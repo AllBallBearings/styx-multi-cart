@@ -1,0 +1,97 @@
+# Styx Multi-Cart
+
+You can have multiple carts or separate purchases at checkout in the real world. Why not Amazon?!
+
+A browser extension that for multiple Amazon shopping carts. Save your current cart, switch between multiple named carts, and restore any of them with one click to proceed to checkout.
+
+## What it does
+
+- **Save** — capture every item in your active Amazon cart (ASIN, quantity, title, image) under a name you choose.
+- **Multi-cart** — keep as many saved carts as you want. "Birthday gifts," "Office supplies," "Wishlist," whatever.
+- **Restore** — re-add every item from a saved cart to your live Amazon cart in one batch request.
+- **Clear** — empty your active cart on Amazon.
+- **Save & clear** — combine the two: snapshot the current cart, then empty it (so you can start a new one without losing the old).
+- **Delete** — remove saved carts you no longer need.
+- **Rename** — rename a saved cart any time.
+
+Storage is local-only (`chrome.storage.local`), so saved carts never leave the device.
+
+## Install (Chrome / Edge / Brave / Arc / Opera / Vivaldi)
+
+These all share the Chromium / Blink engine and load extensions identically.
+
+1. Open `chrome://extensions` (or `edge://extensions`, `brave://extensions`, etc.).
+2. Toggle on **Developer mode** (top right).
+3. Click **Load unpacked**.
+4. Choose this folder (the one with `manifest.json` in it).
+5. The Styx icon appears in your toolbar. Pin it for easy access.
+
+## Install (Safari)
+
+Safari uses true WebKit and ships extensions through the App Store, but Apple provides a one-command converter:
+
+```bash
+xcrun safari-web-extension-converter "/path/to/Styx Multi-Cart"
+```
+
+That generates an Xcode project. Open it, build it, and Safari will load the extension. (You'll need a Mac with Xcode installed.)
+
+## Install (Firefox)
+
+Firefox supports Manifest V3 with one minor change: you need an `applications.gecko` block. To run it temporarily without modifying anything:
+
+1. Visit `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…**.
+3. Select `manifest.json` in this folder.
+
+The extension will run until Firefox restarts.
+
+## How to use
+
+1. Go to your Amazon cart (`amazon.com/gp/cart/view.html` or click the cart icon).
+2. Click the Styx icon in your browser toolbar.
+3. Type a name and hit **Save**. (Leave the field blank to use a timestamped default.)
+4. To restore later, open the popup and click **Restore** on the saved cart you want. Amazon opens with everything added.
+5. Use **Save & clear** to snapshot what's in your cart and empty it in one step — handy when you want a fresh cart but don't want to lose the items you've gathered.
+6. Use **New cart** to start over: it confirms first, empties the active Amazon cart, then drops your cursor in the name field so you can title the next cart on the spot — or just go shop.
+
+### How restore works under the hood
+
+The extension drives Amazon the same way you would: it opens one helper tab, navigates it through each saved product page in turn, and clicks the page's real **Add to Cart** button. When every item has been processed, it lands on `gp/cart/view.html` so you can review what came through.
+
+This is slower than a single-shot batch URL — figure roughly 3–5 seconds per item — but it goes through the exact same UI flow as a human, so authentication, regional locks, multi-seller buy-box selection, and quantity caps are all handled by Amazon's own page logic. Items that have been delisted, are out of stock, or no longer ship to your region simply skip; the rest go through.
+
+You'll need to be signed in to Amazon for restore to work — the extension never handles your credentials.
+
+**Protection plans are auto-declined.** Amazon often interrupts Add-to-Cart with a "2-Year Protection Plan" upsell. The extension auto-clicks "No thanks" because there's no way to recover what you originally chose: by the time an item is in your cart, the prompt is in the past, and if you accepted protection it was added to your cart as its own line item which is saved and restored alongside the product. If you want a plan you didn't originally accept, add it manually after restore.
+
+## Files
+
+| File                                    | What it does                                                        |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| `manifest.json`                         | Extension metadata, permissions, content-script targets             |
+| `background.js`                         | Service worker — owns storage, builds restore URLs, routes messages |
+| `content.js`                            | Runs on Amazon cart pages — scrapes items and clears the cart       |
+| `popup.html` / `popup.css` / `popup.js` | The toolbar popup UI                                                |
+| `generate_icons.html`                   | Optional one-time helper to generate toolbar icon PNGs              |
+
+## Adding custom toolbar icons (optional)
+
+The extension works fine with Chrome's default puzzle-piece icon. If you'd like a real icon:
+
+1. Open `generate_icons.html` in your browser.
+2. Click **Download all 4 PNGs**.
+3. Make a folder called `icons/` next to `manifest.json` and drop the four PNGs in.
+4. Open `manifest.json` and paste the `default_icon` and `icons` blocks shown on the generator page back in.
+5. Reload the extension at `chrome://extensions`.
+
+## Troubleshooting
+
+- **"Could not read the Amazon cart page"** — make sure you're on `amazon.com/cart` (not the homepage) and the page is fully loaded. Refresh and try again.
+- **Restore opened a tab but nothing was added** — you're probably not signed in to Amazon, or Amazon is showing a CAPTCHA on a product page. Sign in, dismiss any prompts, then click Restore again.
+- **Some items didn't restore** — Amazon may have removed the listing, the seller may be out of stock, the product may have a custom-options page (e.g., engraving) that the extension doesn't fill in, or the ASIN may now be region-locked. Anything the extension couldn't add is simply skipped; the rest go through.
+- **Cart-page selectors stop working** — Amazon A/B tests its cart layout. Open an issue / file a fix; the relevant selectors are at the top of `content.js`.
+
+## Privacy
+
+The extension stores data only in your browser's local extension storage. It never sends data to any third-party server. The only network requests it makes are to amazon.com itself, on your behalf, when you click Restore.

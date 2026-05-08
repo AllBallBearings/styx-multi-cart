@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Styx Multi-Cart</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="mc-header">
+      <div class="mc-brand">
+        <svg class="mc-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Background tile -->
+          <rect width="32" height="32" rx="7" fill="#131a22" />
+
+          <!-- Top cart (apex of the pyramid) — wheels visible above water -->
+          <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <path d="M12 5.5 L19 5.5 L18.3 8.7 L12.7 8.7 Z" />
+            <path d="M12 5.5 L10.5 4.2" />
+          </g>
+          <circle cx="13.7" cy="10.2" r="0.9" fill="#ff9900" />
+          <circle cx="17.3" cy="10.2" r="0.9" fill="#ff9900" />
+
+          <!-- Bottom-left cart — wheels submerged -->
+          <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <path d="M4 12 L11 12 L10.3 15.2 L4.7 15.2 Z" />
+            <path d="M4 12 L2.5 10.7" />
+          </g>
+
+          <!-- Bottom-right cart — wheels submerged -->
+          <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <path d="M19 12 L26 12 L25.3 15.2 L19.7 15.2 Z" />
+            <path d="M19 12 L17.5 10.7" />
+          </g>
+
+          <!-- The river Styx — fill body + wave surface -->
+          <path d="M0 16 Q 4 14.6, 8 16 T 16 16 T 24 16 T 32 16 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55" />
+          <path d="M0 16 Q 4 14.6, 8 16 T 16 16 T 24 16 T 32 16" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round" />
+          <path d="M0 20 Q 4 19, 8 20 T 16 20 T 24 20 T 32 20" stroke="#5db5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.55" />
+          <path d="M0 24 Q 4 23.1, 8 24 T 16 24 T 24 24 T 32 24" stroke="#5db5ff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.38" />
+          <path d="M0 28 Q 4 27.3, 8 28 T 16 28 T 24 28 T 32 28" stroke="#5db5ff" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.25" />
+        </svg>
+        <div class="mc-brand-text">
+          <h1>Styx</h1>
+          <p class="mc-tag">Multi-cart for Amazon</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="mc-save-block">
+      <label for="mc-name" class="mc-label">Save current Amazon cart as</label>
+      <div class="mc-save-row">
+        <input
+          id="mc-name"
+          type="text"
+          class="mc-input"
+          placeholder="e.g. Birthday gifts"
+          autocomplete="off"
+          maxlength="60"
+        />
+        <button id="mc-save" class="mc-btn mc-btn-primary" type="button">
+          Save
+        </button>
+      </div>
+      <div class="mc-save-actions">
+        <button
+          id="mc-new-cart"
+          class="mc-btn mc-btn-ghost"
+          type="button"
+          title="Empty the Amazon cart and start a fresh one"
+        >
+          New cart
+        </button>
+        <button
+          id="mc-save-and-clear"
+          class="mc-btn mc-btn-ghost"
+          type="button"
+          title="Save the current cart, then empty it from Amazon"
+        >
+          Save &amp; clear
+        </button>
+        <button
+          id="mc-clear"
+          class="mc-btn mc-btn-ghost mc-btn-danger"
+          type="button"
+          title="Remove every item from your active Amazon cart"
+        >
+          Clear cart
+        </button>
+      </div>
+    </section>
+
+    <section class="mc-list-block">
+      <div class="mc-list-header">
+        <h2>Saved carts</h2>
+        <span id="mc-list-count" class="mc-count">0</span>
+      </div>
+      <ul id="mc-list" class="mc-list" aria-live="polite"></ul>
+      <p id="mc-empty" class="mc-empty" hidden>
+        No saved carts yet. Open your Amazon cart, give it a name above, and
+        hit Save.
+      </p>
+    </section>
+
+    <div id="mc-toast" class="mc-toast" role="status" aria-live="polite" hidden></div>
+
+    <template id="mc-item-template">
+      <li class="mc-item">
+        <div class="mc-item-main">
+          <div class="mc-item-name-row">
+            <span class="mc-item-name"></span>
+            <span class="mc-item-count"></span>
+          </div>
+          <div class="mc-item-meta"></div>
+          <div class="mc-item-thumbs"></div>
+        </div>
+        <div class="mc-item-actions">
+          <button class="mc-btn mc-btn-primary mc-btn-sm" data-action="restore">
+            Restore
+          </button>
+          <button class="mc-btn mc-btn-ghost mc-btn-sm" data-action="rename">
+            Rename
+          </button>
+          <button
+            class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
+            data-action="delete"
+          >
+            Delete
+          </button>
+        </div>
+      </li>
+    </template>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

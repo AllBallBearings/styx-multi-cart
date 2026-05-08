@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Generate Styx icons</title>
+    <style>
+      body {
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        max-width: 640px;
+        margin: 40px auto;
+        padding: 0 20px;
+        color: #131a22;
+      }
+      h1 { margin-bottom: 4px; }
+      p { color: #4a5360; }
+      button {
+        font: inherit;
+        font-weight: 600;
+        background: #ff9900;
+        border: 1px solid #e88a00;
+        color: #1a1209;
+        padding: 10px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .preview {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+        margin: 24px 0;
+        padding: 16px;
+        background: #f7f3ec;
+        border: 1px solid #e0d9cc;
+        border-radius: 8px;
+      }
+      .preview figure { margin: 0; text-align: center; }
+      .preview canvas { display: block; image-rendering: pixelated; background: transparent; }
+      .preview figcaption { font-size: 11px; color: #7a8492; margin-top: 4px; }
+      ol li { margin: 6px 0; }
+      code {
+        background: #ece7dd;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Styx icons</h1>
+    <p>
+      The extension works without icons (Chrome shows a default puzzle piece).
+      If you'd like a proper toolbar icon, generate the PNGs here, save them
+      into an <code>icons/</code> folder next to <code>manifest.json</code>,
+      and paste the <code>icons</code> snippet shown below back into
+      <code>manifest.json</code>.
+    </p>
+
+    <div class="preview" id="preview"></div>
+
+    <button id="download">Download all 4 PNGs</button>
+
+    <h2 style="margin-top:32px">Then add to manifest.json</h2>
+    <pre style="background:#ece7dd;padding:12px;border-radius:6px;overflow:auto;font-size:12px">
+"action": {
+  "default_popup": "popup.html",
+  "default_title": "Styx Multi-Cart",
+  "default_icon": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+},
+"icons": {
+  "16": "icons/icon16.png",
+  "32": "icons/icon32.png",
+  "48": "icons/icon48.png",
+  "128": "icons/icon128.png"
+}</pre>
+
+    <script>
+      const sizes = [16, 32, 48, 128];
+
+      function drawIcon(size) {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const s = size;
+
+        // Rounded square background
+        ctx.fillStyle = "#131a22";
+        roundRect(ctx, 0, 0, s, s, s * 0.22);
+        ctx.fill();
+
+        // Helper — draws a cart at (cx, cy) facing right.
+        // bodyW & bodyH are body dimensions. drawWheels=false hides wheels
+        // (used for the bottom row, whose wheels are submerged).
+        function cart(cx, cy, bodyW, bodyH, drawWheels) {
+          const left = cx - bodyW / 2;
+          const right = cx + bodyW / 2;
+          const top = cy - bodyH / 2;
+          const bot = cy + bodyH / 2;
+
+          ctx.strokeStyle = "#ff9900";
+          ctx.lineWidth = Math.max(1, s * 0.034);
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+
+          // Trapezoid body
+          ctx.beginPath();
+          ctx.moveTo(left, top);
+          ctx.lineTo(right, top);
+          ctx.lineTo(right - bodyW * 0.1, bot);
+          ctx.lineTo(left + bodyW * 0.1, bot);
+          ctx.closePath();
+          ctx.stroke();
+
+          // Handle (stub up-and-left)
+          ctx.beginPath();
+          ctx.moveTo(left, top);
+          ctx.lineTo(left - bodyW * 0.21, top - bodyH * 0.41);
+          ctx.stroke();
+
+          if (drawWheels) {
+            ctx.fillStyle = "#ff9900";
+            const wheelR = Math.max(0.9, s * 0.028);
+            ctx.beginPath();
+            ctx.arc(left + bodyW * 0.27, bot + bodyH * 0.55, wheelR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(right - bodyW * 0.27, bot + bodyH * 0.55, wheelR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // Pyramid layout — 3 carts, all facing right.
+        const cartW = s * 0.22;
+        const cartH = s * 0.1;
+
+        // Top cart (apex) — wheels visible
+        cart(s * 0.5, s * 0.22, cartW, cartH, true);
+        // Bottom-left cart — wheels submerged
+        cart(s * 0.235, s * 0.42, cartW, cartH, false);
+        // Bottom-right cart — wheels submerged
+        cart(s * 0.765, s * 0.42, cartW, cartH, false);
+
+        // ---- The river Styx -----------------------------------------------
+        const waveCfg = [
+          { y: 0.5, amp: 0.045, alpha: 1, width: 0.032 },
+          { y: 0.625, amp: 0.03, alpha: 0.55, width: 0.025 },
+          { y: 0.75, amp: 0.028, alpha: 0.38, width: 0.022 },
+          { y: 0.875, amp: 0.022, alpha: 0.25, width: 0.018 },
+        ];
+
+        // Filled body of the river (using the top wave as its surface)
+        ctx.fillStyle = "rgba(26, 58, 92, 0.55)";
+        ctx.beginPath();
+        traceWave(ctx, s, waveCfg[0].y * s, waveCfg[0].amp * s);
+        ctx.lineTo(s, s);
+        ctx.lineTo(0, s);
+        ctx.closePath();
+        ctx.fill();
+
+        // Wave outlines for movement
+        ctx.strokeStyle = "#5db5ff";
+        ctx.lineCap = "round";
+        for (const w of waveCfg) {
+          ctx.globalAlpha = w.alpha;
+          ctx.lineWidth = Math.max(0.6, s * w.width);
+          ctx.beginPath();
+          traceWave(ctx, s, w.y * s, w.amp * s);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        return canvas;
+      }
+
+      function traceWave(ctx, width, yCenter, amp) {
+        const segments = 4;
+        const segW = width / segments;
+        ctx.moveTo(0, yCenter);
+        for (let i = 0; i < segments; i++) {
+          const cx = i * segW + segW * 0.5;
+          const ex = (i + 1) * segW;
+          const cy = yCenter + (i % 2 === 0 ? -amp : amp);
+          ctx.quadraticCurveTo(cx, cy, ex, yCenter);
+        }
+      }
+
+      function roundRect(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function downloadCanvas(canvas, name) {
+        canvas.toBlob((blob) => {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }, "image/png");
+      }
+
+      const preview = document.getElementById("preview");
+      const canvases = sizes.map((size) => {
+        const c = drawIcon(size);
+        const fig = document.createElement("figure");
+        const cap = document.createElement("figcaption");
+        cap.textContent = `${size}×${size}`;
+        fig.appendChild(c);
+        fig.appendChild(cap);
+        preview.appendChild(fig);
+        return { size, canvas: c };
+      });
+
+      document.getElementById("download").addEventListener("click", () => {
+        canvases.forEach(({ size, canvas }) => {
+          downloadCanvas(canvas, `icon${size}.png`);
+        });
+      });
+    </script>
+  </body>
+</html>
