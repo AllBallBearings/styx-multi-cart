@@ -307,24 +307,24 @@ body {
 }
 
 .mc-item-thumb {
-  width: 30px;
-  height: 30px;
-  border-radius: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
   background: var(--mc-bg);
   border: 1px solid var(--mc-line);
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .mc-item-thumb-more {
-  width: 30px;
-  height: 30px;
-  border-radius: 4px;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
   background: var(--mc-bg);
   border: 1px solid var(--mc-line);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--mc-fg-muted);
 }
@@ -412,4 +412,53 @@ body {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ---- Debug panel -------------------------------------------------------- */
+
+.mc-debug {
+  margin: 8px 16px 12px;
+  border: 1px solid var(--mc-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mc-debug-toggle {
+  display: block;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--mc-fg-muted);
+  cursor: pointer;
+  user-select: none;
+  background: var(--mc-bg-soft);
+}
+
+.mc-debug-toggle:hover {
+  color: var(--mc-fg-soft);
+}
+
+.mc-debug-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mc-debug-output {
+  margin: 0;
+  padding: 8px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--mc-fg);
+  background: var(--mc-bg-sunk);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 260px;
+  overflow-y: auto;
+  display: none;
+}
+
+.mc-debug-output:not(:empty) {
+  display: block;
 }

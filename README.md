@@ -8,7 +8,7 @@ A browser extension that for multiple Amazon shopping carts. Save your current c
 
 - **Save** — capture every item in your active Amazon cart (ASIN, quantity, title, image) under a name you choose.
 - **Multi-cart** — keep as many saved carts as you want. "Birthday gifts," "Office supplies," "Wishlist," whatever.
-- **Restore** — re-add every item from a saved cart to your live Amazon cart in one batch request.
+- **Restore** — replace your live Amazon cart with the items from a saved cart.
 - **Clear** — empty your active cart on Amazon.
 - **Save & clear** — combine the two: snapshot the current cart, then empty it (so you can start a new one without losing the old).
 - **Delete** — remove saved carts you no longer need.
@@ -51,9 +51,8 @@ The extension will run until Firefox restarts.
 1. Go to your Amazon cart (`amazon.com/gp/cart/view.html` or click the cart icon).
 2. Click the Styx icon in your browser toolbar.
 3. Type a name and hit **Save**. (Leave the field blank to use a timestamped default.)
-4. To restore later, open the popup and click **Restore** on the saved cart you want. Amazon opens with everything added.
+4. To restore later, open the popup and click **Restore** on the saved cart you want. Styx clears the current Amazon cart first, then opens Amazon with the saved items added.
 5. Use **Save & clear** to snapshot what's in your cart and empty it in one step — handy when you want a fresh cart but don't want to lose the items you've gathered.
-6. Use **New cart** to start over: it confirms first, empties the active Amazon cart, then drops your cursor in the name field so you can title the next cart on the spot — or just go shop.
 
 ### How restore works under the hood
 
@@ -63,7 +62,7 @@ This is slower than a single-shot batch URL — figure roughly 3–5 seconds per
 
 You'll need to be signed in to Amazon for restore to work — the extension never handles your credentials.
 
-**Protection plans are auto-declined.** Amazon often interrupts Add-to-Cart with a "2-Year Protection Plan" upsell. The extension auto-clicks "No thanks" because there's no way to recover what you originally chose: by the time an item is in your cart, the prompt is in the past, and if you accepted protection it was added to your cart as its own line item which is saved and restored alongside the product. If you want a plan you didn't originally accept, add it manually after restore.
+**Protection plans require your choice.** Amazon often interrupts Add-to-Cart with a protection-plan upsell. Styx pauses restore on that Amazon page, tells you to choose the option you want, then continues with the remaining saved items after the prompt is complete.
 
 ## Files
 

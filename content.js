@@ -111,7 +111,21 @@
    *   4. src                    — only if it isn't a data: placeholder
    */
   function pickBestImage(row) {
-    const img = row.querySelector("img.sc-product-image, img");
+    // Amazon's cart has two <img> per row: a spinner overlay inside
+    // .sc-list-item-spinner (first in DOM order) and the real product image
+    // img.sc-product-image (inside a.sc-product-link). Always prefer the
+    // product image; never accidentally return the spinner URL.
+    function isUsable(img) {
+      if (!img) return false;
+      if (img.closest(".sc-list-item-spinner")) return false;
+      const s = img.currentSrc || img.src || "";
+      return s && !s.startsWith("data:") && !s.includes("loadIndicators") && !s.includes("transparent-pixel");
+    }
+
+    let img = row.querySelector("img.sc-product-image");
+    if (!img || !isUsable(img)) {
+      img = Array.from(row.querySelectorAll("img")).find(isUsable) || null;
+    }
     if (!img) return "";
 
     const dyn = img.getAttribute("data-a-dynamic-image");
@@ -140,20 +154,11 @@
     const hires = img.getAttribute("data-a-hires");
     if (hires) return hires;
 
-    const srcset = img.getAttribute("srcset");
-    if (srcset) {
-      const parts = srcset
-        .split(",")
-        .map((p) => p.trim().split(/\s+/)[0])
-        .filter(Boolean);
-      if (parts.length) return parts[parts.length - 1];
-    }
+    // currentSrc is higher-res (browser-negotiated via srcset) when present.
+    if (img.currentSrc && !img.currentSrc.includes("loadIndicators")) return img.currentSrc;
 
-    const src = img.getAttribute("src") || "";
-    if (src && !src.startsWith("data:") && !/transparent-pixel/.test(src)) {
-      return src;
-    }
-    return "";
+    const src = img.src || "";
+    return isUsable(img) ? src : "";
   }
 
   /**
@@ -169,77 +174,371 @@
   async function clearCart() {
     let removed = 0;
     let safety = 200; // hard cap so we never spin forever
+    let stalledClicks = 0;
+    const initialCount = getActiveCartRows().length;
 
     while (safety-- > 0) {
-      const deleteLink = findActiveDeleteControl();
-      if (!deleteLink) break;
+      const rows = getActiveCartRows();
+      if (!rows.length) break;
 
-      deleteLink.click();
-      removed++;
+      const row = rows[0];
+      const beforeCount = rows.length;
+      const deleteLink = findDeleteControl(row) || findActiveDeleteControl();
+      if (!deleteLink) {
+        break;
+      }
+
+      clickControl(deleteLink);
 
       // Wait for Amazon's XHR + DOM update before scanning for the next row.
-      await waitForCartMutation(2500);
+      await waitForCartChange(row, beforeCount, 4500);
+
+      const afterCount = getActiveCartRows().length;
+      if (afterCount < beforeCount) {
+        removed += beforeCount - afterCount;
+        stalledClicks = 0;
+      } else if (!document.contains(row) || isDeletedRow(row)) {
+        removed++;
+        stalledClicks = 0;
+      } else {
+        stalledClicks++;
+        if (stalledClicks >= 2) break;
+      }
     }
 
-    return removed;
+    return {
+      removed,
+      remaining: getRemainingCartCount(),
+      found: initialCount,
+      sawCartSurface: hasCartSurface(),
+    };
+  }
+
+  function getActiveCartScopes() {
+    const scopes = [
+      document.querySelector("#nav-flyout-ewc .ewc-active-cart--selected"),
+      document.querySelector("#ewc-content .ewc-active-cart--selected"),
+      document.querySelector("#nav-flyout-ewc"),
+      document.querySelector("[data-name='Active Items']"),
+      document.querySelector("#sc-active-cart"),
+      document.querySelector("#sc-list-body"),
+    ].filter(Boolean);
+    return scopes.length ? scopes : [document.body];
+  }
+
+  function getActiveCartRows() {
+    const rows = [];
+    const seen = new Set();
+
+    for (const scope of getActiveCartScopes()) {
+      scope
+        .querySelectorAll(
+          "div[data-asin][data-itemtype='active'], " +
+            ".ewc-item[data-asin], " +
+            "div[data-asin].sc-list-item, " +
+            "div[data-asin][data-itemid]"
+        )
+        .forEach((row) => {
+          const asin = row.getAttribute("data-asin");
+          if (!asin || seen.has(row) || isDeletedRow(row)) return;
+          if (isSaveForLaterRow(row)) {
+            return;
+          }
+          seen.add(row);
+          rows.push(row);
+        });
+    }
+
+    return rows;
+  }
+
+  function hasCartSurface() {
+    return Boolean(
+      document.querySelector("#nav-flyout-ewc") ||
+        document.querySelector("#ewc-content") ||
+        document.querySelector("[data-name='Active Items']") ||
+        document.querySelector("#sc-active-cart") ||
+        document.querySelector("#sc-list-body")
+    );
+  }
+
+  function getRemainingCartCount() {
+    const rows = getActiveCartRows();
+    if (rows.length) return rows.length;
+
+    const quantityEl =
+      document.querySelector("#nav-flyout-ewc #ewc-total-quantity") ||
+      document.querySelector("#ewc-content #ewc-total-quantity") ||
+      document.querySelector("input[name='totalCartQuantity']");
+    if (quantityEl && quantityEl.value) {
+      const n = parseInt(quantityEl.value, 10);
+      if (!Number.isNaN(n) && n > 0) return n;
+    }
+
+    const quantityText = document.querySelector(
+      "#nav-flyout-ewc .ewc-quantity, #ewc-content .ewc-quantity"
+    );
+    if (quantityText) {
+      const match = (quantityText.textContent || "").match(/\b(\d+)\s+items?\b/i);
+      if (match) return parseInt(match[1], 10) || 0;
+    }
+
+    return 0;
+  }
+
+  function isSaveForLaterRow(row) {
+    const itemType = (row.getAttribute("data-itemtype") || "").toLowerCase();
+    if (itemType.includes("saved")) return true;
+
+    const section = row.closest("[data-name], #sc-saved-cart, #sc-saved-cart-list");
+    const sectionName = section
+      ? (section.getAttribute("data-name") || section.id || "").toLowerCase()
+      : "";
+    return sectionName.includes("saved");
+  }
+
+  function isDeletedRow(row) {
+    if (!row || !row.isConnected) return true;
+    if (row.hidden || row.getAttribute("aria-hidden") === "true") return true;
+    if (
+      row.classList.contains("ewc-item-deleted") ||
+      row.classList.contains("sc-list-item-removed")
+    ) {
+      return true;
+    }
+
+    const visibleRemovedMessage =
+      findVisibleIn(row, ".ewc-item-remove-msg") ||
+      findVisibleIn(row, ".ewc-item-already-removed-msg") ||
+      findVisibleIn(row, ".ewc-item-moved-to-sfl-msg") ||
+      findVisibleIn(row, ".sc-list-item-removed-msg") ||
+      findVisibleIn(row, ".sc-list-item-removed-message") ||
+      findVisibleIn(row, "[data-action='undo-delete']");
+    return Boolean(visibleRemovedMessage);
+  }
+
+  function findVisibleIn(root, selector) {
+    const nodes = root.querySelectorAll(selector);
+    for (const node of nodes) {
+      if (isVisible(node)) return node;
+    }
+    return null;
+  }
+
+  function isVisible(el) {
+    if (!el || el.hidden || el.getAttribute("aria-hidden") === "true") {
+      return false;
+    }
+    if (el.classList.contains("aok-hidden") || el.classList.contains("sc-hidden")) {
+      return false;
+    }
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden";
   }
 
   /** Locate the next clickable "Delete" control inside the Active Items section. */
   function findActiveDeleteControl() {
-    const scopes = [
-      document.querySelector("[data-name='Active Items']"),
-      document.querySelector("#sc-active-cart"),
-    ].filter(Boolean);
-
-    if (!scopes.length) {
-      // Fallback: anything explicitly tagged active.
-      return document.querySelector(
-        "div[data-asin][data-itemtype='active'] input[value='Delete']"
-      );
-    }
-
-    for (const scope of scopes) {
-      const el =
-        scope.querySelector("input[value='Delete']") ||
-        scope.querySelector("input[name='submit.delete']") ||
-        scope.querySelector("[data-action*='delete'] input") ||
-        scope.querySelector("input[data-feature-id='delete']") ||
-        // Newer Amazon variants use a button rather than an input
-        scope.querySelector("button[name='submit.delete']") ||
-        scope.querySelector("button[data-action*='delete']");
+    for (const row of getActiveCartRows()) {
+      const el = findDeleteControl(row);
       if (el) return el;
     }
     return null;
   }
 
-  /**
-   * Resolve when the cart's active-items container mutates,
-   * or after `timeoutMs`, whichever comes first.
-   */
-  function waitForCartMutation(timeoutMs) {
+  function findDeleteControl(root) {
+    const selectors = [
+      "input[value='Delete']",
+      "input[aria-label='Delete']",
+      "input[aria-label*='Delete']",
+      "input[name='submit.delete']",
+      "input[name^='submit.delete']",
+      "input[name*='delete']",
+      "input[data-feature-id='delete']",
+      "input[data-action*='delete']",
+      "button[name='submit.delete']",
+      "button[name^='submit.delete']",
+      "button[name*='delete']",
+      "button[data-action*='delete']",
+      "button[data-feature-id='delete']",
+      "button[aria-label='Delete']",
+      "button[aria-label*='Delete']",
+      "button[aria-label^='Delete ']",
+      "button[data-action='a-stepper-decrement'][data-a-selector='decrement']",
+      "fieldset[data-a-decrement-status='trash'] button[data-a-selector='decrement']",
+      ".sc-action-quantity button[data-a-selector='decrement']",
+      ".ewc-qty-and-action-items button[data-a-selector='decrement']",
+      ".ewc-delete-icon-container button",
+      ".ewc-delete-icon",
+      "a[data-action*='delete']",
+      "a[aria-label='Delete']",
+      "a[aria-label*='Delete']",
+      "[data-action='delete'] input",
+      "[data-action*='delete'] input",
+      "[data-action*='delete'] button",
+      "[data-feature-id='delete'] input",
+      "[data-feature-id='delete'] button",
+      ".sc-action-delete input",
+      ".sc-action-delete button",
+      ".sc-list-item-content input[value='Delete']",
+    ];
+
+    for (const selector of selectors) {
+      const el = root.querySelector(selector);
+      if (isClickableControl(el)) return el;
+    }
+
+    const candidates = root.querySelectorAll("input, button, a, span[role='button']");
+    for (const el of candidates) {
+      const text = (el.textContent || el.value || el.getAttribute("aria-label") || "")
+        .trim()
+        .toLowerCase();
+      if (
+        text === "delete" ||
+        text === "remove" ||
+        text.startsWith("delete ")
+      ) {
+        return el;
+      }
+    }
+
+    return null;
+  }
+
+  function isClickableControl(el) {
+    if (!el || el.disabled || el.getAttribute("aria-disabled") === "true") {
+      return false;
+    }
+    return true;
+  }
+
+  function clickControl(el) {
+    try {
+      el.scrollIntoView({ block: "center", inline: "center" });
+    } catch (_e) {
+      /* ignore */
+    }
+    try {
+      el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+      el.click();
+    } catch (_e) {
+      try {
+        el.click();
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+  }
+
+  function waitForCartChange(row, beforeCount, timeoutMs) {
     return new Promise((resolve) => {
       const target =
+        document.querySelector("#nav-flyout-ewc .ewc-active-cart--selected") ||
+        document.querySelector("#ewc-content .ewc-active-cart--selected") ||
+        document.querySelector("#nav-flyout-ewc") ||
         document.querySelector("[data-name='Active Items']") ||
         document.querySelector("#sc-active-cart") ||
+        document.querySelector("#sc-list-body") ||
         document.body;
 
       let done = false;
       const finish = () => {
         if (done) return;
         done = true;
+        clearTimeout(timer);
         observer.disconnect();
         resolve();
       };
 
+      const changed = () =>
+        !document.contains(row) ||
+        isDeletedRow(row) ||
+        getActiveCartRows().length < beforeCount;
+
       const observer = new MutationObserver(() => {
-        // Debounce: wait 250ms of quiet after a change before resolving.
-        clearTimeout(quietTimer);
-        quietTimer = setTimeout(finish, 250);
+        if (changed()) finish();
       });
 
-      let quietTimer = setTimeout(finish, timeoutMs);
-      observer.observe(target, { childList: true, subtree: true });
+      const timer = setTimeout(finish, timeoutMs);
+      observer.observe(target, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style", "hidden", "aria-hidden"],
+      });
+
+      setTimeout(() => {
+        if (changed()) finish();
+      }, 300);
     });
+  }
+
+  /**
+   * Diagnostic snapshot — called by the debug panel in the popup.
+   * Returns a plain-object report of everything the clear logic would see.
+   */
+  function diagnoseCart() {
+    const scopes = getActiveCartScopes();
+    const rows = getActiveCartRows();
+    const quantityInput =
+      document.querySelector("#ewc-total-quantity") ||
+      document.querySelector("input[name='totalCartQuantity']");
+
+    const scopeInfo = scopes.map((s) => ({
+      tag: s.tagName,
+      id: s.id || null,
+      cls: (s.className || "").split(/\s+/).slice(0, 4).join(" "),
+      children: s.children.length,
+    }));
+
+    const rowInfo = rows.map((row) => {
+      const del = findDeleteControl(row);
+      const control = describeControl(del);
+      return {
+        asin: row.getAttribute("data-asin"),
+        itemtype: row.getAttribute("data-itemtype") || null,
+        cls: (row.className || "").split(/\s+/).slice(0, 5).join(" "),
+        isSFL: isSaveForLaterRow(row),
+        isDeleted: isDeletedRow(row),
+        deleteFound: !!del,
+        delete: control,
+      };
+    });
+
+    // Also scan ALL rows without SFL/deleted filtering to help spot missed items
+    const allAsinRows = Array.from(document.querySelectorAll("div[data-asin]")).map((r) => ({
+      asin: r.getAttribute("data-asin"),
+      itemtype: r.getAttribute("data-itemtype") || null,
+      inScopes: scopes.some((s) => s.contains(r)),
+      isSFL: isSaveForLaterRow(r),
+      isDeleted: isDeletedRow(r),
+    }));
+
+    return {
+      url: location.href,
+      sawCartSurface: hasCartSurface(),
+      ewcPresent: Boolean(document.querySelector("#nav-flyout-ewc, #ewc-content")),
+      ewcTotalQuantity: quantityInput ? quantityInput.value || null : null,
+      scopesFound: scopeInfo,
+      activeRowsFound: rowInfo.length,
+      rows: rowInfo,
+      allAsinRows,
+      remainingCount: getRemainingCartCount(),
+    };
+  }
+
+  function describeControl(el) {
+    if (!el) return null;
+    return {
+      tag: el.tagName,
+      name: el.getAttribute("name") || null,
+      value: el.value || null,
+      label: el.getAttribute("aria-label") || null,
+      action: el.getAttribute("data-action") || null,
+      selector: el.getAttribute("data-a-selector") || null,
+      disabled: el.disabled || el.getAttribute("aria-disabled") === "true",
+      html: el.outerHTML ? el.outerHTML.slice(0, 500) : null,
+    };
   }
 
   // ---- Message bus ---------------------------------------------------------
@@ -256,11 +555,75 @@
       return true; // sync
     }
 
+    if (msg.type === "MC_DIAGNOSE_CART") {
+      try {
+        sendResponse({ ok: true, report: diagnoseCart() });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+      return true;
+    }
+
     if (msg.type === "MC_CLEAR_CART") {
       clearCart()
-        .then((removed) => sendResponse({ ok: true, removed }))
+        .then((result) => {
+          sendResponse({
+            ok: result.sawCartSurface && result.remaining === 0,
+            removed: result.removed,
+            remaining: result.remaining,
+            found: result.found,
+            sawCartSurface: result.sawCartSurface,
+            error:
+              result.sawCartSurface && result.remaining === 0
+                ? undefined
+                : result.sawCartSurface
+                  ? `Could not remove ${result.remaining} cart item${result.remaining === 1 ? "" : "s"}.`
+                  : "Could not find an Amazon cart surface on this page.",
+          });
+        })
         .catch((err) => sendResponse({ ok: false, error: String(err) }));
       return true; // async — keep the channel open
+    }
+
+    if (msg.type === "MC_CLEAR_ONE") {
+      // Delete exactly one active cart item, responding BEFORE triggering the
+      // form submission. Amazon's delete is a full-page POST (not XHR), so the
+      // page reloads and destroys this content script immediately after submit.
+      // Background.js drives the loop: it calls MC_CLEAR_ONE once per item,
+      // waits for the page reload, then calls again until the cart is empty.
+      try {
+        const rows = getActiveCartRows();
+        if (!rows.length) {
+          sendResponse({ ok: true, empty: true });
+          return true;
+        }
+
+        const row = rows[0];
+        const deleteBtn = findDeleteControl(row);
+        if (!deleteBtn) {
+          sendResponse({
+            ok: false,
+            error: "No delete control found for ASIN " + row.getAttribute("data-asin"),
+          });
+          return true;
+        }
+
+        // Respond BEFORE submitting — the page reload will kill this script
+        // before a post-submit sendResponse could ever be delivered.
+        sendResponse({ ok: true, asin: row.getAttribute("data-asin") });
+
+        const form = deleteBtn.closest("form");
+        if (form && typeof form.requestSubmit === "function") {
+          // requestSubmit(btn) includes the button's name/value in the POST body
+          // so Amazon knows which item to delete, and works from script context.
+          form.requestSubmit(deleteBtn);
+        } else {
+          deleteBtn.click();
+        }
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
+      }
+      return true;
     }
 
     return false;
