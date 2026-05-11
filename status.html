@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Styx Multi-Cart</title>
+    <link rel="stylesheet" href="status.css" />
+  </head>
+  <body>
+    <header class="sc-header">
+      <svg class="sc-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="32" height="32" rx="7" fill="#131a22" />
+        <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <path d="M12 5.5 L19 5.5 L18.3 8.7 L12.7 8.7 Z" />
+          <path d="M12 5.5 L10.5 4.2" />
+        </g>
+        <circle cx="13.7" cy="10.2" r="0.9" fill="#ff9900" />
+        <circle cx="17.3" cy="10.2" r="0.9" fill="#ff9900" />
+        <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <path d="M4 12 L11 12 L10.3 15.2 L4.7 15.2 Z" />
+          <path d="M4 12 L2.5 10.7" />
+        </g>
+        <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+          <path d="M19 12 L26 12 L25.3 15.2 L19.7 15.2 Z" />
+          <path d="M19 12 L17.5 10.7" />
+        </g>
+        <path d="M0 16 Q 4 14.6, 8 16 T 16 16 T 24 16 T 32 16 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55" />
+        <path d="M0 16 Q 4 14.6, 8 16 T 16 16 T 24 16 T 32 16" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round" />
+        <path d="M0 20 Q 4 19, 8 20 T 16 20 T 24 20 T 32 20" stroke="#5db5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.55" />
+      </svg>
+      <div class="sc-brand-text">
+        <span class="sc-brand-name">Styx</span>
+        <span class="sc-brand-tag">Multi-Cart</span>
+      </div>
+    </header>
+
+    <div class="sc-body">
+      <div class="sc-spinner-wrap">
+        <div class="sc-spinner" id="sc-spinner"></div>
+        <svg class="sc-done-icon" id="sc-done-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M4 10L8.5 14.5L16 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="sc-text">
+        <div class="sc-title" id="sc-title">
+          <span id="sc-title-text">Working</span><span class="sc-dots" id="sc-dots"></span>
+        </div>
+        <div class="sc-detail" id="sc-detail"></div>
+      </div>
+    </div>
+
+    <script src="status.js"></script>
+  </body>
+</html>

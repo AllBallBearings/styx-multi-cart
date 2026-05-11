@@ -12,7 +12,6 @@
 
   const $name = document.getElementById("mc-name");
   const $save = document.getElementById("mc-save");
-  const $newCart = document.getElementById("mc-new-cart");
   const $saveAndClear = document.getElementById("mc-save-and-clear");
   const $clear = document.getElementById("mc-clear");
   const $list = document.getElementById("mc-list");
@@ -20,13 +19,28 @@
   const $empty = document.getElementById("mc-empty");
   const $toast = document.getElementById("mc-toast");
   const $template = document.getElementById("mc-item-template");
+  const $diagnose = document.getElementById("mc-diagnose");
+  const $debugOutput = document.getElementById("mc-debug-output");
 
   // ---- Messaging ---------------------------------------------------------
 
   /** Wraps chrome.runtime.sendMessage with a Promise + nicer error shape. */
   function send(message) {
     return new Promise((resolve) => {
+      let done = false;
+      const timeout = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve({
+          ok: false,
+          error: "No response from extension service worker.",
+        });
+      }, 10000);
+
       chrome.runtime.sendMessage(message, (response) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
         if (chrome.runtime.lastError) {
           resolve({
             ok: false,
@@ -105,10 +119,10 @@
     for (let i = 0; i < showCount; i++) {
       const it = cart.items[i];
       if (!it) continue;
-      // Some saved items (especially from older saves before the lazy-load
-      // fix) won't have a usable image URL. Skip those rather than render
-      // a permanent spinner.
-      if (!it.image || it.image.startsWith("data:")) continue;
+      // Skip bad image URLs: empty, data: placeholders, or Amazon's own
+      // lazy-load spinner gif (loadIndicators) that gets captured before
+      // IntersectionObserver has fired the real product image into place.
+      if (!it.image || it.image.startsWith("data:") || it.image.includes("loadIndicators") || it.image.includes("transparent-pixel")) continue;
       const img = document.createElement("img");
       img.className = "mc-item-thumb";
       img.loading = "lazy";
@@ -184,7 +198,7 @@
     withLoading($saveAndClear, async () => {
       const res = await send({ type: "MC_SAVE_AND_CLEAR", name });
       if (res.ok) {
-        toast(`Saved ${res.saved}, cleared ${res.removed}`);
+        toast(`Saved ${res.saved} item${res.saved === 1 ? "" : "s"} — clearing cart in background.`);
         $name.value = "";
         await refresh();
       } else {
@@ -196,7 +210,7 @@
   $clear.addEventListener("click", () => {
     if (
       !confirm(
-        "Remove all items from your Amazon cart? This will delete them from your active cart on Amazon."
+        "Are you sure you want to clear your current Amazon cart?"
       )
     ) {
       return;
@@ -204,32 +218,13 @@
     withLoading($clear, async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
-        toast(`Cleared ${res.removed} item${res.removed === 1 ? "" : "s"}`);
+        toast(
+          res.alreadyEmpty
+            ? "Your Amazon cart is already empty."
+            : "Clearing your cart — check the Amazon tab."
+        );
       } else {
         toast(res.error || "Could not clear cart", "error");
-      }
-    });
-  });
-
-  // "New cart": confirm → clear active Amazon cart → focus the name input
-  // so the user can title the next cart, or just go shop.
-  $newCart.addEventListener("click", () => {
-    if (!confirm("Are you sure you want to clear out the Amazon Cart?")) {
-      return;
-    }
-    withLoading($newCart, async () => {
-      const res = await send({ type: "MC_CLEAR_CURRENT" });
-      if (res.ok) {
-        const word = res.removed === 1 ? "item" : "items";
-        toast(
-          res.removed > 0
-            ? `Cleared ${res.removed} ${word}. Name your new cart, or just keep shopping.`
-            : "Cart was already empty. Name your new cart, or just keep shopping."
-        );
-        $name.value = "";
-        $name.focus();
-      } else {
-        toast(res.error || "Could not start a new cart", "error");
       }
     });
   });
@@ -244,12 +239,22 @@
     const action = button.dataset.action;
 
     if (action === "restore") {
+      const cartName =
+        li.querySelector(".mc-item-name").textContent.trim() || "this";
+      if (
+        !confirm(
+          `Are you sure want to clear your current Amazon cart and restore the items from ${cartName} cart?`
+        )
+      ) {
+        return;
+      }
+
       withLoading(button, async () => {
         const res = await send({ type: "MC_RESTORE_CART", id });
         if (res.ok) {
           const total = res.total || 0;
           toast(
-            `Restoring ${total} item${total === 1 ? "" : "s"} — give it ~${Math.max(1, Math.round((total * 4) / 60))} min. Your cart will open when done.`
+            `Clearing current cart, then restoring ${total} item${total === 1 ? "" : "s"}. If Amazon shows an upsell, choose an option there to continue.`
           );
         } else {
           toast(res.error || "Could not restore", "error");
@@ -287,6 +292,56 @@
       });
     }
   });
+
+  // ---- Debug panel -------------------------------------------------------
+
+  $diagnose.addEventListener("click", () => {
+    $debugOutput.textContent = "Running diagnostics — navigating to cart page…";
+    withLoading($diagnose, async () => {
+      const res = await send({ type: "MC_DIAGNOSE_CART" });
+      if (res.ok && res.report) {
+        const r = res.report;
+          const lines = [
+            `URL: ${r.url}`,
+            `sawCartSurface: ${r.sawCartSurface}`,
+            `ewcPresent: ${r.ewcPresent}`,
+            `ewcTotalQuantity: ${r.ewcTotalQuantity}`,
+            `remainingCount: ${r.remainingCount}`,
+            ``,
+          `--- Scopes found (${r.scopesFound.length}) ---`,
+          ...r.scopesFound.map(
+            (s) => `  <${s.tag}> id="${s.id}" cls="${s.cls}" children=${s.children}`
+          ),
+          ``,
+          `--- Active rows (${r.activeRowsFound}) ---`,
+          ...r.rows.map(
+            (row) =>
+              `  ASIN=${row.asin} itemtype=${row.itemtype} cls="${row.cls}" SFL=${row.isSFL} deleted=${row.isDeleted}\n` +
+              `    deleteFound=${row.deleteFound} ${formatDebugControl(row.delete)}`
+          ),
+          ``,
+          `--- All data-asin elements on page (${r.allAsinRows.length}) ---`,
+          ...r.allAsinRows.map(
+            (row) =>
+              `  ASIN=${row.asin} itemtype=${row.itemtype} inScopes=${row.inScopes} SFL=${row.isSFL} deleted=${row.isDeleted}`
+          ),
+        ];
+        $debugOutput.textContent = lines.join("\n");
+      } else {
+        $debugOutput.textContent = `Error: ${(res && res.error) || "No response"}`;
+      }
+    });
+  });
+
+  function formatDebugControl(control) {
+    if (!control) return "";
+    return (
+      `tag=${control.tag} name=${control.name} value=${control.value} ` +
+      `label=${control.label} action=${control.action} selector=${control.selector} ` +
+      `disabled=${control.disabled}\n` +
+      `    html=${control.html}`
+    );
+  }
 
   // Submit name on Enter.
   $name.addEventListener("keydown", (e) => {

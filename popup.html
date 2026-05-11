@@ -64,14 +64,6 @@
       </div>
       <div class="mc-save-actions">
         <button
-          id="mc-new-cart"
-          class="mc-btn mc-btn-ghost"
-          type="button"
-          title="Empty the Amazon cart and start a fresh one"
-        >
-          New cart
-        </button>
-        <button
           id="mc-save-and-clear"
           class="mc-btn mc-btn-ghost"
           type="button"
@@ -103,6 +95,16 @@
     </section>
 
     <div id="mc-toast" class="mc-toast" role="status" aria-live="polite" hidden></div>
+
+    <details id="mc-debug" class="mc-debug">
+      <summary class="mc-debug-toggle">Debug</summary>
+      <div class="mc-debug-body">
+        <button id="mc-diagnose" class="mc-btn mc-btn-ghost mc-btn-sm" type="button">
+          Run cart diagnostics
+        </button>
+        <pre id="mc-debug-output" class="mc-debug-output"></pre>
+      </div>
+    </details>
 
     <template id="mc-item-template">
       <li class="mc-item">
