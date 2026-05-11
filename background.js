@@ -26,6 +26,290 @@ function makeId() {
   );
 }
 
+// ---- Upsell choice memory (24 h TTL) --------------------------------------
+//
+// When the user adds an item to their cart normally and Amazon shows a
+// protection-plan / warranty / coverage upsell, observer.js records what they
+// chose. We replay that same choice during cart restore for 24 hours, after
+// which the entry expires and the user is prompted manually again.
+
+const UPSELL_CHOICES_KEY = "mc.upsell.choices.v1";
+const UPSELL_TTL_MS = 24 * 60 * 60 * 1000;
+const PENDING_ATC_TTL_MS = 5 * 60 * 1000;
+
+// In-memory: pending ATC clicks waiting to be linked to an upsell choice
+// when the same tab arrives at an attach page. Map<tabId, {asin,title,host,at}>.
+const _pendingAtc = new Map();
+
+function prunePendingAtc() {
+  const now = Date.now();
+  for (const [tabId, p] of _pendingAtc) {
+    if (now - p.at > PENDING_ATC_TTL_MS) _pendingAtc.delete(tabId);
+  }
+}
+
+function pruneUpsellChoices(map) {
+  const now = Date.now();
+  const out = {};
+  for (const [asin, entry] of Object.entries(map || {})) {
+    if (entry && entry.recordedAt && now - entry.recordedAt < UPSELL_TTL_MS) {
+      out[asin] = entry;
+    }
+  }
+  return out;
+}
+
+async function getUpsellChoices() {
+  const obj = await chrome.storage.local.get(UPSELL_CHOICES_KEY);
+  const map = obj[UPSELL_CHOICES_KEY] || {};
+  // Prune-on-read so expired entries never get returned even if cleanup lagged.
+  const pruned = pruneUpsellChoices(map);
+  // Write back if anything was pruned so storage doesn't accumulate forever.
+  if (Object.keys(pruned).length !== Object.keys(map).length) {
+    await chrome.storage.local.set({ [UPSELL_CHOICES_KEY]: pruned });
+  }
+  return pruned;
+}
+
+async function recordUpsellChoice(asin, entry) {
+  if (!asin) return;
+  const map = await getUpsellChoices(); // already pruned
+  map[asin] = { ...entry, recordedAt: Date.now() };
+  await chrome.storage.local.set({ [UPSELL_CHOICES_KEY]: map });
+}
+
+async function getRecordedUpsellChoice(asin) {
+  if (!asin) return null;
+  const map = await getUpsellChoices();
+  return map[asin] || null;
+}
+
+/**
+ * Inject a script into a tab that finds the upsell control matching a
+ * previously recorded choice and clicks it. Returns true only if a
+ * confident match was clicked. False means the caller should fall back
+ * to the manual prompt.
+ */
+async function applyUpsellChoice(tabId, recorded) {
+  try {
+    const result = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: pageApplyUpsellChoice,
+      args: [recorded],
+    });
+    const r = result && result[0] && result[0].result;
+    return Boolean(r && r.ok);
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * Runs in the upsell page's context. Finds and clicks the option matching
+ * the recorded choice (decline -> "no thanks" button; accept -> the radio
+ * matching label+duration+price, then the continue button). Returns
+ * { ok: bool, error?, choice? }. Self-contained: no closures, no imports.
+ */
+function pageApplyUpsellChoice(recorded) {
+  return new Promise((resolve) => {
+    function isVisible(el) {
+      if (!el || !el.isConnected) return false;
+      if (el.hidden || el.getAttribute("aria-hidden") === "true") return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }
+
+    function findDeclineControl() {
+      const sels = [
+        "input[name='submit.attach-warranty-handler-no-warranty']",
+        "input[name='submit.attach-sidesheet-no-coverage']",
+        "input[name='submit.add-to-cart-no-warranty']",
+        "input[name='submit.no-thanks']",
+        "input[type='radio']#attachSiNoCoverage",
+        "input[type='radio']#siNoCoverage",
+      ];
+      for (const s of sels) {
+        const el = document.querySelector(s);
+        if (el && isVisible(el)) return el;
+      }
+      // Fallback: any visible button labeled "No thanks" / "No coverage".
+      const candidates = document.querySelectorAll(
+        "input[type='submit'], input[type='button'], button, a"
+      );
+      for (const b of candidates) {
+        const t = (b.value || b.textContent || b.getAttribute("aria-label") || "")
+          .toLowerCase()
+          .trim();
+        if (
+          (t === "no thanks" ||
+            t === "no, thanks" ||
+            t === "no coverage" ||
+            t === "skip" ||
+            t === "skip protection") &&
+          isVisible(b)
+        ) {
+          return b;
+        }
+      }
+      return null;
+    }
+
+    function findAcceptRadio(recorded) {
+      const radios = Array.from(
+        document.querySelectorAll(
+          "input[type='radio'][name='attachSiCoverageName'], " +
+            "input[type='radio'][name*='coverage' i], " +
+            "input[type='radio'][name*='warranty' i], " +
+            "input[type='radio'][name*='protection' i]"
+        )
+      ).filter(isVisible);
+      if (!radios.length) return null;
+
+      function scoreRadio(radio) {
+        const container =
+          radio.closest(
+            "[data-coverage-option], .a-row, .a-section, label, li"
+          ) || radio.parentElement;
+        if (!container) return -1;
+        const text = (container.innerText || container.textContent || "")
+          .trim()
+          .toLowerCase();
+        let score = 0;
+
+        // Label token overlap (worth up to 50 pts).
+        if (recorded.optionLabel) {
+          const recTokens = recorded.optionLabel
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((t) => t.length > 2);
+          if (recTokens.length) {
+            const matches = recTokens.filter((t) => text.includes(t)).length;
+            score += (matches / recTokens.length) * 50;
+          }
+        }
+
+        // Price match (up to 30 pts, with tolerance).
+        if (recorded.optionPrice) {
+          const recPrice = parseFloat(
+            String(recorded.optionPrice).replace(/[^\d.]/g, "")
+          );
+          const txtPriceMatch = text.match(/\$\s?(\d+(?:\.\d{2})?)/);
+          if (txtPriceMatch && !Number.isNaN(recPrice)) {
+            const txtPrice = parseFloat(txtPriceMatch[1]);
+            const diff = Math.abs(recPrice - txtPrice);
+            if (diff < 0.01) score += 30;
+            else if (diff < 1) score += 22;
+            else if (diff < 3) score += 8;
+          }
+        }
+
+        // Duration match (up to 30 pts).
+        if (recorded.optionDuration) {
+          const durMatch = text.match(/(\d+)\s*[-\s]?(year|yr|month|mo)\b/i);
+          if (durMatch) {
+            const n = parseInt(durMatch[1], 10);
+            const dur = /year|yr/i.test(durMatch[0]) ? n * 12 : n;
+            if (dur === recorded.optionDuration) score += 30;
+            else if (Math.abs(dur - recorded.optionDuration) <= 2) score += 10;
+          }
+        }
+        return score;
+      }
+
+      const scored = radios.map((r) => ({ radio: r, score: scoreRadio(r) }));
+      scored.sort((a, b) => b.score - a.score);
+      // Require a confident match — 50/100 minimum. Otherwise fall back.
+      if (scored[0] && scored[0].score >= 50) return scored[0].radio;
+      return null;
+    }
+
+    function findContinueControl() {
+      const sels = [
+        "input[type='submit'][name*='attach' i]",
+        "input[type='submit'][name*='continue' i]",
+        "input[type='submit'][value*='Continue' i]",
+        "input[type='submit'][value*='Add to' i]",
+        "button[name*='attach' i]",
+        "button[name*='continue' i]",
+      ];
+      for (const s of sels) {
+        const el = document.querySelector(s);
+        if (el && isVisible(el)) return el;
+      }
+      const candidates = document.querySelectorAll(
+        "input[type='submit'], button[type='submit'], button"
+      );
+      for (const b of candidates) {
+        const t = (b.value || b.textContent || "").toLowerCase().trim();
+        if (
+          (t.includes("continue") ||
+            t.includes("add to cart") ||
+            t.includes("proceed")) &&
+          isVisible(b)
+        ) {
+          return b;
+        }
+      }
+      return null;
+    }
+
+    try {
+      if (!recorded || !recorded.choice) {
+        resolve({ ok: false, error: "no recorded choice" });
+        return;
+      }
+
+      if (recorded.choice === "declined") {
+        const btn = findDeclineControl();
+        if (!btn) {
+          resolve({ ok: false, error: "decline control not found" });
+          return;
+        }
+        try { btn.click(); } catch (e) {
+          resolve({ ok: false, error: "click threw: " + String(e) });
+          return;
+        }
+        resolve({ ok: true, choice: "declined" });
+        return;
+      }
+
+      if (recorded.choice === "accepted") {
+        const radio = findAcceptRadio(recorded);
+        if (!radio) {
+          resolve({ ok: false, error: "no confident coverage option match" });
+          return;
+        }
+        try {
+          radio.click();
+          if (!radio.checked) radio.checked = true;
+          radio.dispatchEvent(new Event("change", { bubbles: true }));
+        } catch (e) {
+          resolve({ ok: false, error: "radio click threw: " + String(e) });
+          return;
+        }
+        // Brief pause so the page can react (some pages enable Continue async).
+        setTimeout(() => {
+          const cont = findContinueControl();
+          if (!cont) {
+            resolve({ ok: false, error: "continue control not found" });
+            return;
+          }
+          try { cont.click(); } catch (e) {
+            resolve({ ok: false, error: "continue click threw: " + String(e) });
+            return;
+          }
+          resolve({ ok: true, choice: "accepted", matched: recorded.optionLabel || "" });
+        }, 700);
+        return;
+      }
+
+      resolve({ ok: false, error: "unknown choice type: " + recorded.choice });
+    } catch (e) {
+      resolve({ ok: false, error: String(e && e.message) || String(e) });
+    }
+  });
+}
+
 // ---- Live operation status ------------------------------------------------
 //
 // A small popup window (status.html) polls MC_GET_STATUS every 350 ms to
@@ -240,34 +524,65 @@ async function scrapeCartInBackground(preferredHost) {
       func: pageScrapeCart,
     });
     const cart = result && result[0] && result[0].result;
-    if (!cart || cart.error) {
-      throw new Error((cart && cart.error) || "pageScrapeCart returned nothing.");
+    if (!cart) {
+      throw new Error("pageScrapeCart returned nothing.");
+    }
+    if (cart.error) {
+      throw new Error(cart.error);
     }
     return cart;
+  }
+
+  /**
+   * A scrape result is "trustworthy" only if either we found items OR the
+   * page itself agrees the cart is empty (nav cart count == 0). If items
+   * is empty but nav count says there ARE items, the page is either still
+   * hydrating or isn't the real cart — caller should try a different tab.
+   */
+  function isTrustworthy(cart) {
+    if (cart.items && cart.items.length > 0) return true;
+    if (cart.navCartCount === 0) return true;
+    return false;
   }
 
   // Fast path: already on the cart page.
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (active && isAmazonCartUrl(active.url) && sameAmazonHost(getUrlHost(active.url), host)) {
-    return runScrape(active.id);
+    const cart = await runScrape(active.id);
+    if (isTrustworthy(cart)) return cart;
+    // Active cart tab returned 0 but nav says items exist — fall through to fresh tab.
   }
 
-  // Reuse an existing cart tab if one is open.
+  // Reuse an existing cart tab if one is open. Filter through isAmazonCartUrl
+  // (regex-based, stricter than match patterns) so we don't grab tabs at URLs
+  // like /cart-purchase-conditions/ that match the broad chrome.tabs.query glob.
   const existingCartTabs = await chrome.tabs.query({ url: AMAZON_CART_PATTERNS });
-  const existingMatch = existingCartTabs.find((t) => sameAmazonHost(getUrlHost(t.url), host));
+  const realCartTabs = existingCartTabs.filter((t) => isAmazonCartUrl(t.url));
+  const existingMatch = realCartTabs.find((t) => sameAmazonHost(getUrlHost(t.url), host));
   if (existingMatch) {
     try {
-      return await runScrape(existingMatch.id);
+      const cart = await runScrape(existingMatch.id);
+      if (isTrustworthy(cart)) return cart;
+      // Existing cart tab returned 0 but nav says items exist — it may be stale
+      // or showing a non-cart state. Fall through to opening a fresh tab.
     } catch (_e) {
       // Existing tab failed (e.g. navigated away) — open a fresh one below.
     }
   }
 
   // Open a silent background tab, wait for it to fully load, scrape, close.
+  // If the first scrape comes back empty but nav-cart-count indicates items,
+  // wait a bit more (cart contents may be hydrating via XHR) and retry once.
   const tempTab = await chrome.tabs.create({ url: cartUrl, active: false });
   try {
     await waitForTabReload(tempTab.id, 20000);
-    return await runScrape(tempTab.id);
+    let cart = await runScrape(tempTab.id);
+    if (!isTrustworthy(cart)) {
+      // Give Amazon another 2.5 s to finish hydrating the cart panel, then retry.
+      await sleep(2500);
+      cart = await runScrape(tempTab.id);
+    }
+    return cart;
   } finally {
     try { await chrome.tabs.remove(tempTab.id); } catch (_e) { /* already closed */ }
   }
@@ -558,7 +873,46 @@ async function restoreCart(savedCart, onProgress) {
 
         // Check for upsell regardless of which path Amazon took.
         if (await isUpsellTab(helperTab.id)) {
-          await waitForUserUpsellChoice(helperTab.id, item, host);
+          // First try to replay the user's previously recorded choice for
+          // this ASIN (24 h TTL). Falls back to the manual prompt if no
+          // recorded choice exists or the page doesn't match confidently.
+          const recorded = await getRecordedUpsellChoice(item.asin);
+          let autoHandled = false;
+          if (recorded) {
+            const ageMs = Date.now() - (recorded.recordedAt || 0);
+            const ageLabel = ageMs < 60 * 60 * 1000
+              ? "earlier today"
+              : ageMs < 24 * 60 * 60 * 1000
+                ? "recently"
+                : "from before";
+            const choiceDesc =
+              recorded.choice === "declined"
+                ? '"No coverage"'
+                : `"${(recorded.optionLabel || "selected option").slice(0, 60)}"`;
+            setOpStatus(
+              `Restoring ${cartLabel}`,
+              `Applying your choice ${ageLabel}: ${choiceDesc}…`
+            );
+            await showStatus(
+              helperTab.id,
+              `Applying your saved choice: ${choiceDesc}`,
+              "loading"
+            );
+            autoHandled = await applyUpsellChoice(helperTab.id, recorded);
+            if (autoHandled) {
+              // Continue button submits a form → page navigates. Wait for it.
+              await sleep(800);
+              try {
+                const tab = await chrome.tabs.get(helperTab.id);
+                if (tab.status === "loading") {
+                  await waitForTabComplete(helperTab.id, 12000);
+                }
+              } catch (_e) { /* tab might have closed */ }
+            }
+          }
+          if (!autoHandled) {
+            await waitForUserUpsellChoice(helperTab.id, item, host);
+          }
         } else if (!navigated) {
           // In-page panel style — give Amazon a moment to register the add.
           await sleep(1200);
@@ -1121,14 +1475,49 @@ async function pageScrapeCart() {
       return isUsable(img) ? src : "";
     }
 
+    // Read the nav cart count (the badge on the cart icon in the header).
+    // This is the source of truth for whether the cart has items — if it
+    // says > 0 but we find 0 rows, the page isn't really the cart or hasn't
+    // finished hydrating, and the caller knows to retry / try another tab.
+    function readNavCartCount() {
+      const candidates = [
+        document.getElementById("nav-cart-count"),
+        document.getElementById("ewc-total-quantity"),
+        document.querySelector("#nav-cart .nav-cart-count"),
+      ];
+      for (const el of candidates) {
+        if (!el) continue;
+        const t = (el.textContent || el.value || "").trim();
+        const n = parseInt(t.replace(/[^\d]/g, ""), 10);
+        if (Number.isFinite(n)) return n;
+      }
+      return null;
+    }
+    const navCartCount = readNavCartCount();
+
     const activeScope =
       document.querySelector("[data-name='Active Items']") ||
       document.querySelector("#sc-active-cart") ||
+      document.querySelector("#ewc-content") ||
+      document.querySelector("#nav-flyout-ewc") ||
       document.body;
 
-    const rows = activeScope.querySelectorAll(
-      "div[data-asin][data-itemtype='active'], div[data-asin].sc-list-item, div[data-asin]"
+    // Try selectors from most specific (typed active rows) to most permissive,
+    // so legitimate cart layouts that don't have the data-itemtype attribute
+    // still match. Stop at the first selector that finds any rows.
+    let rows = activeScope.querySelectorAll(
+      "div[data-asin][data-itemtype='active'], li[data-asin][data-itemtype='active']"
     );
+    if (!rows.length) {
+      rows = activeScope.querySelectorAll(
+        "div[data-asin].sc-list-item, li[data-asin].sc-list-item, li[data-asin].ewc-item"
+      );
+    }
+    if (!rows.length) {
+      // Last-ditch: any element carrying a real ASIN that isn't explicitly
+      // marked as Save-For-Later. Filtering happens in the loop below.
+      rows = activeScope.querySelectorAll("[data-asin]");
+    }
 
     const items = [];
     const seen = new Set();
@@ -1173,9 +1562,20 @@ async function pageScrapeCart() {
       items.push({ asin, title, quantity, price, image, url });
     });
 
-    return { host: location.hostname, capturedAt: new Date().toISOString(), items };
+    return {
+      host: location.hostname,
+      capturedAt: new Date().toISOString(),
+      items,
+      navCartCount,
+    };
   } catch (err) {
-    return { error: String(err && err.message) || String(err), host: location.hostname, capturedAt: new Date().toISOString(), items: [] };
+    return {
+      error: String(err && err.message) || String(err),
+      host: location.hostname,
+      capturedAt: new Date().toISOString(),
+      items: [],
+      navCartCount: null,
+    };
   }
 }
 
@@ -1189,6 +1589,53 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       switch (msg.type) {
         case "MC_GET_STATUS": {
           sendResponse(_opStatus || { active: false, title: "", detail: "" });
+          break;
+        }
+
+        case "MC_OBSERVE_ATC": {
+          // observer.js detected an Add-to-Cart click on a product page.
+          // Stash it keyed by tab id so we can link the upcoming upsell choice.
+          prunePendingAtc();
+          const tabId = _sender && _sender.tab && _sender.tab.id;
+          if (tabId != null && msg.asin) {
+            _pendingAtc.set(tabId, {
+              asin: String(msg.asin).toUpperCase(),
+              title: msg.title || "",
+              host: msg.host || "",
+              at: Date.now(),
+            });
+          }
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case "MC_OBSERVE_UPSELL_CHOICE": {
+          // observer.js detected a decline or accept on an upsell surface.
+          // Link it back to the most recent ATC for this tab and record it.
+          prunePendingAtc();
+          const tabId = _sender && _sender.tab && _sender.tab.id;
+          let pending = tabId != null ? _pendingAtc.get(tabId) : null;
+          if (!pending) {
+            // Fallback: the upsell may be in a different tab than the ATC
+            // (rare but possible with sidesheet flows). Use the newest pending.
+            let newest = null;
+            for (const p of _pendingAtc.values()) {
+              if (!newest || p.at > newest.at) newest = p;
+            }
+            pending = newest;
+          }
+          if (pending && pending.asin) {
+            await recordUpsellChoice(pending.asin, {
+              choice: msg.choice,
+              optionLabel: msg.optionLabel || "",
+              optionPrice: msg.optionPrice || "",
+              optionDuration: msg.optionDuration || null,
+              productHost: pending.host,
+              productTitle: pending.title,
+            });
+            if (tabId != null) _pendingAtc.delete(tabId);
+          }
+          sendResponse({ ok: true });
           break;
         }
 

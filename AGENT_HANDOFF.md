@@ -117,6 +117,50 @@ Product image:     img.sc-product-image  (inside a.sc-product-link — NOT the s
 
 ---
 
+## Pending Test: Upsell Recording & 24h Replay
+
+A new system records the user's protection-plan / warranty / coverage choices
+when they add items to their Amazon cart normally, and replays those choices
+when restoring a saved cart containing the same ASIN (24h TTL).
+
+**Files involved:**
+- `observer.js` — new content script on `/dp/*` and `/gp/*` pages. Watches ATC
+  clicks on product pages and choice clicks on upsell surfaces.
+- `background.js` — `recordUpsellChoice`, `getRecordedUpsellChoice`,
+  `applyUpsellChoice`, `pageApplyUpsellChoice`, `_pendingAtc` map, plus
+  `MC_OBSERVE_ATC` and `MC_OBSERVE_UPSELL_CHOICE` message handlers.
+- `manifest.json` — added a second content_scripts entry for observer.js
+  matching `*://*.{tld}/dp/*` and `*://*.{tld}/gp/*` across all 12 Amazon TLDs.
+
+**Testing checklist:**
+- [ ] Reload the extension after pulling the changes.
+- [ ] Find an Amazon product that triggers a protection-plan upsell (most
+      electronics, appliances, watches). Add it to cart normally.
+- [ ] When the upsell shows, click "No thanks" (or pick a coverage tier and
+      Continue). Both decline and accept paths need separate tests.
+- [ ] Open the service worker console and confirm
+      `chrome.storage.local` contains `mc.upsell.choices.v1` with the ASIN
+      as a key and `recordedAt` timestamp.
+- [ ] Save the cart, clear it, then restore it. During restore, the status
+      window should show `Applying your choice earlier today: "No coverage"…`
+      and the upsell page should auto-submit without prompting.
+- [ ] Verify replay works for **decline** (easy: stable selectors).
+- [ ] Verify replay works for **accept** when tiers haven't changed.
+- [ ] Verify graceful fallback to manual prompt when the same ASIN's
+      upsell tiers have changed (cannot score ≥50 confidently).
+- [ ] Verify TTL: change a recorded entry's `recordedAt` to >24h ago in
+      DevTools storage, then restore — should prompt manually, not replay.
+- [ ] Verify the entry is auto-pruned from storage on next read.
+- [ ] Verify nothing was flagged by Amazon (no CAPTCHA storm, no account
+      warnings) after running through 10+ cart restores.
+
+**Safety design notes:**
+- Never auto-declines by default — only replays choices the user themselves
+  made on the same product within the last 24h.
+- 24h TTL keeps stale choices from being replayed when offered tiers shift.
+- Accept replay requires confident match (≥50/100 score across label tokens,
+  price within $1, duration within 2 months) or it falls back to manual.
+
 ## To Do / Testing Checklist
 
 - [ ] Reload the unpacked extension in Chrome (`chrome://extensions` → reload icon)
