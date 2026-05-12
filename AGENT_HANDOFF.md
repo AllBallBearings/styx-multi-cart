@@ -1,6 +1,384 @@
 # Agent Handoff
 
-Last updated: 2026-05-09
+Last updated: 2026-05-11
+
+---
+
+## Performance Plan (in progress — 2026-05-11)
+
+User reported the extension accumulating messages/errors and using excess memory
+when running in the background. Goal: reduce background work, gate active
+processing behind "Amazon tab in focus", and stop unbounded retry/poll loops.
+
+### Findings
+
+1. **observer.js manifest patterns too broad.** `*://*.{tld}/gp/*` loads
+   observer.js on `/gp/help/`, `/gp/your-account/`, `/gp/orderhistory*`,
+   `/gp/css/*`, `/gp/wishlist/*`, `/gp/registry/*`, `/gp/buy/payselect/*`, etc.
+   The script early-exits on non-applicable pages but Chrome still creates the
+   isolated V8 world per tab, which costs memory across many open Amazon tabs.
+
+2. **10-minute upsell wait loop (`waitForUserUpsellChoice`, background.js:1021).**
+   Polls the upsell tab every 1.5s for up to 10 min via `chrome.scripting.executeScript`.
+   If the user walks away mid-restore, this keeps the service worker alive and
+   injects scripts ~400 times. Probably the biggest leak during operations.
+
+3. **status.js retry loop is unbounded (status.js:62).** On SW restart it
+   retries indefinitely with no max-attempt cap. The dot-animation `setInterval`
+   keeps firing even when the window is hidden/backgrounded.
+
+4. **Errors mostly from `chrome.scripting.executeScript`** in
+   `applyUpsellChoice` / `pageShowStatus` / `isUpsellTab` when tabs navigate
+   mid-injection. Swallowed but surfaced in the extension console.
+
+### Plan (in priority order)
+
+- [x] **Step 1 — Narrow observer.js manifest matches.** Replaced `/gp/*` with
+      explicit subpath list: `/dp/*`, `/gp/product/*`, `/gp/buy/*`, `/gp/sw/*`,
+      `/gp/aw/*`, `/gp/coverage/*`, `/gp/cart/aws/*`. Keeps coverage for product
+      pages and upsell flows; drops it from account/help/order/registry pages.
+      observer.js's own `isProductPage()` / `isUpsellSurface()` checks remain as
+      a second-stage filter — they handle DOM-detected sidesheet upsells on
+      product pages and any path inconsistencies.
+
+- [ ] **Step 2 — Bound the upsell wait loop.**
+      - Abort after N seconds of no observable progress (default 90s).
+      - Pause polling when no Amazon tab is visible (`chrome.tabs.query` for the
+        helper tab's window + visibility check via `executeScript`).
+      - Increase poll interval from 1.5s → 3s while user is away.
+
+- [ ] **Step 3 — Cap status.js retries; pause on `visibilitychange`.**
+      - Hard max retry count (~20) for SW reconnects.
+      - Pause both the polling and dot animation when `document.hidden`.
+      - Resume on `visibilitychange` → visible.
+
+---
+
+## Roadmap to Public Launch (added 2026-05-11)
+
+Three tracks: store readiness, monetization, and a new "Import list as cart"
+feature. None of this is started yet — listed here so the next session can
+pick up coherently.
+
+### Track A — Store readiness (Chrome / Edge / Firefox / Safari)
+
+#### A1. Production hygiene
+- [ ] Strip / wrap all `console.error` and `console.warn` behind a `DEBUG`
+      build flag. Web Store reviewers ding extensions that spam the console.
+- [ ] Remove the in-popup Debug panel (`#mc-debug` in popup.html) or hide it
+      behind a "developer mode" toggle.
+- [ ] Add a `LICENSE` file (MIT or similar) and a real README with
+      install/usage instructions and screenshots.
+- [ ] Privacy policy page (hosted, e.g. GitHub Pages) — required by Chrome
+      Web Store because we access amazon.com content. Must state explicitly
+      that no data is collected/transmitted; everything stays in
+      `chrome.storage.local`.
+- [ ] Permissions justification doc — Web Store now asks per-permission. For
+      `storage`, `activeTab`, `scripting`, `tabs`, and each amazon host
+      pattern, write a one-line reason.
+- [ ] Manifest: add `homepage_url`, `author`, and a long `description` that
+      reads like a tagline ("Save and restore multiple Amazon shopping
+      carts. Free for 2 carts; unlimited with Pro.").
+- [ ] Bump version scheme: switch to `0.x.y` pre-launch, `1.0.0` on launch.
+
+#### A2. Store listing assets
+- [ ] Icon already done (128×128 from `icons/_render.py`).
+- [ ] Small promo tile 440×280 (Chrome Web Store).
+- [ ] Large promo tile 920×680 (optional, helps featured placement).
+- [ ] Marquee 1400×560 (optional).
+- [ ] 1–5 screenshots at 1280×800 OR 640×400 — popup with saved carts,
+      mid-restore status overlay, post-restore confirmation.
+- [ ] 30-second demo video (optional but boosts conversion).
+
+#### A3. Cross-browser support
+- **Edge**: Manifest V3 native. Should "just work"; need separate listing on
+      Microsoft Partner Center.
+- **Firefox**: Supports MV3 but with quirks. Must add
+      `browser_specific_settings.gecko` block to manifest. `chrome.*` APIs
+      work via Mozilla's polyfill; alternately, ship a thin `browser.*`
+      shim. Service workers are supported but flaky on long-running
+      operations — may need a fallback to event pages.
+- **Safari**: Most painful. Requires converting via Xcode
+      (`safari-web-extension-converter`), signing with an Apple Developer
+      account ($99/yr), and submitting through App Store Connect. Defer
+      until traction on Chrome/Edge/Firefox.
+
+#### A4. Tests
+- [ ] **Unit tests (Vitest or Jest)** — extract pure functions to a `lib/`
+      directory and test:
+      - `normalizeAmazonHost`, `sameAmazonHost`, `isAmazonCartUrl`,
+        `isAmazonUrl` in [background.js](background.js).
+      - `pruneUpsellChoices`, `prunePendingAtc`.
+      - Coverage option scoring in `pageApplyUpsellChoice`
+        ([background.js:157-224](background.js:157)).
+      - `pickBestImage` in [content.js](content.js).
+- [ ] **DOM fixture tests** — snapshot Amazon's cart HTML, run `scrapeCart`,
+      `getActiveCartRows`, `findDeleteControl` against fixtures. Refresh
+      fixtures any time Amazon's A/B test breaks selectors.
+- [ ] **E2E tests with Playwright** — drives a real Chromium instance with
+      the extension loaded. Two modes:
+      - **Mocked Amazon**: a local Express server serving fake cart/product
+        HTML. Fast, deterministic. Use for CI.
+      - **Real Amazon**: a small smoke suite that logs in with a throwaway
+        account and validates save/restore on staging carts. Manual or
+        nightly only — Amazon will rate-limit/block CI.
+- [ ] **Cross-browser CI** — GitHub Actions matrix:
+      `{ chrome | edge | firefox } × { extension-load-test, popup-render-test }`.
+      Playwright supports all three.
+
+---
+
+### Track B — Free vs Pro monetization
+
+#### B1. Tier design
+- **Free**: 2 saved carts. Save attempt when at limit → prompt to upgrade
+      or delete an existing cart.
+- **Pro**: 25 saved carts. (Round number, well above typical user need —
+      keeps storage size reasonable since each cart is ~10–100 items.
+      Unlimited is tempting but invites pathological cases like 500 carts
+      that blow out `chrome.storage.local`'s 10 MB quota.)
+- Pricing: $4.99 one-time or $1.49/month — TBD; one-time is friendlier and
+      avoids subscription churn.
+
+#### B2. Billing infrastructure
+- **Recommended: ExtensionPay** (https://extensionpay.com). Built
+      specifically for browser extensions, handles Stripe checkout in a
+      popup, gives you a `extensionpay.user()` call returning paid status.
+      ~5% fee, no monthly minimum, supports Chrome/Firefox/Edge.
+- Alternative: roll your own with Stripe Checkout + license key + a tiny
+      Cloudflare Worker for validation. More work, lower fees.
+- **Do not** rely on Chrome Web Store payments — Google removed extension
+      in-app purchases in 2020.
+
+#### B3. Gating implementation sketch
+- New helper `getProStatus()` in background.js: cached for 24 h in
+      `chrome.storage.local`, refreshed via ExtensionPay SDK.
+- `MC_SAVE_CURRENT` / `MC_SAVE_AND_CLEAR` handlers: count existing carts,
+      reject with `{ ok: false, code: "FREE_LIMIT", error: "..." }` when at
+      cap AND not Pro.
+- Popup: show a small "X / 2 carts (Free)" badge near `#mc-list-count`;
+      clicking opens an upgrade flow.
+- Never silently truncate the user's data. If a paid user lapses, keep all
+      saved carts read-only — let them restore and delete but not add new
+      ones until they renew.
+
+---
+
+### Track C — Import Amazon Lists as Carts
+
+User idea: let users convert their Amazon Wishlists / Lists into Styx carts
+so they can one-click load a curated list to checkout.
+
+#### C1. Feasibility
+- List URLs: `/hz/wishlist/ls/{listId}` (modern) and
+      `/gp/registry/wishlist/{listId}` (legacy). Both render server-side
+      with `data-itemid` rows containing ASIN + title + price + image.
+- DOM is materially different from the cart page — needs its own scraper
+      function (`pageScrapeList` parallel to `pageScrapeCart`).
+- Lists can be private (auth-gated) or public. Auth-gated ones work
+      because we're in the user's session.
+- Lists can be huge (100+ items). Need to handle pagination ("Page 2",
+      `?page=2`) — list pages have a "Load more" button or numbered pages.
+
+#### C2. UX sketch
+- New section in popup or a separate "Import" button next to "Save".
+- User flow:
+  1. Click "Import from list"
+  2. Popup prompts: paste a list URL, or pick from "Your lists" (we can
+     scrape `/hz/wishlist/` to enumerate them).
+  3. Background opens the list URL in a hidden tab, scrapes all pages,
+     closes the tab.
+  4. Saved as a cart with `name = list name`, `host`, `items[]` — same
+     schema as a normal saved cart, so restore Just Works.
+
+#### C3. Implementation steps
+- [ ] New `MC_LIST_USER_LISTS` message + `pageScrapeUserLists` to enumerate
+      the user's lists from `/hz/wishlist/`.
+- [ ] New `MC_IMPORT_LIST` message + `pageScrapeList` to scrape a single
+      list (handle pagination internally).
+- [ ] Popup UI: list picker modal or URL input.
+- [ ] Edge cases: out-of-stock items (Amazon shows but with no ATC button —
+      `restoreCart` should treat as a soft failure and surface in the
+      "N failed" tail), variant-only items (`/dp/B0...?th=1`), digital
+      goods (no qty selector).
+- [ ] Should imported carts be marked as "from list" so users can distinguish
+      them from manually saved snapshots? Probably yes — small badge in the
+      popup.
+
+---
+
+### Track D — Cart editing & merging
+
+Two related features for power users who curate their saved carts over time.
+
+#### D1. Edit a saved cart
+- [ ] **Add current onscreen item to a saved cart.** While on a product
+      page (`/dp/...` or `/gp/product/...`), let the user push that single
+      ASIN into any saved cart without going through Amazon's actual cart.
+      - New popup button "Add this item to…" (visible only when active tab
+        is a product page).
+      - Scrape ASIN + title + price + image from the current page (reuse
+        the observer.js `getAsinFromPage` / `getProductTitle` helpers —
+        promote them to a shared function).
+      - New message `MC_ADD_ITEM_TO_CART { savedCartId, item }`. Background
+        appends to the target cart's `items[]` if the ASIN isn't already
+        there; if it is, bump `quantity`.
+- [ ] **Remove an item from a saved cart.** Open the cart's item list in
+      the popup with per-row delete buttons.
+      - Currently the popup only shows thumbnail strip + counts; need an
+        expandable "View items" panel per cart.
+      - New message `MC_REMOVE_ITEM_FROM_CART { savedCartId, asin }`.
+      - If the last item is removed, prompt to delete the cart entirely.
+- [ ] **Edit item quantity.** Quantity stepper in the same expanded view.
+      Useful for users who saved a cart with qty=1 but want qty=5 next
+      time they restore.
+
+#### D2. Combine carts
+- [ ] **Merge two carts into a new one.** User picks 2+ saved carts → Styx
+      creates a new cart with the union of items.
+      - UI: selection mode on the popup list ("Combine…" button → checkboxes
+        appear → pick 2+ → "Combine selected" → name prompt).
+      - Merge logic: same ASIN across carts → sum quantities (or take the
+        max — TBD; sum is more intuitive but can produce surprising
+        totals).
+      - Origin host: error if the carts come from different Amazon TLDs
+        (e.g. amazon.com + amazon.co.uk — can't restore across regions).
+        Surface this clearly before the merge.
+      - New message `MC_COMBINE_CARTS { ids: [...], name, mergeStrategy }`.
+- [ ] **Append vs replace option** — alternative to "create new cart",
+      append cart B into cart A in place. Less common but useful for users
+      who maintain one master cart.
+
+---
+
+### Track F — Hybrid batch + reconciliation restore
+
+Two-phase restore: try Amazon's batched cart-add endpoint
+(`/gp/aws/cart/add.html`) for speed, then verify the live cart against
+the saved snapshot and per-item-drive anything the batch dropped. Closes
+the reliability gap that historically pushed us toward the slower drive
+approach (see existing comment at
+[background.js:752-767](background.js:752)).
+
+#### F1. Design
+1. **Batch add**: build a URL like
+   `/gp/aws/cart/add.html?ASIN.1=B0X&Quantity.1=1&ASIN.2=B0Y&Quantity.2=2…`
+   and open it in the helper tab. The user lands on Amazon's "review
+   additions" page with all items pre-staged and clicks "Add all" once.
+2. **Wait for commit**: detect navigation to `/gp/cart/view.html`.
+3. **Reconcile**: scrape the live cart via the existing
+   `scrapeCartInBackground` ([background.js:517](background.js:517)) /
+   `pageScrapeCart` ([background.js:1425](background.js:1425)), then diff
+   against `savedCart.items[]`:
+   - **Missing ASINs** → run the existing per-item drive
+     (`pageAddToCart` at [background.js:1097](background.js:1097)) on
+     just those items, so the normal ATC + upsell pipeline runs.
+   - **Quantity drift** → record for the summary; do NOT auto-correct
+     (per user direction).
+4. **Summary report**: end-of-restore status entry listing dropped items,
+   quantity drift, and any items whose seller/variant may differ from
+   what was originally saved — so the user can review before checkout.
+
+The existing "batch endpoint is unreliable, drive the UI instead" comment
+becomes outdated — it's still unreliable on its own, but reconciliation
+is the new reliability mechanism.
+
+#### F2. Implementation checklist
+- [ ] Batch-URL builder helper; chunk into ≤50-ASIN batches if the saved
+      cart is bigger than Amazon's URL-length limit allows.
+- [ ] Open the batch URL in the helper tab `active: true`; watch for
+      landing on `/gp/cart/view.html` to know the user committed.
+- [ ] Reuse `scrapeCartInBackground` for the verification scrape.
+- [ ] New `reconcileCart(saved, live)` helper returning
+      `{ missing: [...], quantityDrift: [{asin, expected, actual}], possibleVariantMismatch: [...] }`.
+- [ ] Refactor the per-item-drive loop inside `restoreCart`
+      ([background.js:768](background.js:768)) to accept a filtered
+      ASIN subset rather than the full saved cart.
+- [ ] Summary toast / status entry listing all issues, e.g.
+      `2 items added with qty 1 instead of 3 — please adjust on the cart page`,
+      `1 item came from a different seller — check before checkout`.
+- [ ] "Restore mode" toggle in the popup — `Quick (batch)` default vs
+      `Reliable (drive)` (current behavior). Persist preference in
+      `chrome.storage.local`.
+
+#### F3. Decisions & edge cases
+- **Quantity drift** → no auto-correct. Surface each affected item in the
+  summary with expected vs actual qty; user adjusts on the cart page.
+  *(Confirmed by user.)*
+- **Variant / seller selection** → the batch endpoint uses Amazon's
+  default seller/variant per ASIN, which may differ from what the user
+  saw when the cart was originally saved. Don't override; surface in the
+  summary so the user can review before checkout. *(Confirmed by user.)*
+- **Upsells skip the batch path.** The 24 h upsell-choice replay
+  (`getRecordedUpsellChoice` at [background.js:81](background.js:81))
+  only fires during the per-item ATC click flow, so items added via batch
+  won't get their recorded protection-plan / coverage choices applied.
+  Two options:
+  - (a) Accept that batch-loaded items skip upsells entirely.
+  - (b) After batch + reconcile, run a third pass visiting each ASIN's
+        product page just to apply recorded upsell choices.
+  - **Recommendation**: ship (a) first; add (b) later if users complain.
+- **Pre-clear** → continue using `clearThenRestoreCart`'s
+  ([background.js:963](background.js:963)) existing pre-clear step.
+  Hybrid path runs after the live cart is empty.
+- **URL length limit** → Amazon's batch endpoint caps around 50–100 ASIN
+  params. For oversized carts, chunk into multiple batch pages
+  sequentially; reconciliation runs once at the very end.
+
+---
+
+### Track E — Status toast redesign
+
+The floating progress toast injected into the Amazon page during clear /
+restore operations (`pageShowStatus` in
+[background.js:1308](background.js:1308)) needs both a bug fix and a glow-up.
+
+#### E1. Fix: text overflowing the background
+- Long product titles in the "Restoring cart — adding N of M: [Title]"
+  message extend past the orange box.
+- Root cause: the message `<span>` uses `white-space: nowrap` (line ~1356)
+  with no `overflow` / `text-overflow`, and the toast has
+  `width: max-content` which lets it exceed `max-width: 560px` in some
+  layouts.
+- Fix options (cheapest first):
+  - Switch span to `white-space: normal; word-break: break-word; overflow: hidden; text-overflow: ellipsis`
+    and let the toast wrap to 2 lines.
+  - Truncate the title to ~50 chars in `restoreCart` before passing it to
+    `showStatus` (already partially done — currently truncates at 46 chars
+    in [background.js:807](background.js:807) but that ends up too long
+    when combined with the "adding N of M:" prefix).
+  - Drop `width: max-content` and use a fixed-width pill with internal
+    scrolling/ellipsis.
+
+#### E2. Redesign: bigger, more on-brand, animated icon
+- [ ] **Color & style**: move away from solid amber → use the extension's
+      navy + amber palette. Maybe a dark navy pill with a glowing amber
+      border, drop shadow, subtle gradient. The current solid orange reads
+      as a generic warning banner, not a branded surface.
+- [ ] **Show the Styx icon** inside the toast — left-aligned, at the
+      current spinner's slot. Embed the icon as inline SVG (the SVG already
+      lives in [popup.html](popup.html:12), pull it into a self-contained
+      function the `executeScript` injection can use; can't reference
+      `chrome.runtime.getURL` paths because the injected function runs in
+      the page's MAIN world).
+- [ ] **Animate the carts**: while a restore is in progress, animate the
+      three carts in the icon cycling through the triangle positions —
+      top → bottom-right → bottom-left → top. Pure SVG + CSS animation
+      (`@keyframes` translating each `<g>` group around the triangle
+      vertices) so it doesn't depend on JS timers in the page context.
+      Visualizes the "ferrying between carts" idea — items moving from
+      saved snapshot into the live cart.
+- [ ] **Done state**: animation stops, carts settle into final triangle,
+      checkmark briefly overlays the apex.
+- [ ] **Error state**: red glow border, animation pauses at current frame,
+      warning icon overlays.
+
+Implementation note: keep `pageShowStatus` self-contained (no external
+files). The icon SVG markup + keyframe CSS will need to be embedded as
+string literals inside that function so `chrome.scripting.executeScript`
+can serialize it.
+
+---
 
 ## Project Overview
 

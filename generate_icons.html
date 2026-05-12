@@ -140,18 +140,18 @@
         const cartH = s * 0.1;
 
         // Top cart (apex) — wheels visible
-        cart(s * 0.5, s * 0.22, cartW, cartH, true);
-        // Bottom-left cart — wheels submerged
-        cart(s * 0.235, s * 0.42, cartW, cartH, false);
-        // Bottom-right cart — wheels submerged
-        cart(s * 0.765, s * 0.42, cartW, cartH, false);
+        cart(s * 0.5, s * 0.32, cartW, cartH, true);
+        // Bottom-left cart — wheels lap the waterline
+        cart(s * 0.235, s * 0.5, cartW, cartH, true);
+        // Bottom-right cart — shifted right so handle clears top cart wheel
+        cart(s * 0.79, s * 0.5, cartW, cartH, true);
 
         // ---- The river Styx -----------------------------------------------
         const waveCfg = [
-          { y: 0.5, amp: 0.045, alpha: 1, width: 0.032 },
-          { y: 0.625, amp: 0.03, alpha: 0.55, width: 0.025 },
-          { y: 0.75, amp: 0.028, alpha: 0.38, width: 0.022 },
-          { y: 0.875, amp: 0.022, alpha: 0.25, width: 0.018 },
+          { y: 0.62, amp: 0.045, alpha: 1, width: 0.032 },
+          { y: 0.72, amp: 0.03, alpha: 0.55, width: 0.025 },
+          { y: 0.81, amp: 0.028, alpha: 0.38, width: 0.022 },
+          { y: 0.89, amp: 0.022, alpha: 0.25, width: 0.018 },
         ];
 
         // Filled body of the river (using the top wave as its surface)
