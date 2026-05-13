@@ -255,58 +255,6 @@ body {
   border: 1px solid var(--mc-line);
 }
 
-.mc-mode-toggle {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mc-mode-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--mc-fg-muted);
-  font-weight: 700;
-}
-
-.mc-mode-btn {
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border: 1px solid var(--mc-line-strong);
-  background: var(--mc-bg);
-  color: var(--mc-fg-soft);
-  cursor: pointer;
-  transition: background 120ms, color 120ms, border-color 120ms;
-}
-
-.mc-mode-btn + .mc-mode-btn {
-  margin-left: -1px;
-}
-
-.mc-mode-btn:first-of-type {
-  border-radius: 999px 0 0 999px;
-}
-
-.mc-mode-btn:last-of-type {
-  border-radius: 0 999px 999px 0;
-}
-
-.mc-mode-btn[aria-pressed="true"] {
-  background: var(--mc-accent);
-  border-color: var(--mc-accent-strong);
-  color: var(--mc-accent-ink);
-  z-index: 1;
-}
-
-.mc-mode-btn:focus-visible {
-  outline: 2px solid var(--mc-link);
-  outline-offset: 1px;
-  z-index: 2;
-}
-
 .mc-list {
   list-style: none;
   margin: 0;

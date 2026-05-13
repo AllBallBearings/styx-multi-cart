@@ -21,8 +21,6 @@
   const $template = document.getElementById("mc-item-template");
   const $diagnose = document.getElementById("mc-diagnose");
   const $debugOutput = document.getElementById("mc-debug-output");
-  const $modeQuick = document.getElementById("mc-mode-quick");
-  const $modeReliable = document.getElementById("mc-mode-reliable");
 
   // ---- Messaging ---------------------------------------------------------
 
@@ -353,36 +351,9 @@
     }
   });
 
-  // ---- Restore mode toggle -----------------------------------------------
-
-  function paintRestoreMode(mode) {
-    const m = mode === "reliable" ? "reliable" : "quick";
-    $modeQuick.setAttribute("aria-pressed", String(m === "quick"));
-    $modeReliable.setAttribute("aria-pressed", String(m === "reliable"));
-  }
-
-  async function loadRestoreMode() {
-    const res = await send({ type: "MC_GET_RESTORE_MODE" });
-    paintRestoreMode((res && res.mode) || "quick");
-  }
-
-  async function setRestoreMode(mode) {
-    paintRestoreMode(mode);
-    await send({ type: "MC_SET_RESTORE_MODE", mode });
-  }
-
-  $modeQuick.addEventListener("click", () => setRestoreMode("quick"));
-  $modeReliable.addEventListener("click", () => setRestoreMode("reliable"));
-
   // ---- Boot --------------------------------------------------------------
 
-  document.addEventListener("DOMContentLoaded", () => {
-    refresh();
-    loadRestoreMode();
-  });
+  document.addEventListener("DOMContentLoaded", refresh);
   // In case the popup script runs after DOMContentLoaded already fired:
-  if (document.readyState !== "loading") {
-    refresh();
-    loadRestoreMode();
-  }
+  if (document.readyState !== "loading") refresh();
 })();
