@@ -751,19 +751,18 @@ async function sendToContent(tabId, message) {
 // ---- Restore: navigate-and-click ------------------------------------------
 
 /**
- * Amazon's old batch endpoint (/gp/aws/cart/add.html) is unreliable —
- * frequent silent drops that land you on an empty cart. The bulletproof
- * approach is to actually drive the site:
+ * Restore drives Amazon's per-item add flow in a helper tab — for each
+ * saved ASIN we land on the product page, set quantity, click Add to
+ * Cart, dismiss any upsell, then move on. This is the same UI a human
+ * would use, so authentication, region locks, upsells, and seller-
+ * specific buy-box selection all just work.
  *
- *   1. Open one helper tab.
- *   2. For each saved item, navigate it to that product's page.
- *   3. Run an in-page script that selects the right quantity and clicks
- *      the page's real "Add to Cart" button.
- *   4. End on /gp/cart/view.html so the user can review.
- *
- * It's slower (~3–5s per item) but it actually works, and it goes through
- * the same UI flow as a human, so authentication, sessions, region locks,
- * and seller-specific buy-box selection all just work.
+ * We previously tried Amazon's batch add endpoint
+ * (/gp/aws/cart/add.html?ASIN.1=…) as a fast path, but as of late 2026
+ * that page no longer renders an "Add all" confirmation — it just shows
+ * an empty cart view, silently drops the items, and offers a "Go To
+ * Cart" link. The batch path has been removed; see git history for the
+ * old `restoreCartHybrid` if Amazon ever revives the endpoint.
  */
 async function restoreCart(savedCart, onProgress) {
   const items = (savedCart.items || []).filter((it) => it && it.asin);
@@ -784,7 +783,23 @@ async function restoreCart(savedCart, onProgress) {
   const cartLabel = savedCart.name ? `"${savedCart.name}"` : "cart";
   setOpStatus(`Restoring ${cartLabel}`, `Loading first product…`);
 
-  const helperTab = await chrome.tabs.create({ url: productUrl(items[0]), active: true });
+  // Reuse the user's active Amazon tab if they have one — they were
+  // almost certainly on the cart page when they clicked Restore, and
+  // we're about to navigate it anyway. Spawning a second tab and
+  // leaving the original on a stale "Preparing…" toast is just noise.
+  // Fall back to a fresh tab only if no Amazon tab is foregrounded
+  // (e.g. user triggered restore from a non-Amazon page).
+  let helperTab;
+  try {
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (active && isAmazonUrl(active.url)) {
+      await chrome.tabs.update(active.id, { url: productUrl(items[0]), active: true });
+      helperTab = active;
+    }
+  } catch (_e) { /* fall through to create */ }
+  if (!helperTab) {
+    helperTab = await chrome.tabs.create({ url: productUrl(items[0]), active: true });
+  }
   await waitForTabReload(helperTab.id, 20000);
 
   let added = 0;
@@ -804,7 +819,7 @@ async function restoreCart(savedCart, onProgress) {
       // Show per-item progress on the now-loaded product page and in the status window.
       {
         const raw = item.title || item.asin || '';
-        const shortTitle = raw.length > 46 ? raw.slice(0, 44) + '…' : raw;
+        const shortTitle = raw.length > 30 ? raw.slice(0, 28) + '…' : raw;
         setOpStatus(
           `Restoring ${cartLabel}`,
           `Item ${i + 1} of ${items.length}: ${shortTitle}`
@@ -985,6 +1000,16 @@ async function clearThenRestoreCart(target) {
       await sleep(2000);
     }
 
+    // Note: we used to try Amazon's /gp/aws/cart/add.html batch endpoint
+    // first and only per-item-drive the missing items. As of 2026 that
+    // page no longer renders an "Add all" confirmation — it just shows
+    // an empty cart view with a "Go To Cart" link and silently drops
+    // the additions. There is no button to auto-click, so the batch
+    // path is strictly worse than the per-item drive (which works).
+    // Go straight to the reliable per-item engine. restoreCart reuses
+    // the active Amazon tab, so the "Preparing…" toast painted above
+    // will be naturally overwritten by restoreCart's own progress and
+    // final done/error toasts.
     await restoreCart(target);
   } catch (err) {
     console.error("[Styx Multi-Cart] restore failed", err);
@@ -1020,14 +1045,20 @@ async function isUpsellTab(tabId) {
 
 async function waitForUserUpsellChoice(tabId, item, host) {
   await chrome.tabs.update(tabId, { active: true });
-  let noticeShown = await showRestoreUpsellNotice(tabId, item);
+  const raw = (item && item.title) || "this item";
+  const shortTitle = raw.length > 40 ? raw.slice(0, 38) + "…" : raw;
+  setOpStatus(
+    "Waiting on your choice",
+    `Pick a protection option for "${shortTitle}" on the Amazon page — restore resumes automatically.`
+  );
+  await showRestoreUpsellNotice(tabId, item);
 
   const timeoutAt = Date.now() + 10 * 60 * 1000;
   while (Date.now() < timeoutAt) {
     await sleep(1500);
-    if (!noticeShown) {
-      noticeShown = await showRestoreUpsellNotice(tabId, item);
-    }
+    // Re-paint the toast each poll — Amazon's protection-plan flow
+    // sometimes swaps the page body mid-interaction, wiping our node.
+    await showRestoreUpsellNotice(tabId, item);
     if (!(await isUpsellTab(tabId))) {
       await waitForTabComplete(tabId, 15000);
       await sleep(800);
@@ -1043,15 +1074,16 @@ async function waitForUserUpsellChoice(tabId, item, host) {
 }
 
 async function showRestoreUpsellNotice(tabId, item) {
+  var raw = (item && item.title) || "this item";
+  var shortTitle = raw.length > 50 ? raw.slice(0, 48) + "…" : raw;
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: pageShowRestoreUpsellNotice,
-      args: [item && item.title ? item.title : "this item"],
-    });
+    await showStatus(
+      tabId,
+      'Amazon needs your protection-plan choice for "' + shortTitle + '". Pick an option below — Styx will keep restoring the rest of your cart as soon as you choose.',
+      "loading"
+    );
     return true;
   } catch (_e) {
-    // The user can still resolve the Amazon prompt directly.
     return false;
   }
 }
@@ -1284,16 +1316,6 @@ function pageHasRestoreUpsell() {
   );
 }
 
-function pageShowRestoreUpsellNotice(title) {
-  if (window.__styxRestoreUpsellNoticeShown) return;
-  window.__styxRestoreUpsellNoticeShown = true;
-  setTimeout(() => {
-    alert(
-      `Styx paused restore for "${title}" because Amazon needs your upsell choice.\n\nChoose the option you want on this Amazon page. Styx will continue restoring the remaining items after the prompt is complete.`
-    );
-  }, 50);
-}
-
 /**
  * Runs in the page context via chrome.scripting.executeScript.
  * Creates or updates a floating status toast in the bottom-right corner.
@@ -1314,46 +1336,122 @@ function pageShowStatus(message, type) {
     (document.body || document.documentElement).appendChild(toast);
   }
 
-  // Inject spinner keyframe once per page.
+  // Inject keyframes + animation classes once per page.
   if (!document.getElementById('__styx-kf')) {
     var s = document.createElement('style');
     s.id = '__styx-kf';
-    s.textContent = '@keyframes _styxSpin{to{transform:rotate(360deg)}}';
+    // Three carts cycle through triangle vertices:
+    //   TOP  ≈ (15.5, 10.2)   BL ≈ (7.5, 16)   BR ≈ (24.5, 16)
+    // Each cart visits all 3 vertices; offset by 1/3 of the 2.4s cycle.
+    s.textContent =
+      '@keyframes _styxCartA{' +
+        '0%,100%{transform:translate(0,0)}' +
+        '33%{transform:translate(9px,5.8px)}' +
+        '66%{transform:translate(-8px,5.8px)}' +
+      '}' +
+      '@keyframes _styxCartB{' +
+        '0%,100%{transform:translate(0,0)}' +
+        '33%{transform:translate(8px,-5.8px)}' +
+        '66%{transform:translate(17px,0)}' +
+      '}' +
+      '@keyframes _styxCartC{' +
+        '0%,100%{transform:translate(0,0)}' +
+        '33%{transform:translate(-17px,0)}' +
+        '66%{transform:translate(-9px,-5.8px)}' +
+      '}' +
+      '.__styx-toast-loading .__styx-cart-a{animation:_styxCartA 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      '.__styx-toast-loading .__styx-cart-b{animation:_styxCartB 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      '.__styx-toast-loading .__styx-cart-c{animation:_styxCartC 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      '@keyframes _styxFadeIn{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}';
     (document.head || document.body || document.documentElement).appendChild(s);
   }
 
-  var bg  = type === 'done' ? '#1e7e34' : type === 'error' ? '#b1271b' : '#ff9900';
-  var fg  = (type === 'done' || type === 'error') ? '#ffffff' : '#1a1209';
-  var bdr = type === 'done' ? '#155724' : type === 'error' ? '#8b1a15' : '#e88a00';
+  var accent = type === 'done' ? '#34d399' : type === 'error' ? '#ef4444' : '#ff9900';
+  var glowRgb = type === 'done' ? '52,211,153' : type === 'error' ? '239,68,68' : '255,153,0';
 
   var ts = toast.style;
   ts.position = 'fixed'; ts.top = '24px'; ts.left = '50%';
   ts.transform = 'translateX(-50%)'; ts.bottom = ''; ts.right = '';
   ts.zIndex = '2147483647';
   ts.display = 'flex'; ts.alignItems = 'center'; ts.gap = '14px';
-  ts.padding = '14px 24px'; ts.borderRadius = '12px';
-  ts.border = '1px solid ' + bdr;
-  ts.background = bg; ts.color = fg;
+  ts.padding = '16px 22px'; ts.borderRadius = '14px';
+  ts.border = '1px solid ' + accent;
+  ts.background = '#131a22'; ts.color = '#ffffff';
   ts.fontFamily = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
-  ts.fontSize = '19px'; ts.fontWeight = '600'; ts.lineHeight = '1.4';
-  ts.boxShadow = '0 6px 24px rgba(0,0,0,.28)';
-  ts.maxWidth = '560px'; ts.width = 'max-content'; ts.pointerEvents = 'none';
-  ts.opacity = '1'; ts.transition = 'opacity .2s';
+  ts.fontSize = '18px'; ts.fontWeight = '600'; ts.lineHeight = '1.35';
+  ts.boxShadow = '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)';
+  ts.maxWidth = '720px'; ts.width = ''; ts.pointerEvents = 'none';
+  ts.opacity = '1'; ts.transition = 'opacity .2s, box-shadow .25s, border-color .25s';
+
+  toast.className = type === 'loading' ? '__styx-toast-loading' : '';
 
   if (toast._styxTimer) { clearTimeout(toast._styxTimer); toast._styxTimer = null; }
 
-  var icon = document.createElement('div');
-  icon.style.cssText = 'flex-shrink:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center';
-  if (type === 'loading') {
-    icon.innerHTML = '<div style="width:19px;height:19px;border-radius:50%;border:3px solid ' + fg + ';border-top-color:transparent;animation:_styxSpin .7s linear infinite"></div>';
-  } else if (type === 'done') {
-    icon.innerHTML = '<svg width="21" height="21" viewBox="0 0 21 21" fill="none"><path d="M3 10.5L8.5 16L18 5" stroke="' + fg + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  } else {
-    icon.innerHTML = '<svg width="21" height="21" viewBox="0 0 21 21" fill="none"><path d="M10.5 4v8M10.5 15.5v1.5" stroke="' + fg + '" stroke-width="3" stroke-linecap="round"/></svg>';
+  // Styx logo (carts + river) — copied from popup.html, with class hooks
+  // on each cart's <g> and its wheels for the cycling animation.
+  var logoSvg =
+    '<svg width="36" height="36" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:block">' +
+      '<rect width="32" height="32" rx="7" fill="#131a22"/>' +
+      // Top cart (apex)
+      '<g class="__styx-cart-a">' +
+        '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/>' +
+          '<path d="M12 8.6 L10.5 7.3"/>' +
+        '</g>' +
+        '<circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/>' +
+        '<circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/>' +
+      '</g>' +
+      // Bottom-left cart
+      '<g class="__styx-cart-b">' +
+        '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/>' +
+          '<path d="M4 14.4 L2.5 13.1"/>' +
+        '</g>' +
+        '<circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/>' +
+        '<circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/>' +
+      '</g>' +
+      // Bottom-right cart
+      '<g class="__styx-cart-c">' +
+        '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/>' +
+          '<path d="M21 14.4 L19.5 13.1"/>' +
+        '</g>' +
+        '<circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/>' +
+        '<circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/>' +
+      '</g>' +
+      // River Styx
+      '<path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/>' +
+      '<path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/>' +
+      '<path d="M0 23 Q 4 22, 8 23 T 16 23 T 24 23 T 32 23" stroke="#5db5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.55"/>' +
+      '<path d="M0 25.9 Q 4 25, 8 25.9 T 16 25.9 T 24 25.9 T 32 25.9" stroke="#5db5ff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.38"/>' +
+      '<path d="M0 28.5 Q 4 27.8, 8 28.5 T 16 28.5 T 24 28.5 T 32 28.5" stroke="#5db5ff" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.25"/>' +
+    '</svg>';
+
+  // Apex overlay glyph for done/error states.
+  var overlay = '';
+  if (type === 'done') {
+    overlay =
+      '<div style="position:absolute;left:50%;top:32%;width:18px;height:18px;transform:translate(-50%,-50%) scale(1);' +
+        'background:#34d399;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
+        'box-shadow:0 0 8px rgba(52,211,153,.7);animation:_styxFadeIn .2s ease-out">' +
+        '<svg width="12" height="12" viewBox="0 0 21 21" fill="none"><path d="M3 10.5L8.5 16L18 5" stroke="#0b1a14" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</div>';
+  } else if (type === 'error') {
+    overlay =
+      '<div style="position:absolute;left:50%;top:32%;width:18px;height:18px;transform:translate(-50%,-50%) scale(1);' +
+        'background:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
+        'color:#fff;font-size:13px;font-weight:800;line-height:1;' +
+        'box-shadow:0 0 8px rgba(239,68,68,.7);animation:_styxFadeIn .2s ease-out">!</div>';
   }
 
+  var icon = document.createElement('div');
+  icon.style.cssText = 'position:relative;flex-shrink:0;width:36px;height:36px';
+  icon.innerHTML = logoSvg + overlay;
+
   var span = document.createElement('span');
-  span.style.cssText = 'flex:1;word-break:break-word;white-space:nowrap';
+  span.style.cssText =
+    'flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;' +
+    'display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden';
   span.textContent = message;
 
   toast.innerHTML = '';
