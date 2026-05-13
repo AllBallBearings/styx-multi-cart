@@ -751,19 +751,16 @@ async function sendToContent(tabId, message) {
 // ---- Restore: navigate-and-click ------------------------------------------
 
 /**
- * Amazon's old batch endpoint (/gp/aws/cart/add.html) is unreliable —
- * frequent silent drops that land you on an empty cart. The bulletproof
- * approach is to actually drive the site:
+ * Two restore paths are available:
  *
- *   1. Open one helper tab.
- *   2. For each saved item, navigate it to that product's page.
- *   3. Run an in-page script that selects the right quantity and clicks
- *      the page's real "Add to Cart" button.
- *   4. End on /gp/cart/view.html so the user can review.
+ *   "reliable" (restoreCart): drive each product page, click ATC, handle
+ *     upsells. ~3–5s per item but works through the same UI a human uses.
+ *   "quick"    (restoreCartHybrid): open Amazon's batch add page, the user
+ *     clicks "Add all" once, then we verify the live cart against the
+ *     saved snapshot and per-item-drive anything the batch dropped.
  *
- * It's slower (~3–5s per item) but it actually works, and it goes through
- * the same UI flow as a human, so authentication, sessions, region locks,
- * and seller-specific buy-box selection all just work.
+ * The "quick" path is the default; the toggle lives in the popup and
+ * persists in chrome.storage.local under `restoreMode`.
  */
 async function restoreCart(savedCart, onProgress) {
   const items = (savedCart.items || []).filter((it) => it && it.asin);
@@ -804,7 +801,7 @@ async function restoreCart(savedCart, onProgress) {
       // Show per-item progress on the now-loaded product page and in the status window.
       {
         const raw = item.title || item.asin || '';
-        const shortTitle = raw.length > 46 ? raw.slice(0, 44) + '…' : raw;
+        const shortTitle = raw.length > 30 ? raw.slice(0, 28) + '…' : raw;
         setOpStatus(
           `Restoring ${cartLabel}`,
           `Item ${i + 1} of ${items.length}: ${shortTitle}`
@@ -960,6 +957,254 @@ async function restoreCart(savedCart, onProgress) {
   };
 }
 
+// ---- Hybrid restore: batch + reconciliation -------------------------------
+
+const RESTORE_MODE_KEY = 'restoreMode';
+const BATCH_CHUNK_SIZE = 50;
+
+async function getRestoreMode() {
+  try {
+    const obj = await chrome.storage.local.get(RESTORE_MODE_KEY);
+    return obj[RESTORE_MODE_KEY] === 'reliable' ? 'reliable' : 'quick';
+  } catch (_e) {
+    return 'quick';
+  }
+}
+
+function chunkItems(items, size) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+function buildBatchAddUrl(host, chunk) {
+  const params = new URLSearchParams();
+  chunk.forEach((it, idx) => {
+    const n = idx + 1;
+    params.set(`ASIN.${n}`, it.asin);
+    params.set(`Quantity.${n}`, String(Math.max(1, it.quantity || 1)));
+  });
+  return `https://${host}/gp/aws/cart/add.html?${params.toString()}`;
+}
+
+/**
+ * Wait for the helper tab to land on /gp/cart/view.html (i.e. the user
+ * clicked "Add all" on the batch staging page and Amazon committed the
+ * additions). Resolves true on land, false on timeout.
+ */
+function waitForCartViewLand(tabId, timeoutMs) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      try { chrome.tabs.onUpdated.removeListener(listener); } catch (_e) {}
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const listener = (id, info, tab) => {
+      if (id !== tabId) return;
+      if (info && info.status === 'complete') {
+        const url = (tab && tab.url) || '';
+        if (isAmazonCartUrl(url)) finish(true);
+      }
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+  });
+}
+
+/**
+ * Diff a saved cart snapshot against the live cart scrape.
+ *
+ * @returns {{
+ *   missing: object[],
+ *   quantityDrift: {asin:string,title:string,expected:number,actual:number}[],
+ *   possibleVariantMismatch: {asin:string,savedTitle:string,liveTitle:string}[]
+ * }}
+ */
+function reconcileCart(savedItems, liveItems) {
+  const liveByAsin = new Map();
+  for (const it of liveItems || []) {
+    if (it && it.asin) liveByAsin.set(it.asin, it);
+  }
+  const missing = [];
+  const quantityDrift = [];
+  const possibleVariantMismatch = [];
+  const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+  for (const saved of savedItems) {
+    if (!saved || !saved.asin) continue;
+    const live = liveByAsin.get(saved.asin);
+    if (!live) {
+      missing.push(saved);
+      continue;
+    }
+    const expected = Math.max(1, saved.quantity || 1);
+    const actual = Math.max(0, live.quantity || 0);
+    if (actual !== expected) {
+      quantityDrift.push({
+        asin: saved.asin,
+        title: saved.title || '',
+        expected,
+        actual,
+      });
+    }
+    // Heuristic variant check — same ASIN can map to different listings if
+    // a seller swapped contents. Compare the first ~40 chars of normalized
+    // titles; surface only obvious divergence.
+    const sNorm = norm(saved.title);
+    const lNorm = norm(live.title);
+    if (sNorm && lNorm && sNorm.slice(0, 40) !== lNorm.slice(0, 40) &&
+        !sNorm.includes(lNorm.slice(0, 24)) && !lNorm.includes(sNorm.slice(0, 24))) {
+      possibleVariantMismatch.push({
+        asin: saved.asin,
+        savedTitle: saved.title || '',
+        liveTitle: live.title || '',
+      });
+    }
+  }
+  return { missing, quantityDrift, possibleVariantMismatch };
+}
+
+async function restoreCartHybrid(savedCart, onProgress) {
+  const items = (savedCart.items || []).filter((it) => it && it.asin);
+  if (!items.length) {
+    return { ok: false, error: 'This saved cart has no items.' };
+  }
+
+  const host = savedCart.host || 'www.amazon.com';
+  const cartLabel = savedCart.name ? `"${savedCart.name}"` : 'cart';
+  const chunks = chunkItems(items, BATCH_CHUNK_SIZE);
+
+  setOpStatus(
+    `Restoring ${cartLabel}`,
+    chunks.length === 1
+      ? 'Opening Amazon batch add page…'
+      : `Opening batch 1 of ${chunks.length}…`
+  );
+
+  const helperTab = await chrome.tabs.create({
+    url: buildBatchAddUrl(host, chunks[0]),
+    active: true,
+  });
+
+  // Walk through each batch chunk; wait for the user to click "Add all"
+  // and land on /gp/cart/view.html before advancing to the next chunk.
+  let batchTimedOut = false;
+  for (let i = 0; i < chunks.length; i++) {
+    if (i > 0) {
+      setOpStatus(
+        `Restoring ${cartLabel}`,
+        `Opening batch ${i + 1} of ${chunks.length}…`
+      );
+      try {
+        await chrome.tabs.update(helperTab.id, {
+          url: buildBatchAddUrl(host, chunks[i]),
+          active: true,
+        });
+      } catch (_e) {
+        batchTimedOut = true;
+        break;
+      }
+    }
+    const prompt = chunks.length === 1
+      ? `Click "Add all" on the Amazon page to add ${chunks[i].length} items…`
+      : `Click "Add all" — batch ${i + 1} of ${chunks.length} (${chunks[i].length} items)…`;
+    try { await showStatus(helperTab.id, prompt, 'loading'); } catch (_e) { /* tab may still be loading */ }
+
+    const landed = await waitForCartViewLand(helperTab.id, 240000);
+    if (!landed) {
+      batchTimedOut = true;
+      break;
+    }
+  }
+
+  // Verification scrape on the helper tab (now on /gp/cart/view.html).
+  setOpStatus(`Restoring ${cartLabel}`, 'Verifying cart contents…');
+  try { await showStatus(helperTab.id, 'Verifying cart contents…', 'loading'); } catch (_e) {}
+
+  let liveItems = [];
+  if (!batchTimedOut) {
+    try {
+      const result = await chrome.scripting.executeScript({
+        target: { tabId: helperTab.id },
+        func: pageScrapeCart,
+      });
+      const live = result && result[0] && result[0].result;
+      if (live && Array.isArray(live.items)) liveItems = live.items;
+    } catch (_e) {
+      // Tab closed or scrape failed — treat as fully missing.
+    }
+  }
+
+  const report = batchTimedOut
+    ? { missing: items.slice(), quantityDrift: [], possibleVariantMismatch: [] }
+    : reconcileCart(items, liveItems);
+
+  // Per-item-drive the missing items, if any. Close the batch tab first so
+  // restoreCart's own helper-tab/cart-view flow has the foreground.
+  let driveAdded = 0;
+  let driveFailures = [];
+  if (report.missing.length) {
+    setOpStatus(
+      `Restoring ${cartLabel}`,
+      `Per-item restore for ${report.missing.length} missing item${report.missing.length === 1 ? '' : 's'}…`
+    );
+    try { await chrome.tabs.remove(helperTab.id); } catch (_e) {}
+    const driveCart = { ...savedCart, items: report.missing };
+    const driveResult = await restoreCart(driveCart, onProgress);
+    if (driveResult && driveResult.ok) {
+      driveAdded = driveResult.added || 0;
+      driveFailures = driveResult.failures || [];
+    } else if (driveResult) {
+      driveFailures = driveResult.failures || [];
+    }
+  }
+
+  // Summary.
+  const batchedAdded = items.length - report.missing.length;
+  const totalAdded = batchedAdded + driveAdded;
+  const issues = [];
+  if (report.quantityDrift.length) {
+    issues.push(`${report.quantityDrift.length} qty mismatch${report.quantityDrift.length === 1 ? '' : 'es'}`);
+  }
+  if (report.possibleVariantMismatch.length) {
+    issues.push(`${report.possibleVariantMismatch.length} possible variant change${report.possibleVariantMismatch.length === 1 ? '' : 's'}`);
+  }
+  if (driveFailures.length) {
+    issues.push(`${driveFailures.length} failed`);
+  }
+  const summaryHead = totalAdded >= items.length
+    ? `Cart restored — ${totalAdded} of ${items.length} items`
+    : `Cart restored — ${totalAdded} of ${items.length} items (some missing)`;
+  const summary = issues.length ? `${summaryHead} · ${issues.join(' · ')}` : summaryHead;
+
+  clearOpStatus(summary);
+  // Show on whichever Amazon tab is foreground now.
+  try {
+    const [activeNow] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeNow && isAmazonUrl(activeNow.url)) {
+      const kind = (issues.length || totalAdded < items.length) ? 'error' : 'done';
+      await showStatus(activeNow.id, summary, kind);
+    }
+  } catch (_e) { /* best-effort */ }
+
+  if (report.quantityDrift.length || report.possibleVariantMismatch.length) {
+    console.info('[Styx Multi-Cart] hybrid restore reconciliation', report);
+  }
+
+  return {
+    ok: true,
+    total: items.length,
+    added: totalAdded,
+    failed: items.length - totalAdded,
+    failures: driveFailures,
+    quantityDrift: report.quantityDrift,
+    possibleVariantMismatch: report.possibleVariantMismatch,
+  };
+}
+
 async function clearThenRestoreCart(target) {
   try {
     const currentCount = await getActiveAmazonCartCount(target.host);
@@ -985,7 +1230,12 @@ async function clearThenRestoreCart(target) {
       await sleep(2000);
     }
 
-    await restoreCart(target);
+    const mode = await getRestoreMode();
+    if (mode === 'quick') {
+      await restoreCartHybrid(target);
+    } else {
+      await restoreCart(target);
+    }
   } catch (err) {
     console.error("[Styx Multi-Cart] restore failed", err);
   }
@@ -1314,46 +1564,122 @@ function pageShowStatus(message, type) {
     (document.body || document.documentElement).appendChild(toast);
   }
 
-  // Inject spinner keyframe once per page.
+  // Inject keyframes + animation classes once per page.
   if (!document.getElementById('__styx-kf')) {
     var s = document.createElement('style');
     s.id = '__styx-kf';
-    s.textContent = '@keyframes _styxSpin{to{transform:rotate(360deg)}}';
+    // Three carts cycle through triangle vertices:
+    //   TOP  ≈ (15.5, 10.2)   BL ≈ (7.5, 16)   BR ≈ (24.5, 16)
+    // Each cart visits all 3 vertices; offset by 1/3 of the 2.4s cycle.
+    s.textContent =
+      '@keyframes _styxCartA{' +
+        '0%,100%{transform:translate(0,0)}' +
+        '33%{transform:translate(9px,5.8px)}' +
+        '66%{transform:translate(-8px,5.8px)}' +
+      '}' +
+      '@keyframes _styxCartB{' +
+        '0%,100%{transform:translate(0,0)}' +
+        '33%{transform:translate(8px,-5.8px)}' +
+        '66%{transform:translate(17px,0)}' +
+      '}' +
+      '@keyframes _styxCartC{' +
+        '0%,100%{transform:translate(0,0)}' +
+        '33%{transform:translate(-17px,0)}' +
+        '66%{transform:translate(-9px,-5.8px)}' +
+      '}' +
+      '.__styx-toast-loading .__styx-cart-a{animation:_styxCartA 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      '.__styx-toast-loading .__styx-cart-b{animation:_styxCartB 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      '.__styx-toast-loading .__styx-cart-c{animation:_styxCartC 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      '@keyframes _styxFadeIn{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}';
     (document.head || document.body || document.documentElement).appendChild(s);
   }
 
-  var bg  = type === 'done' ? '#1e7e34' : type === 'error' ? '#b1271b' : '#ff9900';
-  var fg  = (type === 'done' || type === 'error') ? '#ffffff' : '#1a1209';
-  var bdr = type === 'done' ? '#155724' : type === 'error' ? '#8b1a15' : '#e88a00';
+  var accent = type === 'done' ? '#34d399' : type === 'error' ? '#ef4444' : '#ff9900';
+  var glowRgb = type === 'done' ? '52,211,153' : type === 'error' ? '239,68,68' : '255,153,0';
 
   var ts = toast.style;
   ts.position = 'fixed'; ts.top = '24px'; ts.left = '50%';
   ts.transform = 'translateX(-50%)'; ts.bottom = ''; ts.right = '';
   ts.zIndex = '2147483647';
   ts.display = 'flex'; ts.alignItems = 'center'; ts.gap = '14px';
-  ts.padding = '14px 24px'; ts.borderRadius = '12px';
-  ts.border = '1px solid ' + bdr;
-  ts.background = bg; ts.color = fg;
+  ts.padding = '16px 22px'; ts.borderRadius = '14px';
+  ts.border = '1px solid ' + accent;
+  ts.background = '#131a22'; ts.color = '#ffffff';
   ts.fontFamily = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
-  ts.fontSize = '19px'; ts.fontWeight = '600'; ts.lineHeight = '1.4';
-  ts.boxShadow = '0 6px 24px rgba(0,0,0,.28)';
-  ts.maxWidth = '560px'; ts.width = 'max-content'; ts.pointerEvents = 'none';
-  ts.opacity = '1'; ts.transition = 'opacity .2s';
+  ts.fontSize = '18px'; ts.fontWeight = '600'; ts.lineHeight = '1.35';
+  ts.boxShadow = '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)';
+  ts.maxWidth = '520px'; ts.width = ''; ts.pointerEvents = 'none';
+  ts.opacity = '1'; ts.transition = 'opacity .2s, box-shadow .25s, border-color .25s';
+
+  toast.className = type === 'loading' ? '__styx-toast-loading' : '';
 
   if (toast._styxTimer) { clearTimeout(toast._styxTimer); toast._styxTimer = null; }
 
-  var icon = document.createElement('div');
-  icon.style.cssText = 'flex-shrink:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center';
-  if (type === 'loading') {
-    icon.innerHTML = '<div style="width:19px;height:19px;border-radius:50%;border:3px solid ' + fg + ';border-top-color:transparent;animation:_styxSpin .7s linear infinite"></div>';
-  } else if (type === 'done') {
-    icon.innerHTML = '<svg width="21" height="21" viewBox="0 0 21 21" fill="none"><path d="M3 10.5L8.5 16L18 5" stroke="' + fg + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  } else {
-    icon.innerHTML = '<svg width="21" height="21" viewBox="0 0 21 21" fill="none"><path d="M10.5 4v8M10.5 15.5v1.5" stroke="' + fg + '" stroke-width="3" stroke-linecap="round"/></svg>';
+  // Styx logo (carts + river) — copied from popup.html, with class hooks
+  // on each cart's <g> and its wheels for the cycling animation.
+  var logoSvg =
+    '<svg width="36" height="36" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:block">' +
+      '<rect width="32" height="32" rx="7" fill="#131a22"/>' +
+      // Top cart (apex)
+      '<g class="__styx-cart-a">' +
+        '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/>' +
+          '<path d="M12 8.6 L10.5 7.3"/>' +
+        '</g>' +
+        '<circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/>' +
+        '<circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/>' +
+      '</g>' +
+      // Bottom-left cart
+      '<g class="__styx-cart-b">' +
+        '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/>' +
+          '<path d="M4 14.4 L2.5 13.1"/>' +
+        '</g>' +
+        '<circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/>' +
+        '<circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/>' +
+      '</g>' +
+      // Bottom-right cart
+      '<g class="__styx-cart-c">' +
+        '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+          '<path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/>' +
+          '<path d="M21 14.4 L19.5 13.1"/>' +
+        '</g>' +
+        '<circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/>' +
+        '<circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/>' +
+      '</g>' +
+      // River Styx
+      '<path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/>' +
+      '<path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/>' +
+      '<path d="M0 23 Q 4 22, 8 23 T 16 23 T 24 23 T 32 23" stroke="#5db5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.55"/>' +
+      '<path d="M0 25.9 Q 4 25, 8 25.9 T 16 25.9 T 24 25.9 T 32 25.9" stroke="#5db5ff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.38"/>' +
+      '<path d="M0 28.5 Q 4 27.8, 8 28.5 T 16 28.5 T 24 28.5 T 32 28.5" stroke="#5db5ff" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.25"/>' +
+    '</svg>';
+
+  // Apex overlay glyph for done/error states.
+  var overlay = '';
+  if (type === 'done') {
+    overlay =
+      '<div style="position:absolute;left:50%;top:32%;width:18px;height:18px;transform:translate(-50%,-50%) scale(1);' +
+        'background:#34d399;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
+        'box-shadow:0 0 8px rgba(52,211,153,.7);animation:_styxFadeIn .2s ease-out">' +
+        '<svg width="12" height="12" viewBox="0 0 21 21" fill="none"><path d="M3 10.5L8.5 16L18 5" stroke="#0b1a14" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</div>';
+  } else if (type === 'error') {
+    overlay =
+      '<div style="position:absolute;left:50%;top:32%;width:18px;height:18px;transform:translate(-50%,-50%) scale(1);' +
+        'background:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;' +
+        'color:#fff;font-size:13px;font-weight:800;line-height:1;' +
+        'box-shadow:0 0 8px rgba(239,68,68,.7);animation:_styxFadeIn .2s ease-out">!</div>';
   }
 
+  var icon = document.createElement('div');
+  icon.style.cssText = 'position:relative;flex-shrink:0;width:36px;height:36px';
+  icon.innerHTML = logoSvg + overlay;
+
   var span = document.createElement('span');
-  span.style.cssText = 'flex:1;word-break:break-word;white-space:nowrap';
+  span.style.cssText =
+    'flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;' +
+    'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden';
   span.textContent = message;
 
   toast.innerHTML = '';
@@ -1589,6 +1915,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       switch (msg.type) {
         case "MC_GET_STATUS": {
           sendResponse(_opStatus || { active: false, title: "", detail: "" });
+          break;
+        }
+
+        case "MC_GET_RESTORE_MODE": {
+          const mode = await getRestoreMode();
+          sendResponse({ ok: true, mode });
+          break;
+        }
+
+        case "MC_SET_RESTORE_MODE": {
+          const mode = msg.mode === 'reliable' ? 'reliable' : 'quick';
+          await chrome.storage.local.set({ [RESTORE_MODE_KEY]: mode });
+          sendResponse({ ok: true, mode });
           break;
         }
 
