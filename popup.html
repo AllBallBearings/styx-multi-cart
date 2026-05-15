@@ -90,6 +90,34 @@
       <div class="mc-list-header">
         <h2>Saved carts</h2>
         <span id="mc-list-count" class="mc-count">0</span>
+        <div class="mc-list-header-actions">
+          <button
+            id="mc-combine"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+            title="Merge two carts into one"
+          >
+            Merge Carts
+          </button>
+        </div>
+      </div>
+      <div id="mc-combine-bar" class="mc-combine-bar" hidden>
+        <span id="mc-combine-status">Pick 2 carts to combine.</span>
+        <button
+          id="mc-combine-continue"
+          class="mc-btn mc-btn-primary mc-btn-sm"
+          type="button"
+          disabled
+        >
+          Continue →
+        </button>
+        <button
+          id="mc-combine-cancel"
+          class="mc-btn mc-btn-ghost mc-btn-sm"
+          type="button"
+        >
+          Cancel
+        </button>
       </div>
       <ul id="mc-list" class="mc-list" aria-live="polite"></ul>
       <p id="mc-empty" class="mc-empty" hidden>
@@ -114,28 +142,105 @@
       <li class="mc-item">
         <div class="mc-item-main">
           <div class="mc-item-name-row">
-            <span class="mc-item-name"></span>
+            <button
+              class="mc-item-name"
+              data-action="rename"
+              type="button"
+              title="Rename cart"
+            ></button>
             <span class="mc-item-count"></span>
           </div>
           <div class="mc-item-meta"></div>
           <div class="mc-item-thumbs"></div>
         </div>
         <div class="mc-item-actions">
-          <button class="mc-btn mc-btn-primary mc-btn-sm" data-action="restore">
+          <button
+            class="mc-btn mc-btn-primary mc-btn-sm"
+            data-action="restore"
+            title="Move all items to Amazon cart"
+          >
             Restore
           </button>
-          <button class="mc-btn mc-btn-ghost mc-btn-sm" data-action="rename">
-            Rename
+          <button
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            data-action="edit"
+            aria-expanded="false"
+            title="Remove or Multiply Items"
+          >
+            Edit
           </button>
           <button
             class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
             data-action="delete"
+            title="Delete entire cart"
           >
             Delete
           </button>
         </div>
+        <div class="mc-item-edit" hidden>
+          <ul class="mc-edit-list"></ul>
+        </div>
       </li>
     </template>
+
+    <template id="mc-edit-row-template">
+      <li class="mc-edit-row">
+        <img class="mc-edit-thumb" alt="" referrerpolicy="no-referrer" loading="lazy" />
+        <div class="mc-edit-info">
+          <span class="mc-edit-title"></span>
+          <span class="mc-edit-asin"></span>
+        </div>
+        <div class="mc-edit-qty">
+          <button class="mc-qty-btn" data-action="qty-dec" type="button" aria-label="Decrease quantity">−</button>
+          <input class="mc-qty-input" type="number" min="1" max="99" inputmode="numeric" />
+          <button class="mc-qty-btn" data-action="qty-inc" type="button" aria-label="Increase quantity">+</button>
+        </div>
+        <button class="mc-edit-remove" data-action="item-remove" type="button" aria-label="Remove item">×</button>
+      </li>
+    </template>
+
+    <!-- Combine modal: pick a merge direction -->
+    <div id="mc-combine-modal" class="mc-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="mc-combine-title">
+      <div class="mc-modal-backdrop" data-action="modal-cancel"></div>
+      <div class="mc-modal-card">
+        <h3 id="mc-combine-title" class="mc-modal-title">Combine carts</h3>
+        <p class="mc-modal-sub">Pick a direction. Items merge by ASIN; duplicates keep the higher quantity.</p>
+
+        <div class="mc-combine-options">
+          <button class="mc-combine-option" data-action="combine-go" data-direction="a-to-b" type="button">
+            <div class="mc-combine-pill mc-combine-pill-source"><span class="mc-cart-name" data-slot="a"></span></div>
+            <svg class="mc-combine-arrow" viewBox="0 0 120 24" aria-hidden="true">
+              <defs>
+                <marker id="mc-arrowhead-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                  <path d="M0 0 L10 5 L0 10 Z" fill="currentColor" />
+                </marker>
+              </defs>
+              <line x1="4" y1="12" x2="116" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="8 6" marker-end="url(#mc-arrowhead-a)" />
+            </svg>
+            <div class="mc-combine-pill mc-combine-pill-target"><span class="mc-cart-name" data-slot="b"></span></div>
+            <span class="mc-combine-caption">Move <em data-slot="a"></em> into <em data-slot="b"></em></span>
+          </button>
+
+          <button class="mc-combine-option" data-action="combine-go" data-direction="b-to-a" type="button">
+            <div class="mc-combine-pill mc-combine-pill-target"><span class="mc-cart-name" data-slot="a"></span></div>
+            <svg class="mc-combine-arrow" viewBox="0 0 120 24" aria-hidden="true">
+              <defs>
+                <marker id="mc-arrowhead-b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                  <path d="M0 0 L10 5 L0 10 Z" fill="currentColor" />
+                </marker>
+              </defs>
+              <line x1="116" y1="12" x2="4" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="8 6" marker-end="url(#mc-arrowhead-b)" />
+            </svg>
+            <div class="mc-combine-pill mc-combine-pill-source"><span class="mc-cart-name" data-slot="b"></span></div>
+            <span class="mc-combine-caption">Move <em data-slot="b"></em> into <em data-slot="a"></em></span>
+          </button>
+        </div>
+
+        <div class="mc-modal-actions">
+          <button class="mc-btn mc-btn-ghost mc-btn-sm" data-action="modal-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <script src="popup.js"></script>
   </body>

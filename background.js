@@ -1829,6 +1829,111 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
+        case "MC_REMOVE_ITEM_FROM_CART": {
+          const carts = await readCarts();
+          const target = carts.find((c) => c.id === msg.id);
+          if (!target) {
+            sendResponse({ ok: false, error: "Cart not found." });
+            break;
+          }
+          const before = target.items.length;
+          target.items = (target.items || []).filter((it) => it.asin !== msg.asin);
+          if (target.items.length === before) {
+            sendResponse({ ok: false, error: "Item not found in cart." });
+            break;
+          }
+          if (target.items.length === 0) {
+            // Last item removed — delete the cart entirely.
+            const next = carts.filter((c) => c.id !== target.id);
+            await writeCarts(next);
+            sendResponse({ ok: true, cartDeleted: true });
+            break;
+          }
+          await writeCarts(carts);
+          sendResponse({ ok: true, remaining: target.items.length });
+          break;
+        }
+
+        case "MC_COMBINE_CARTS": {
+          // Move every item from sourceId into targetId. Duplicate ASINs
+          // resolve via max quantity (per user spec). Source cart is then
+          // deleted. Returns the merged target cart.
+          const carts = await readCarts();
+          const source = carts.find((c) => c.id === msg.sourceId);
+          const target = carts.find((c) => c.id === msg.targetId);
+          if (!source || !target) {
+            sendResponse({ ok: false, error: "One of the carts could not be found." });
+            break;
+          }
+          if (source.id === target.id) {
+            sendResponse({ ok: false, error: "Pick two different carts." });
+            break;
+          }
+          if (!sameAmazonHost(source.host, target.host)) {
+            sendResponse({
+              ok: false,
+              error: `Can't merge across regions — "${source.name}" is on ${source.host} but "${target.name}" is on ${target.host}.`,
+            });
+            break;
+          }
+
+          const targetByAsin = new Map();
+          (target.items || []).forEach((it) => {
+            if (it && it.asin) targetByAsin.set(it.asin, it);
+          });
+          let added = 0;
+          let qtyBumped = 0;
+          (source.items || []).forEach((srcItem) => {
+            if (!srcItem || !srcItem.asin) return;
+            const existing = targetByAsin.get(srcItem.asin);
+            if (existing) {
+              const srcQty = Number(srcItem.quantity) || 1;
+              const tgtQty = Number(existing.quantity) || 1;
+              const merged = Math.max(srcQty, tgtQty);
+              if (merged !== tgtQty) {
+                existing.quantity = merged;
+                qtyBumped++;
+              }
+            } else {
+              target.items.push({ ...srcItem });
+              targetByAsin.set(srcItem.asin, target.items[target.items.length - 1]);
+              added++;
+            }
+          });
+
+          // Drop the source cart from the list.
+          const next = carts.filter((c) => c.id !== source.id);
+          await writeCarts(next);
+          sendResponse({
+            ok: true,
+            target,
+            added,
+            qtyBumped,
+            sourceName: source.name,
+            targetName: target.name,
+          });
+          break;
+        }
+
+        case "MC_UPDATE_ITEM_QUANTITY": {
+          const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
+          const carts = await readCarts();
+          const target = carts.find((c) => c.id === msg.id);
+          if (!target) {
+            sendResponse({ ok: false, error: "Cart not found." });
+            break;
+          }
+          const item = (target.items || []).find((it) => it.asin === msg.asin);
+          if (!item) {
+            sendResponse({ ok: false, error: "Item not found in cart." });
+            break;
+          }
+          item.quantity = qty;
+          await writeCarts(carts);
+          sendResponse({ ok: true, quantity: qty });
+          break;
+        }
+
         case "MC_RESTORE_CART": {
           const carts = await readCarts();
           const target = carts.find((c) => c.id === msg.id);
