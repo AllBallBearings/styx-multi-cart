@@ -27,6 +27,9 @@
   const $combineContinue = document.getElementById("mc-combine-continue");
   const $combineCancel = document.getElementById("mc-combine-cancel");
   const $combineModal = document.getElementById("mc-combine-modal");
+  const $interceptToggle = document.getElementById("mc-intercept-toggle");
+  const $createNew = document.getElementById("mc-create-new");
+  const $themeToggle = document.getElementById("mc-theme-toggle");
 
   // ---- Messaging ---------------------------------------------------------
 
@@ -234,6 +237,84 @@
     if (res.ok) render(res.carts || []);
   }
 
+  // ---- Settings: ATC intercept toggle ------------------------------------
+
+  async function loadInterceptSetting() {
+    const res = await send({ type: "MC_GET_INTERCEPT" });
+    if (res.ok) $interceptToggle.checked = !!res.enabled;
+  }
+
+  $interceptToggle.addEventListener("change", async () => {
+    const enabled = $interceptToggle.checked;
+    const res = await send({ type: "MC_SET_INTERCEPT", enabled });
+    if (!res.ok) {
+      // Revert and notify if the write failed.
+      $interceptToggle.checked = !enabled;
+      toast(res.error || "Could not save setting", "error");
+    }
+  });
+
+  // ---- Settings: light / dark mode toggle --------------------------------
+
+  const MOON_SVG = `<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M13.5 9.5a6 6 0 1 1-7-7 4.5 4.5 0 0 0 7 7z" fill="currentColor"/>
+  </svg>`;
+
+  const SUN_SVG = `<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="8" cy="8" r="3" fill="currentColor"/>
+    <line x1="8" y1="1" x2="8" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="8" y1="13" x2="8" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="1" y1="8" x2="3" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="13" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="3.05" y1="3.05" x2="4.46" y2="4.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="11.54" y1="11.54" x2="12.95" y2="12.95" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="12.95" y1="3.05" x2="11.54" y2="4.46" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="4.46" y1="11.54" x2="3.05" y2="12.95" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>`;
+
+  function applyTheme(theme) {
+    const html = document.documentElement;
+    if (theme === "dark" || theme === "light") {
+      html.dataset.theme = theme;
+    } else {
+      delete html.dataset.theme;
+    }
+    // Show the icon that lets the user switch TO the opposite mode.
+    const resolvedDark =
+      theme === "dark" ||
+      (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    $themeToggle.innerHTML = resolvedDark ? SUN_SVG : MOON_SVG;
+    $themeToggle.title = resolvedDark
+      ? "Switch to light mode"
+      : "Switch to dark mode";
+    $themeToggle.setAttribute(
+      "aria-label",
+      resolvedDark ? "Switch to light mode" : "Switch to dark mode"
+    );
+  }
+
+  async function loadThemeSetting() {
+    const result = await chrome.storage.local.get("mc.settings.v1");
+    const settings = result["mc.settings.v1"];
+    const theme =
+      settings && typeof settings.theme === "string" ? settings.theme : null;
+    applyTheme(theme);
+  }
+
+  $themeToggle.addEventListener("click", async () => {
+    const current = document.documentElement.dataset.theme || null;
+    const resolvedDark =
+      current === "dark" ||
+      (!current && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const next = resolvedDark ? "light" : "dark";
+    applyTheme(next);
+    // Persist alongside existing settings without overwriting other keys.
+    const result = await chrome.storage.local.get("mc.settings.v1");
+    const settings = Object.assign({}, result["mc.settings.v1"] || {});
+    settings.theme = next;
+    await chrome.storage.local.set({ "mc.settings.v1": settings });
+  });
+
   // ---- Event wiring ------------------------------------------------------
 
   function defaultName() {
@@ -390,12 +471,23 @@
     $combineModal.dataset.cartA = idA;
     $combineModal.dataset.cartB = idB;
     $combineModal.hidden = false;
-    $combineModal.setAttribute("aria-hidden", "false");
+    // `inert` is the right tool here: it hides the subtree from AT and
+    // also removes focusability. Toggling aria-hidden on a focused
+    // ancestor trips Chrome's a11y guard (see the "Blocked aria-hidden
+    // on an element because its descendant retained focus" warning).
+    $combineModal.removeAttribute("inert");
   }
 
   function closeCombineModal() {
+    // Move focus out of the modal BEFORE we mark it inert, otherwise
+    // browsers still see a focused descendant inside an inert/hidden
+    // subtree for one frame.
+    const active = document.activeElement;
+    if (active && $combineModal.contains(active)) {
+      active.blur();
+    }
+    $combineModal.setAttribute("inert", "");
     $combineModal.hidden = true;
-    $combineModal.setAttribute("aria-hidden", "true");
     delete $combineModal.dataset.cartA;
     delete $combineModal.dataset.cartB;
   }
@@ -591,6 +683,29 @@
 
   // ---- Combine bar / modal wiring ----------------------------------------
 
+  $createNew.addEventListener("click", () => {
+    // If the user is mid-Merge selection, exit it first so the new cart
+    // doesn't pop up wearing a checkbox.
+    if (combineState.active) setCombineMode(false);
+
+    const name = prompt("Name for the new cart:");
+    if (name == null) return; // user cancelled the prompt
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast("Name cannot be empty.", "error");
+      return;
+    }
+    withLoading($createNew, async () => {
+      const res = await send({ type: "MC_CREATE_EMPTY_CART", name: trimmed });
+      if (res.ok) {
+        toast(`Created "${trimmed}".`);
+        await refresh();
+      } else {
+        toast(res.error || "Could not create cart.", "error");
+      }
+    });
+  });
+
   $combineBtn.addEventListener("click", () => {
     setCombineMode(!combineState.active);
   });
@@ -688,7 +803,15 @@
 
   // ---- Boot --------------------------------------------------------------
 
-  document.addEventListener("DOMContentLoaded", refresh);
+  document.addEventListener("DOMContentLoaded", () => {
+    loadThemeSetting();
+    refresh();
+    loadInterceptSetting();
+  });
   // In case the popup script runs after DOMContentLoaded already fired:
-  if (document.readyState !== "loading") refresh();
+  if (document.readyState !== "loading") {
+    loadThemeSetting();
+    refresh();
+    loadInterceptSetting();
+  }
 })();

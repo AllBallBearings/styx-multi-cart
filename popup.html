@@ -49,6 +49,15 @@
           <p class="mc-tag">Cart Management to Hell and back</p>
         </div>
       </div>
+      <button
+        id="mc-theme-toggle"
+        class="mc-theme-toggle"
+        type="button"
+        aria-label="Toggle light/dark mode"
+        title="Toggle light/dark mode"
+      >
+        <!-- icon injected by popup.js -->
+      </button>
     </header>
 
     <section class="mc-save-block">
@@ -84,6 +93,13 @@
           Clear cart
         </button>
       </div>
+      <label class="mc-toggle" title="When you click Amazon's Add to Cart on a product page, pick a saved cart instead.">
+        <input id="mc-intercept-toggle" type="checkbox" />
+        <span class="mc-toggle-label">
+          Intercept Amazon's <em>Add to Cart</em>
+          <span class="mc-toggle-sub">Pick a saved cart instead of Amazon's live cart.</span>
+        </span>
+      </label>
     </section>
 
     <section class="mc-list-block">
@@ -91,6 +107,14 @@
         <h2>Saved carts</h2>
         <span id="mc-list-count" class="mc-count">0</span>
         <div class="mc-list-header-actions">
+          <button
+            id="mc-create-new"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+            title="Create a new empty saved cart"
+          >
+            Create new
+          </button>
           <button
             id="mc-combine"
             class="mc-btn mc-btn-ghost mc-btn-sm"
@@ -200,7 +224,7 @@
     </template>
 
     <!-- Combine modal: pick a merge direction -->
-    <div id="mc-combine-modal" class="mc-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="mc-combine-title">
+    <div id="mc-combine-modal" class="mc-modal" hidden inert role="dialog" aria-modal="true" aria-labelledby="mc-combine-title">
       <div class="mc-modal-backdrop" data-action="modal-cancel"></div>
       <div class="mc-modal-card">
         <h3 id="mc-combine-title" class="mc-modal-title">Combine carts</h3>

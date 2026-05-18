@@ -8,6 +8,17 @@
  */
 
 const STORAGE_KEY = "mc.carts.v1";
+const SETTINGS_KEY = "mc.settings.v1";
+
+// User-tunable feature toggles. Shape kept tiny on purpose — new fields
+// merge with defaults so old stored shapes never block a launch.
+const DEFAULT_SETTINGS = {
+  interceptAtc: true,
+  // Ephemeral flag — set to true for the duration of a cart restore so the
+  // observer.js ATC intercept stands down. Cleared in a finally block so a
+  // crash or early return can never leave interception permanently disabled.
+  restoring: false,
+};
 
 // ---- Storage helpers ------------------------------------------------------
 
@@ -18,6 +29,19 @@ async function readCarts() {
 
 async function writeCarts(carts) {
   await chrome.storage.local.set({ [STORAGE_KEY]: carts });
+}
+
+async function readSettings() {
+  const result = await chrome.storage.local.get(SETTINGS_KEY);
+  const stored = result[SETTINGS_KEY];
+  return Object.assign({}, DEFAULT_SETTINGS, stored && typeof stored === "object" ? stored : {});
+}
+
+async function writeSettings(patch) {
+  const current = await readSettings();
+  const next = Object.assign({}, current, patch || {});
+  await chrome.storage.local.set({ [SETTINGS_KEY]: next });
+  return next;
 }
 
 function makeId() {
@@ -770,6 +794,16 @@ async function restoreCart(savedCart, onProgress) {
     return { ok: false, error: "This saved cart has no items." };
   }
 
+  // Suspend the ATC intercept for the duration of the restore.
+  // observer.js watches mc.settings.v1 via chrome.storage.onChanged and
+  // hydrateCachesFromStorage(), so any page that loads during the restore
+  // will see restoring:true and skip the cart-picker overlay entirely.
+  // The finally block guarantees the flag is cleared even on error/throw.
+  await writeSettings({ restoring: true });
+
+  let _restoreResult;
+  try {
+
   const host = savedCart.host || "www.amazon.com";
   const productUrl = (item) =>
     item.url && /^https?:\/\//.test(item.url)
@@ -966,13 +1000,21 @@ async function restoreCart(savedCart, onProgress) {
     // Tab may have been closed by the user mid-restore — fine.
   }
 
-  return {
+  _restoreResult = {
     ok: true,
     total: items.length,
     added,
     failed,
     failures,
   };
+
+  } finally {
+    // Always lift the interception suspension, regardless of how the
+    // restore ends (success, thrown error, or tab-closed mid-restore).
+    await writeSettings({ restoring: false });
+  }
+
+  return _restoreResult;
 }
 
 async function clearThenRestoreCart(target) {
@@ -1255,6 +1297,12 @@ function pageAddToCart(qty) {
 
       setQuantity();
       try {
+        // Tell our own ATC intercept (observer.js) to let this click
+        // pass through untouched. We're in the middle of a restore;
+        // the item is meant to go to Amazon's live cart, not back into
+        // a saved cart. The flag is consumed by the intercept listener
+        // on the next click.
+        try { btn.dataset.styxBypass = "1"; } catch (_e) { /* not an HTMLElement */ }
         btn.click();
       } catch (e) {
         resolve({ ok: false, error: "click threw: " + String(e) });
@@ -2015,6 +2063,92 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             returnToOrigin: true,
             originUrl: scOriginUrl,
           }), 0);
+          break;
+        }
+
+        case "MC_GET_INTERCEPT": {
+          const settings = await readSettings();
+          sendResponse({ ok: true, enabled: !!settings.interceptAtc });
+          break;
+        }
+
+        case "MC_SET_INTERCEPT": {
+          const next = await writeSettings({ interceptAtc: !!msg.enabled });
+          sendResponse({ ok: true, enabled: !!next.interceptAtc });
+          break;
+        }
+
+        case "MC_CREATE_EMPTY_CART": {
+          // Create a saved cart with no items. Used by the popup's
+          // "Create new" button. The ATC intercept on Amazon pages
+          // can then fill it via MC_ADD_ITEM_TO_SAVED_CART.
+          const name = (msg.name || "").trim() || "Untitled cart";
+
+          // Default host to www.amazon.com but prefer the active tab's
+          // Amazon hostname if available, so cross-region merge guards
+          // line up with where the user is shopping right now.
+          let host = "www.amazon.com";
+          try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.url) {
+              const tabUrl = new URL(tab.url);
+              if (/(^|\.)amazon\./i.test(tabUrl.hostname)) host = tabUrl.hostname;
+            }
+          } catch (_e) {
+            // Tab query can fail in some contexts; the default host is fine.
+          }
+
+          const carts = await readCarts();
+          const newCart = {
+            id: makeId(),
+            name,
+            host,
+            savedAt: new Date().toISOString(),
+            items: [],
+          };
+          carts.unshift(newCart);
+          await writeCarts(carts);
+          sendResponse({ ok: true, cart: newCart });
+          break;
+        }
+
+        case "MC_ADD_ITEM_TO_SAVED_CART": {
+          // Add a single product-page item to an existing saved cart.
+          // Used by the in-page ATC picker (observer.js) when the user
+          // chooses to send a click to a saved cart instead of Amazon's
+          // live cart.
+          const item = msg.item || {};
+          if (!item.asin) {
+            sendResponse({ ok: false, error: "Item is missing ASIN." });
+            break;
+          }
+          const reqQty = Math.max(1, Math.min(99, Number(item.quantity) || 1));
+          const carts = await readCarts();
+          const target = carts.find((c) => c.id === msg.savedCartId);
+          if (!target) {
+            sendResponse({ ok: false, error: "Cart not found." });
+            break;
+          }
+          target.items = Array.isArray(target.items) ? target.items : [];
+          const existing = target.items.find((it) => it && it.asin === item.asin);
+          let action;
+          if (existing) {
+            const merged = Math.max(1, Math.min(99, (Number(existing.quantity) || 1) + reqQty));
+            existing.quantity = merged;
+            action = "bumped";
+          } else {
+            target.items.push({
+              asin: item.asin,
+              title: item.title || "(untitled)",
+              quantity: reqQty,
+              price: item.price || "",
+              image: item.image || "",
+              url: item.url || "",
+            });
+            action = "added";
+          }
+          await writeCarts(carts);
+          sendResponse({ ok: true, action, cartName: target.name, itemCount: target.items.length });
           break;
         }
 
