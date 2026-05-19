@@ -1,0 +1,6 @@
+dist/
+.DS_Store
+*.zip
+safari/build/
+safari/*.xcodeproj/xcuserdata/
+safari/*.xcodeproj/project.xcworkspace/xcuserdata/
