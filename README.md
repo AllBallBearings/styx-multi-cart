@@ -1,5 +1,7 @@
 # Styx Multi-Cart
 
+Licensed under [PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and noncommercial use.
+
 You can have multiple carts or separate purchases at checkout in the real world. Why not Amazon?!
 
 A browser extension that for multiple Amazon shopping carts. Save your current cart, switch between multiple named carts, and restore any of them with one click to proceed to checkout.
