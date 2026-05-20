@@ -25,12 +25,18 @@
   // ---- Page classification ------------------------------------------------
 
   function isProductPage() {
-    return /\/(?:dp|gp\/product)\/[A-Z0-9]/i.test(location.pathname);
+    // /dp/{ASIN}, /gp/product/{ASIN}, and /gp/aw/d/{ASIN} (mobile web PDP).
+    return /\/(?:dp|gp\/product|gp\/aw\/d)\/[A-Z0-9]/i.test(location.pathname);
   }
 
   function isUpsellSurface() {
-    // URL-based detection
-    if (/\/gp\/(?:buy|sw|coverage|aw|cart\/aws)/i.test(location.pathname)) {
+    // PDPs are never upsells — guard against the /gp/aw/d/ mobile-web PDP
+    // being caught by the `aw` clause below.
+    if (isProductPage()) return false;
+
+    // URL-based detection. `aw/(c|o)` covers mobile cart + order surfaces
+    // without swallowing the mobile PDP at /gp/aw/d/.
+    if (/\/gp\/(?:buy|sw|coverage|aw\/(?:c|o)|cart\/aws)/i.test(location.pathname)) {
       return true;
     }
     if (
@@ -69,19 +75,46 @@
   // ---- Helpers ------------------------------------------------------------
 
   function getAsinFromPage() {
-    const bodyAsin =
-      document.body && document.body.getAttribute("data-asin");
-    if (bodyAsin) return bodyAsin;
+    // Prefer the hidden ASIN input inside the ATC form. Amazon's twister
+    // widget rewrites this value as the user picks size/color/etc., so it
+    // reflects the *child* (buyable) variant — which is what the bulk-add
+    // endpoint requires. body[data-asin] and the /dp/ URL stay on the
+    // parent ASIN even after the user changes variant.
+    const ATC_FORM_SELECTORS = [
+      "#addToCart_feature_div form input[name='ASIN']",
+      "#addToCart_feature_div input[name='ASIN']",
+      "form#addToCart input[name='ASIN']",
+      "form[action*='/cart/add'] input[name='ASIN']",
+    ];
+    for (const sel of ATC_FORM_SELECTORS) {
+      const el = document.querySelector(sel);
+      if (el && el.value && /^[A-Z0-9]{10}$/i.test(el.value)) {
+        return el.value.toUpperCase();
+      }
+    }
 
-    const dpMatch = location.pathname.match(
-      /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i
-    );
-    if (dpMatch) return dpMatch[1].toUpperCase();
-
-    const asinInput = document.querySelector(
+    // Any other hidden ASIN input on the page — still typically the live
+    // variant on PDPs, just not scoped to the ATC form.
+    const anyAsinInput = document.querySelector(
       "input[name='ASIN'], input[name='asin']"
     );
-    if (asinInput && asinInput.value) return asinInput.value;
+    if (anyAsinInput && anyAsinInput.value && /^[A-Z0-9]{10}$/i.test(anyAsinInput.value)) {
+      return anyAsinInput.value.toUpperCase();
+    }
+
+    // Fallbacks: parent-ish ASIN sources. Only reached when no twister
+    // input is present (non-variant products, or pages where the ATC form
+    // hasn't rendered yet).
+    const bodyAsin =
+      document.body && document.body.getAttribute("data-asin");
+    if (bodyAsin && /^[A-Z0-9]{10}$/i.test(bodyAsin)) {
+      return bodyAsin.toUpperCase();
+    }
+
+    const dpMatch = location.pathname.match(
+      /\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/i
+    );
+    if (dpMatch) return dpMatch[1].toUpperCase();
 
     return null;
   }
@@ -132,6 +165,31 @@
     return "";
   }
 
+  /**
+   * Read the currently selected variant dimensions from Amazon's
+   * "twister" widget. Each dimension lives in a container with an id
+   * like `variation_color_name`, `variation_size_name`, etc., and the
+   * selected value renders inside a `.selection` span.
+   *
+   * Returns a human-readable label like "Medium / Navy" — the order
+   * matches whatever order Amazon renders the dimensions on the page.
+   * Used downstream so the reconciliation UI can tell the user which
+   * variant of an item failed in human terms, not just by ASIN.
+   *
+   * Returns "" for non-variant products (no twister widget).
+   */
+  function getVariantLabelFromPage() {
+    const containers = document.querySelectorAll("[id^='variation_']");
+    if (!containers.length) return "";
+    const parts = [];
+    for (const c of containers) {
+      const sel = c.querySelector(".selection");
+      const txt = sel && sel.textContent && sel.textContent.trim();
+      if (txt) parts.push(txt);
+    }
+    return parts.join(" / ").slice(0, 200);
+  }
+
   function getProductQuantityFromPage() {
     const select = document.getElementById("quantity");
     if (select && select.value) {
@@ -156,6 +214,7 @@
       price: getProductPriceFromPage(),
       image: getProductImageFromPage(),
       url: `https://${location.hostname}/dp/${asin}`,
+      variantLabel: getVariantLabelFromPage(),
     };
   }
 
