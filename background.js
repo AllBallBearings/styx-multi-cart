@@ -772,22 +772,543 @@ async function sendToContent(tabId, message) {
   }
 }
 
-// ---- Restore: navigate-and-click ------------------------------------------
+// ---- Restore: batch endpoint + per-item fallback -------------------------
 
 /**
- * Restore drives Amazon's per-item add flow in a helper tab — for each
- * saved ASIN we land on the product page, set quantity, click Add to
- * Cart, dismiss any upsell, then move on. This is the same UI a human
- * would use, so authentication, region locks, upsells, and seller-
- * specific buy-box selection all just work.
+ * Amazon's batch add endpoint (/gp/aws/cart/add.html) renders a single
+ * "Add to Shopping Cart" confirmation page listing every ASIN in the
+ * querystring, with one yellow "Add To Cart" button that commits all of
+ * them at once. We use this as the fast path: one navigation, one click,
+ * everything lands.
  *
- * We previously tried Amazon's batch add endpoint
- * (/gp/aws/cart/add.html?ASIN.1=…) as a fast path, but as of late 2026
- * that page no longer renders an "Add all" confirmation — it just shows
- * an empty cart view, silently drops the items, and offers a "Go To
- * Cart" link. The batch path has been removed; see git history for the
- * old `restoreCartHybrid` if Amazon ever revives the endpoint.
+ * Critical: the endpoint silently drops items unless an `AssociateTag`
+ * is present in the URL. That's why earlier attempts concluded the page
+ * was broken — they were hitting it without a tag and getting an empty
+ * cart view with a "Go To Cart" link. With any tag value the page
+ * renders correctly. We bake in a placeholder tag below; swap it for
+ * your own Associates tag if you want affiliate credit on restores.
+ *
+ * Anything the batch endpoint misses (login redirect, captcha, dropped
+ * items, page format change) falls through to restoreCart() — the
+ * proven per-item engine, which also handles upsell pages, region
+ * locks, and buy-box selection. That's strictly slower but reliable.
  */
+
+// Associate tag baked into bulk-add URLs. The page won't render items
+// without a tag (Amazon's anti-scraping). The value doesn't have to be
+// a registered associate — any well-formed `xxxxxxxx-20` string works.
+// Replace with your own tag to claim affiliate credit on restores.
+const STYX_ASSOCIATE_TAG = "styxmcart-20";
+
+/**
+ * Build a bulk-add URL. The endpoint expects pairs of `ASIN.N` and
+ * `Quantity.N` where N is 1-based. Caller is responsible for chunking
+ * if the item list would blow the URL length limit.
+ */
+function buildBulkAddUrl(host, items, associateTag) {
+  const params = new URLSearchParams();
+  items.forEach((it, i) => {
+    const n = i + 1;
+    params.set(`ASIN.${n}`, String(it.asin).toUpperCase());
+    const qty = Math.max(1, Math.min(99, Number(it.quantity) || 1));
+    params.set(`Quantity.${n}`, String(qty));
+  });
+  if (associateTag) {
+    params.set("tag", associateTag);
+    params.set("AssociateTag", associateTag);
+  }
+  return `https://${host}/gp/aws/cart/add.html?${params.toString()}`;
+}
+
+function chunkItemsForBulk(items, size = 30) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Runs in the page context. Locates the "Add To Cart" button on
+ * /gp/aws/cart/add.html, scrolls it into view, and applies a pulsing
+ * orange highlight so the user can find it at a glance. Does NOT click —
+ * the user clicks themselves to confirm the bulk add (intentional human
+ * checkpoint before items hit the live cart). Returns {ok:true} when the
+ * button is found and decorated, {ok:false,error} if it never appears.
+ *
+ * The injected style and class are idempotent — calling this twice on
+ * the same page (e.g. for a multi-chunk restore) is harmless.
+ */
+function pageHighlightBulkConfirm() {
+  return new Promise((resolve) => {
+    console.log("[Styx Multi-Cart] searching for bulk-confirm button…");
+
+    const isVisible = (el) => {
+      if (!el || !el.isConnected) return false;
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+
+    // Tier 1: selector-based — fast path, covers Amazon's standard ATC
+    // naming. Different surfaces use different conventions, so we cast wide.
+    const SELECTORS = [
+      "#add-to-cart-button",
+      "input#add-to-cart-button",
+      "input[name='submit.add-to-cart']",
+      "input[name='submit.addToCart']",
+      "input[name='submit.add-to-cart-button']",
+      "button[name='submit.add-to-cart']",
+      "input.a-button-input[aria-labelledby*='add-to-cart']",
+      "input[type='submit'][value*='Add' i][value*='Cart' i]",
+      "form[action*='cart/add' i] input[type='submit']",
+      "form[action*='cart/add' i] button[type='submit']",
+    ];
+
+    // Tier 2: text-based fallback — find any visible <input type=submit>,
+    // <button>, or Amazon's `.a-button-text` span whose label looks like
+    // "Add to Cart" / "Add to Shopping Cart". Resolves the visible label
+    // back to its clickable input via the wrapping `.a-button` when
+    // needed (Amazon's button widget visually masks the actual <input>).
+    const findByText = () => {
+      const cands = document.querySelectorAll(
+        "input[type='submit'], button, .a-button-text, span.a-button-text"
+      );
+      for (const el of cands) {
+        const label = (
+          el.value || el.textContent || el.getAttribute("aria-label") || ""
+        ).trim().toLowerCase();
+        if (!label) continue;
+        const looksLikeAddToCart =
+          label === "add to cart" ||
+          label === "add to shopping cart" ||
+          (label.startsWith("add") && label.includes("cart") && label.length < 40);
+        if (!looksLikeAddToCart) continue;
+
+        // If the match is a label span, climb to the clickable input.
+        let clickable = el;
+        if (el.classList && el.classList.contains("a-button-text")) {
+          const wrap = el.closest(".a-button");
+          if (wrap) {
+            const inp = wrap.querySelector("input, button");
+            if (inp) clickable = inp;
+          }
+        }
+        if (isVisible(clickable) || isVisible(el)) return clickable;
+      }
+      return null;
+    };
+
+    const findButton = () => {
+      for (const sel of SELECTORS) {
+        const el = document.querySelector(sel);
+        if (el && isVisible(el)) {
+          console.log("[Styx Multi-Cart] confirm button matched selector:", sel);
+          return el;
+        }
+      }
+      const byText = findByText();
+      if (byText) {
+        console.log("[Styx Multi-Cart] confirm button matched via text fallback");
+        return byText;
+      }
+      return null;
+    };
+
+    // Highlight via an overlay <div> positioned on top of the button. Bypasses
+    // Amazon's CSS entirely (their button styles often include
+    // `outline:none !important` which would eat any class-based outline).
+    // The overlay tracks the button on scroll/resize.
+    const applyOverlayRing = (btn) => {
+      // Pick the visible target: if the matched element is an opacity-0
+      // <input> mask, the .a-button wrapper is what the user actually sees.
+      let target = btn;
+      try {
+        const op = parseFloat(getComputedStyle(btn).opacity || "1");
+        if (op < 0.1) {
+          const wrap = btn.closest(".a-button") || btn.parentElement;
+          if (wrap) target = wrap;
+        }
+      } catch (_e) { /* fall through */ }
+
+      if (!document.getElementById("__styx-bulk-ring-style")) {
+        const s = document.createElement("style");
+        s.id = "__styx-bulk-ring-style";
+        s.textContent =
+          "@keyframes __styxBulkRingPulse{" +
+            "0%,100%{box-shadow:0 0 0 0 rgba(255,153,0,.95),0 0 24px 4px rgba(255,153,0,.4);transform:scale(1)}" +
+            "50%{box-shadow:0 0 0 18px rgba(255,153,0,0),0 0 40px 12px rgba(255,153,0,.6);transform:scale(1.03)}" +
+          "}" +
+          ".__styx-bulk-ring{" +
+            "position:fixed!important;pointer-events:none!important;" +
+            "border:3px solid #ff9900!important;border-radius:10px!important;" +
+            "background:transparent!important;" +
+            "z-index:2147483645!important;" +
+            "animation:__styxBulkRingPulse 1.2s ease-in-out infinite!important;" +
+            "transform-origin:center!important;" +
+          "}";
+        document.head.appendChild(s);
+      }
+
+      const existing = document.getElementById("__styx-bulk-ring");
+      if (existing) existing.remove();
+
+      const ring = document.createElement("div");
+      ring.id = "__styx-bulk-ring";
+      ring.className = "__styx-bulk-ring";
+      document.body.appendChild(ring);
+
+      const reposition = () => {
+        if (!target.isConnected) return;
+        const r = target.getBoundingClientRect();
+        ring.style.top = (r.top - 6) + "px";
+        ring.style.left = (r.left - 6) + "px";
+        ring.style.width = (r.width + 12) + "px";
+        ring.style.height = (r.height + 12) + "px";
+      };
+      reposition();
+      window.addEventListener("scroll", reposition, true);
+      window.addEventListener("resize", reposition);
+
+      try { target.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      catch (_e) { /* older browsers */ }
+      // Re-position after the smooth-scroll animation finishes.
+      setTimeout(reposition, 700);
+
+      console.log("[Styx Multi-Cart] overlay ring placed over", target);
+    };
+
+    const deadline = Date.now() + 10000;
+    const tick = () => {
+      const btn = findButton();
+      if (btn) {
+        try { applyOverlayRing(btn); resolve({ ok: true }); }
+        catch (e) {
+          console.error("[Styx Multi-Cart] applyOverlayRing failed:", e);
+          resolve({ ok: false, error: String(e) });
+        }
+        return;
+      }
+      if (Date.now() > deadline) {
+        // Dump diagnostic info so we can identify which selectors to add.
+        const inputs = Array.from(document.querySelectorAll("input[type='submit'], button"));
+        console.warn(
+          "[Styx Multi-Cart] confirm button not found within 10s. Visible submits/buttons on page:",
+          inputs.filter(isVisible).map((el) => ({
+            tag: el.tagName,
+            name: el.name || null,
+            id: el.id || null,
+            value: el.value || null,
+            text: (el.textContent || "").trim().slice(0, 60),
+            ariaLabel: el.getAttribute("aria-label"),
+          }))
+        );
+        resolve({ ok: false, error: "Confirm button not found within 10s" });
+        return;
+      }
+      setTimeout(tick, 200);
+    };
+    tick();
+  });
+}
+
+/**
+ * Runs in the page context. Renders a modal Yes/No prompt overlaying
+ * whatever page the user is on, and resolves to "yes" | "no" | "dismissed"
+ * (dismissed = clicked the backdrop outside the modal). Used to ask the
+ * user whether to fall back to per-item restore when bulk doesn't land
+ * every item. The title/message strings come from the extension — never
+ * user input — but we still set them via textContent so a defensive
+ * mistake doesn't open an XSS hole.
+ */
+function pagePromptYesNo(title, message, yesLabel, noLabel) {
+  return new Promise((resolve) => {
+    const ID = "__styx-prompt-modal";
+    const existing = document.getElementById(ID);
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = ID;
+    overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,.55);" +
+      "z-index:2147483646;display:flex;align-items:center;justify-content:center;" +
+      "font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;";
+
+    const modal = document.createElement("div");
+    modal.style.cssText =
+      "background:#131a22;color:#fff;border:1px solid #ff9900;" +
+      "border-radius:14px;padding:22px 26px;max-width:460px;width:90%;" +
+      "box-shadow:0 0 0 1px #ff9900,0 6px 32px rgba(0,0,0,.6);";
+
+    const h = document.createElement("div");
+    h.style.cssText = "font-size:18px;font-weight:700;margin-bottom:10px;";
+    h.textContent = title;
+    modal.appendChild(h);
+
+    const p = document.createElement("div");
+    p.style.cssText = "font-size:15px;line-height:1.45;opacity:.92;margin-bottom:22px;white-space:pre-wrap;";
+    p.textContent = message;
+    modal.appendChild(p);
+
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;justify-content:flex-end;";
+
+    const noBtn = document.createElement("button");
+    noBtn.textContent = noLabel;
+    noBtn.style.cssText =
+      "padding:9px 16px;border-radius:8px;border:1px solid #4b5563;" +
+      "background:transparent;color:#fff;cursor:pointer;font-size:14px;";
+    row.appendChild(noBtn);
+
+    const yesBtn = document.createElement("button");
+    yesBtn.textContent = yesLabel;
+    yesBtn.style.cssText =
+      "padding:9px 18px;border-radius:8px;border:1px solid #ff9900;" +
+      "background:#ff9900;color:#131a22;cursor:pointer;font-size:14px;font-weight:700;";
+    row.appendChild(yesBtn);
+
+    modal.appendChild(row);
+    overlay.appendChild(modal);
+    (document.body || document.documentElement).appendChild(overlay);
+
+    const cleanup = (answer) => { try { overlay.remove(); } catch (_e) {} resolve(answer); };
+    yesBtn.addEventListener("click", () => cleanup("yes"));
+    noBtn.addEventListener("click", () => cleanup("no"));
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) cleanup("dismissed"); });
+  });
+}
+
+/**
+ * Wait until the user navigates the helper tab away from the bulk
+ * confirmation page (the signal that they clicked "Add To Cart") OR
+ * closes the tab OR the timeout expires. Resolves with the navigation
+ * outcome so the caller can branch on success vs. abandon.
+ */
+function waitForUserBulkConfirm(tabId, timeoutMs = 5 * 60 * 1000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      try { chrome.tabs.onUpdated.removeListener(navListener); } catch (_e) {}
+      try { chrome.tabs.onRemoved.removeListener(removeListener); } catch (_e) {}
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const navListener = (id, info, tab) => {
+      if (id !== tabId) return;
+      // The click POSTs and triggers a navigation away from add.html.
+      // Use status:'loading' so we catch the navigation start (the URL
+      // is already the new destination at this point).
+      if (info.status === "loading" && tab && tab.url) {
+        if (!/\/gp\/aws\/cart\/add\.html/i.test(tab.url)) {
+          finish({ ok: true, url: tab.url });
+        }
+      }
+    };
+    const removeListener = (id) => {
+      if (id === tabId) finish({ ok: false, error: "tab closed" });
+    };
+    const timer = setTimeout(
+      () => finish({ ok: false, error: "user did not confirm within timeout" }),
+      timeoutMs
+    );
+    chrome.tabs.onUpdated.addListener(navListener);
+    chrome.tabs.onRemoved.addListener(removeListener);
+  });
+}
+
+/**
+ * Fast-path restore via the batch endpoint. On success returns
+ * { ok:true, missing:[…] } where `missing` is items that didn't land
+ * with the requested quantity (caller falls back to per-item for those).
+ * On failure returns { ok:false, error, missing: <all items> } so the
+ * caller can run the full per-item engine.
+ */
+async function restoreCartBulk(savedCart) {
+  const allItems = (savedCart.items || []).filter((it) => it && it.asin);
+  if (!allItems.length) {
+    return { ok: false, error: "no items", missing: [] };
+  }
+
+  await writeSettings({ restoring: true });
+  const host = savedCart.host || "www.amazon.com";
+  const cartLabel = savedCart.name ? `"${savedCart.name}"` : "cart";
+  const chunks = chunkItemsForBulk(allItems, 30);
+
+  let helperTab;
+  try {
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (active && isAmazonUrl(active.url)) helperTab = active;
+  } catch (_e) { /* fall through */ }
+
+  try {
+    for (let c = 0; c < chunks.length; c++) {
+      const chunk = chunks[c];
+      const url = buildBulkAddUrl(host, chunk, STYX_ASSOCIATE_TAG);
+      const batchLabel = chunks.length > 1
+        ? `batch ${c + 1}/${chunks.length} (${chunk.length} items)`
+        : `${chunk.length} items in one go`;
+      setOpStatus(`Restoring ${cartLabel}`, `Loading bulk add for ${batchLabel}…`);
+
+      if (!helperTab) {
+        helperTab = await chrome.tabs.create({ url, active: true });
+      } else {
+        await chrome.tabs.update(helperTab.id, { url, active: true });
+      }
+      await waitForTabReload(helperTab.id, 25000);
+
+      // Paint an immediate toast so the user always gets feedback that
+      // bulk add is running, even before we know whether the confirm
+      // page rendered. This used to be gated on the highlight succeeding,
+      // which meant any selector miss = total UI silence.
+      const loadingPrompt = chunks.length > 1
+        ? `Loading bulk add — batch ${c + 1} of ${chunks.length} (${chunk.length} items)…`
+        : `Loading bulk add for ${chunk.length} item${chunk.length === 1 ? '' : 's'}…`;
+      await showStatus(helperTab.id, loadingPrompt, "loading");
+
+      // Try to highlight the confirm button. Two possible outcomes:
+      //   (a) Confirm page rendered → button found → highlight + ask user to click.
+      //   (b) Amazon redirected past it OR our selectors miss the button →
+      //       skip the wait, proceed to reconciliation at the end of the loop.
+      const hlRes = await chrome.scripting.executeScript({
+        target: { tabId: helperTab.id },
+        func: pageHighlightBulkConfirm,
+      });
+      const hr = hlRes && hlRes[0] && hlRes[0].result;
+
+      if (hr && hr.ok) {
+        // Path (a): user-confirm flow.
+        const chunkPrompt = chunks.length > 1
+          ? `Click the highlighted "Add To Cart" to confirm batch ${c + 1} of ${chunks.length} (${chunk.length} items)`
+          : `Click the highlighted "Add To Cart" to add ${chunk.length} item${chunk.length === 1 ? '' : 's'} to your Amazon cart`;
+        setOpStatus(`Restoring ${cartLabel}`, `Waiting for your confirmation…`);
+        await showStatus(helperTab.id, chunkPrompt, "loading");
+
+        const confirmRes = await waitForUserBulkConfirm(helperTab.id);
+        if (!confirmRes.ok) {
+          // User closed tab or didn't act within 5 min — treat as abandon.
+          // No fallback prompt: the user explicitly walked away.
+          return {
+            ok: false,
+            error: `User did not confirm bulk add: ${confirmRes.error}`,
+            host,
+            helperTabId: helperTab && helperTab.id,
+            missing: allItems,
+            userAbandoned: true,
+          };
+        }
+        await waitForTabComplete(helperTab.id, 20000);
+      } else {
+        // Path (b): highlight failed. Tell the user we're falling through
+        // to reconciliation rather than leaving the toast on "Loading…"
+        // indefinitely. Console has the dump of visible buttons for debug.
+        console.info(
+          `[Styx Multi-Cart] bulk chunk ${c + 1} highlight failed (${(hr && hr.error) || "unknown"}); ` +
+            `proceeding to cart reconciliation.`
+        );
+        await showStatus(
+          helperTab.id,
+          "Couldn't find the confirm button — checking your cart…",
+          "loading"
+        );
+      }
+    }
+
+    // Reconcile: scrape resulting cart, diff against what we sent.
+    let cart = null;
+    try { cart = await scrapeCartInBackground(host); } catch (_e) { /* treat as empty */ }
+    const inCart = new Map();
+    if (cart && Array.isArray(cart.items)) {
+      for (const it of cart.items) {
+        inCart.set(String(it.asin).toUpperCase(), Number(it.quantity) || 1);
+      }
+    }
+    const missing = [];
+    for (const want of allItems) {
+      const wantQty = Math.max(1, Number(want.quantity) || 1);
+      const have = inCart.get(String(want.asin).toUpperCase()) || 0;
+      if (have < wantQty) {
+        missing.push({ ...want, quantity: wantQty - have });
+      }
+    }
+
+    // Full success: every item present in cart. No prompt — caller paints
+    // the done toast.
+    if (missing.length === 0) {
+      return {
+        ok: true,
+        host,
+        helperTabId: helperTab && helperTab.id,
+        total: allItems.length,
+        added: allItems.length,
+        missing: [],
+      };
+    }
+
+    // Partial / nothing landed. Ask the user before running the slow
+    // per-item fallback — they're already on the cart page and may want
+    // to see the partial result before committing to a long restore.
+    const addedCount = allItems.length - missing.length;
+    const summary = addedCount > 0
+      ? `Bulk add only got ${addedCount} of ${allItems.length} items into your cart.\n\nWould you like to restore the remaining ${missing.length} one at a time? This is slower but more reliable.`
+      : `The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).\n\nWould you like to restore all ${allItems.length} items one at a time instead?`;
+
+    let userChoice = "no";
+    try {
+      const promptRes = await chrome.scripting.executeScript({
+        target: { tabId: helperTab.id },
+        func: pagePromptYesNo,
+        args: [
+          "Bulk add incomplete",
+          summary,
+          "Restore one by one",
+          "Cancel",
+        ],
+      });
+      userChoice = (promptRes && promptRes[0] && promptRes[0].result) || "no";
+    } catch (_e) {
+      // Tab closed or injection failed — treat as no.
+      userChoice = "no";
+    }
+
+    if (userChoice === "yes") {
+      // Caller will run restoreCart on the missing subset.
+      return {
+        ok: true,
+        host,
+        helperTabId: helperTab && helperTab.id,
+        total: allItems.length,
+        added: addedCount,
+        missing,
+      };
+    }
+
+    // User declined fallback (or dismissed). Return ok with empty
+    // missing so the caller doesn't run per-item. We still paint a
+    // final status reflecting the partial result.
+    const partialMsg = addedCount > 0
+      ? `Bulk restore added ${addedCount} of ${allItems.length} items — ${missing.length} skipped`
+      : `Bulk restore added 0 items — try again or restore one by one`;
+    clearOpStatus(partialMsg);
+    try {
+      await showStatus(helperTab.id, partialMsg, addedCount > 0 ? "done" : "error");
+    } catch (_e) { /* tab may be gone */ }
+    return {
+      ok: true,
+      host,
+      helperTabId: helperTab && helperTab.id,
+      total: allItems.length,
+      added: addedCount,
+      missing: [],
+      userDeclinedFallback: true,
+    };
+  } finally {
+    // restoreCart (the per-item fallback) re-sets restoring:true itself,
+    // so it's safe to release the flag here regardless of fallback path.
+    await writeSettings({ restoring: false });
+  }
+}
+
 async function restoreCart(savedCart, onProgress) {
   const items = (savedCart.items || []).filter((it) => it && it.asin);
   if (!items.length) {
@@ -1042,17 +1563,68 @@ async function clearThenRestoreCart(target) {
       await sleep(2000);
     }
 
-    // Note: we used to try Amazon's /gp/aws/cart/add.html batch endpoint
-    // first and only per-item-drive the missing items. As of 2026 that
-    // page no longer renders an "Add all" confirmation — it just shows
-    // an empty cart view with a "Go To Cart" link and silently drops
-    // the additions. There is no button to auto-click, so the batch
-    // path is strictly worse than the per-item drive (which works).
-    // Go straight to the reliable per-item engine. restoreCart reuses
-    // the active Amazon tab, so the "Preparing…" toast painted above
-    // will be naturally overwritten by restoreCart's own progress and
-    // final done/error toasts.
-    await restoreCart(target);
+    // Fast path: hit Amazon's batch add endpoint, which renders a
+    // confirmation page listing every ASIN and commits them all on a
+    // single button click. Anything the batch endpoint can't add (login
+    // redirect, captcha, dropped variant, page format change) falls
+    // through to the per-item engine, which is slower but proven.
+    const bulk = await restoreCartBulk(target);
+
+    if (bulk.ok && bulk.missing.length === 0) {
+      // Everything landed in one shot. Land the user on the cart view
+      // and paint the done toast.
+      const host = bulk.host || target.host || "www.amazon.com";
+      const doneMsg = `Cart restored — ${bulk.added} item${bulk.added === 1 ? '' : 's'} added`;
+      clearOpStatus(doneMsg);
+      try {
+        if (bulk.helperTabId) {
+          await chrome.tabs.update(bulk.helperTabId, {
+            url: `https://${host}/gp/cart/view.html`,
+            active: true,
+          });
+          await waitForTabReload(bulk.helperTabId, 15000);
+          await showStatus(bulk.helperTabId, doneMsg, 'done');
+        }
+      } catch (_e) { /* tab may have closed — fine */ }
+      return;
+    }
+
+    // User explicitly declined the per-item fallback in the bulk
+    // reconciliation prompt — respect that and stop. Bulk already
+    // painted a partial-result toast.
+    if (bulk.ok && bulk.userDeclinedFallback) {
+      console.info(
+        `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
+          `user declined per-item fallback`
+      );
+      return;
+    }
+
+    // User abandoned the bulk confirm page (closed tab / 5-min timeout).
+    // No automatic fallback — they walked away on purpose.
+    if (!bulk.ok && bulk.userAbandoned) {
+      console.info("[Styx Multi-Cart] user abandoned bulk confirm — not falling back");
+      return;
+    }
+
+    // Otherwise: bulk had a hard failure (couldn't navigate, scripting
+    // error, etc.) OR partial success where the user chose "Restore one
+    // by one". Drive the remainder through the per-item engine.
+    const fallbackItems = (bulk.missing && bulk.missing.length)
+      ? bulk.missing
+      : target.items;
+    if (!bulk.ok) {
+      console.info(
+        "[Styx Multi-Cart] bulk restore failed, falling back to per-item:",
+        bulk.error
+      );
+    } else {
+      console.info(
+        `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
+          `user opted to per-item-fill ${bulk.missing.length} missing`
+      );
+    }
+    await restoreCart({ ...target, items: fallbackItems });
   } catch (err) {
     console.error("[Styx Multi-Cart] restore failed", err);
   }
@@ -2135,6 +2707,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           if (existing) {
             const merged = Math.max(1, Math.min(99, (Number(existing.quantity) || 1) + reqQty));
             existing.quantity = merged;
+            // Refresh variantLabel if we have a new one and the existing
+            // row is missing it (e.g., item was originally added from a
+            // tile that didn't expose variant info).
+            if (item.variantLabel && !existing.variantLabel) {
+              existing.variantLabel = String(item.variantLabel).slice(0, 200);
+            }
             action = "bumped";
           } else {
             target.items.push({
@@ -2144,6 +2722,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               price: item.price || "",
               image: item.image || "",
               url: item.url || "",
+              variantLabel: item.variantLabel ? String(item.variantLabel).slice(0, 200) : "",
             });
             action = "added";
           }
