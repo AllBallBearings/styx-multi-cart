@@ -7,9 +7,10 @@
  *   - Tab discovery: finds (or opens) an Amazon cart tab to send messages to.
  *
  * Testing note: pure helpers and storage wrappers in this file are mirrored
- * byte-for-byte in lib/helpers.js and lib/storage.js so they can be unit-tested
- * under Vitest. If you change a helper here, change it there. A future PR can
- * collapse the duplication by loading background.js as an ES module.
+ * byte-for-byte in lib/helpers.js, lib/storage.js, and lib/scrape.js
+ * (pageScrapeCart + pageGetCartCount) so they can be unit-tested under Vitest.
+ * If you change a helper here, change it there. A future PR can collapse the
+ * duplication by loading background.js as an ES module.
  */
 
 const STORAGE_KEY = "mc.carts.v1";

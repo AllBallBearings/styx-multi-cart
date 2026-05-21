@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head><title>Amazon Cart</title></head>
+<body>
+  <span id="nav-cart-count">1</span>
+  <div id="sc-active-cart">
+    <div data-name="Active Items">
+      <!-- The row has a spinner img first; the scraper must skip it and pick
+           the real .sc-product-image, never the loadIndicators URL. -->
+      <div data-asin="B000SPINNER" data-itemtype="active" class="sc-list-item">
+        <a class="sc-product-link" href="/dp/B000SPINNER">
+          <div class="sc-list-item-spinner">
+            <img src="https://images-na.ssl-images-amazon.com/images/G/01/loadIndicators/loading._CB.gif" />
+          </div>
+          <img class="sc-product-image"
+               src="https://m.media-amazon.com/images/I/real-product.jpg" />
+          <span class="sc-product-title">Spinner Edge Case</span>
+        </a>
+        <select name="quantity"><option value="1" selected>1</option></select>
+        <span class="sc-product-price">$3.00</span>
+      </div>
+
+      <!-- Row with no img.sc-product-image; fallback finds the first usable
+           non-spinner img with a real URL. -->
+      <div data-asin="B000NOSPI" data-itemtype="active" class="sc-list-item">
+        <a class="sc-product-link" href="/dp/B000NOSPI">
+          <img src="data:image/gif;base64,R0lGOD" />
+          <img src="https://m.media-amazon.com/images/I/fallback.jpg" />
+          <span class="sc-product-title">Fallback Image Item</span>
+        </a>
+        <select name="quantity"><option value="1" selected>1</option></select>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

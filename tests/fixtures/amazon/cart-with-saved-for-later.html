@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head><title>Amazon Cart</title></head>
+<body>
+  <span id="nav-cart-count">1</span>
+
+  <div id="sc-active-cart">
+    <div data-name="Active Items">
+      <div data-asin="B000ACTIVE" data-itemtype="active" class="sc-list-item">
+        <a class="sc-product-link" href="/dp/B000ACTIVE">
+          <img class="sc-product-image" src="https://m.media-amazon.com/images/I/active.jpg" />
+          <span class="sc-product-title">Active Item</span>
+        </a>
+        <select name="quantity"><option value="1" selected>1</option></select>
+        <span class="sc-product-price">$10.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save For Later items must be skipped. The active-scope query above
+       narrows to [data-name='Active Items'] so these should be invisible
+       to the scraper regardless of markup. -->
+  <div data-name="Saved Items">
+    <div data-asin="B000SAVED1" data-itemtype="saved" class="sc-list-item">
+      <a class="sc-product-link" href="/dp/B000SAVED1">
+        <span class="sc-product-title">Saved Item</span>
+      </a>
+      <select name="quantity"><option value="1" selected>1</option></select>
+    </div>
+  </div>
+</body>
+</html>
