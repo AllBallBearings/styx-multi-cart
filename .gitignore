@@ -1,6 +1,8 @@
 dist/
 .DS_Store
 *.zip
+node_modules/
+coverage/
 safari/build/
 safari/*.xcodeproj/xcuserdata/
 safari/*.xcodeproj/project.xcworkspace/xcuserdata/

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><title>Amazon Home (cart flyout)</title></head>
+<body>
+  <!-- nav-cart-count present but markup uses EWC (cart flyout) shape.
+       pageGetCartCount should fall through to the .ewc-quantity text
+       since there are no live rows visible. -->
+  <span id="nav-cart-count">3</span>
+
+  <div id="nav-flyout-ewc">
+    <span class="ewc-quantity">3 items</span>
+    <ul>
+      <li class="ewc-item" data-asin="B000EWCITEM">
+        <a class="sc-product-link" href="/dp/B000EWCITEM">
+          <img class="sc-product-image" src="https://m.media-amazon.com/images/I/ewc.jpg" />
+          <span class="sc-product-title">Flyout Item</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</body>
+</html>

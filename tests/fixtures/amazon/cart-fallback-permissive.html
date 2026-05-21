@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><title>Amazon Cart (legacy markup)</title></head>
+<body>
+  <!-- Markup that has neither data-itemtype='active' nor .sc-list-item,
+       forcing the scraper into its most permissive [data-asin] fallback.
+       Also tests dedup: the same ASIN appears twice and should be emitted once. -->
+  <span id="nav-cart-count">1</span>
+  <div id="ewc-content">
+    <div data-asin="B000LEGACY">
+      <a href="/dp/B000LEGACY">
+        <span class="sc-product-title">Legacy Item</span>
+      </a>
+      <span class="sc-product-price">$1.00</span>
+    </div>
+    <div data-asin="B000LEGACY">
+      <span class="sc-product-title">Duplicate (should be skipped)</span>
+    </div>
+  </div>
+</body>
+</html>

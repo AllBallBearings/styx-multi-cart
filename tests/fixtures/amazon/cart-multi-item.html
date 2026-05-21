@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head><title>Amazon Cart</title></head>
+<body>
+  <span id="nav-cart-count" class="nav-cart-count">5</span>
+
+  <div id="sc-active-cart">
+    <div data-name="Active Items">
+      <!-- Row 1: standard select-based quantity -->
+      <div data-asin="B000AAAAAA" data-itemtype="active" class="sc-list-item">
+        <a class="sc-product-link" href="/dp/B000AAAAAA">
+          <img class="sc-product-image" src="https://m.media-amazon.com/images/I/aaa.jpg" />
+          <span class="sc-product-title">Alpha Widget</span>
+        </a>
+        <select name="quantity">
+          <option value="2" selected>2</option>
+        </select>
+        <span class="a-price">
+          <span class="a-offscreen">$9.99</span>
+        </span>
+      </div>
+
+      <!-- Row 2: quantity via input[name=quantityBox] -->
+      <div data-asin="B000BBBBBB" data-itemtype="active" class="sc-list-item">
+        <a class="sc-product-link" href="/dp/B000BBBBBB">
+          <img class="sc-product-image" src="https://m.media-amazon.com/images/I/bbb.jpg" />
+          <span class="sc-product-title">
+            <span class="a-truncate-full">Beta Gizmo (extra long title that may truncate)</span>
+          </span>
+        </a>
+        <input name="quantityBox" type="text" value="7" />
+        <span class="a-price-whole">14</span>
+      </div>
+
+      <!-- Row 3: quantity via .a-dropdown-prompt text -->
+      <div data-asin="B000CCCCCC" data-itemtype="active" class="sc-list-item">
+        <a class="sc-product-link" href="/dp/B000CCCCCC">
+          <img class="sc-product-image" src="https://m.media-amazon.com/images/I/ccc.jpg" />
+          <span class="sc-product-title">Gamma Doohickey</span>
+        </a>
+        <span class="a-dropdown-prompt">3</span>
+        <span class="sc-product-price">$5.50</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
