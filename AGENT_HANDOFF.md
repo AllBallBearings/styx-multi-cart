@@ -4,6 +4,71 @@ Last updated: 2026-05-25
 
 ---
 
+## Pre-Launch Anti-Piracy / Revenue Hygiene (added 2026-05-25)
+
+Discussed in-chat: the repo is staying **public** (open-source signals trust
+for a utility extension that touches the user's Amazon session, and the
+PolyForm Noncommercial license already covers commercial fork prevention).
+That means the real revenue-leak vectors are in the shipped bundle and the
+entitlement check, not the repo. Three things must be true before the
+first Chrome Web Store submission:
+
+- [ ] **1. Production build strips debug surfaces.**
+      Add a build step (esbuild / rollup / a shell script — keep it boring)
+      that produces a `dist/` directory for the Web Store with the
+      following removed or guarded behind `if (DEBUG)` where `DEBUG=false`
+      in the production bundle:
+  - `#mc-debug` panel markup in `popup.html`
+  - The `Ctrl+Alt+D` keyboard toggle and 5-click tagline backup in
+    `popup.js` (`loadDebugPanelVisibility`, `setDebugPanelVisible`, the
+    `[data-debug-ent]` click delegation, the keydown listener, and
+    `entPresets`)
+  - The `DEV_FLAG_KEY` (`mc.dev.v1`) read/write
+  - All `console.log` / `console.warn` / `console.error` calls
+    (`console.error` can stay if wrapped in a `DEBUG` guard for crash
+    visibility during early launch — but no unconditional logs)
+  - The `formatEntForDisplay` / `refreshDebugEntDisplay` helpers and any
+    other dead code that only the debug panel uses
+      Rationale: as long as `Ctrl+Alt+D` exists in the shipped bundle,
+      anyone who reads this handoff file (or just pokes around the JS)
+      can grant themselves premium. That's the actual leak — not the
+      public repo.
+
+- [ ] **2. Sensitive strategy docs out of the public repo.**
+      Move the parts of `docs/MONETIZATION_PLAN.md` that are competitive
+      / strategic (pricing rationale, conversion logic, planned upsell
+      points, threat-model assumptions) to a private gist or Notion page.
+      Keep only the *public-facing* policy in the repo — i.e. what tier
+      gets what, what happens on lapse, privacy stance. The "why $4.99
+      not $9.99" reasoning and the "lapsed read-only is a deliberate
+      retention lever" framing don't need to live in front of users.
+
+- [ ] **3. Server-side entitlement re-verification on a daily cadence.**
+      Build this into the Stripe wiring (Phase 5). Even with a perfect
+      production bundle, a user can flip `tier: "premium"` in
+      `chrome.storage.local` via DevTools. Mitigations:
+  - On extension startup and once per 24 h, call the license server
+    with the user's license key / ExtensionPay token; the server
+    returns canonical `{ tier, premiumUntil, autoRenew }`.
+  - **Overwrite** the local entitlement object with the server response
+    rather than merging — local tampering self-heals on next online
+    check.
+  - Cache the last-known-good entitlement with a `lastChecked`
+    timestamp so the extension still works offline / when the server
+    is down (already in the data model — just use it).
+  - Soft-fail strategy: if the server has been unreachable for >14 days,
+    drop the local cache to free tier and prompt re-auth. Stops the
+    "permanent offline premium" attack without punishing real users
+    whose laptop spent a weekend on a plane.
+
+These three together close the realistic revenue-leak paths for a
+$4.99/yr extension. Anything beyond this (obfuscation, native messaging
+host, signed entitlement blobs) is over-engineering for the price point
+and the threat model — the kind of person who'd patch a $4.99 extension
+was never a paying customer.
+
+---
+
 ## Monetization UI Phase (shipped 2026-05-25)
 
 Phase 3 of the monetization plan landed: the entitlement-aware UI layer plus
