@@ -15,6 +15,20 @@
 
 const STORAGE_KEY = "mc.carts.v1";
 const SETTINGS_KEY = "mc.settings.v1";
+const ENTITLEMENT_KEY = "mc.entitlement.v1";
+const DEV_FLAG_KEY = "mc.dev.v1";
+
+// Tier limits — keep in sync with lib/helpers.js. See docs/MONETIZATION_PLAN.md.
+const FREE_CART_LIMIT = 2;
+const PREMIUM_CART_LIMIT = 20;
+
+const DEFAULT_ENTITLEMENT = Object.freeze({
+  tier: "free",
+  premiumUntil: null,
+  autoRenew: false,
+  source: null,
+  lastChecked: 0,
+});
 
 // User-tunable feature toggles. Shape kept tiny on purpose — new fields
 // merge with defaults so old stored shapes never block a launch.
@@ -30,11 +44,123 @@ const DEFAULT_SETTINGS = {
 
 async function readCarts() {
   const result = await chrome.storage.local.get(STORAGE_KEY);
-  return Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+  const carts = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+  // Backfill lastUsedAt on carts saved before the entitlement layer existed.
+  // Mirrored from lib/helpers.js#backfillLastUsedAt — keep in sync.
+  for (const c of carts) {
+    if (c && !Number.isFinite(c.lastUsedAt)) {
+      const sa = Number(c.savedAt);
+      c.lastUsedAt = Number.isFinite(sa) ? sa : 0;
+    }
+  }
+  return carts;
 }
 
 async function writeCarts(carts) {
   await chrome.storage.local.set({ [STORAGE_KEY]: carts });
+}
+
+// ---- Entitlement (mirrored from lib/helpers.js + lib/storage.js) ----------
+// See docs/MONETIZATION_PLAN.md. Mirroring matches the convention used for
+// other pure helpers — service worker can't import ESM yet.
+
+async function readEntitlement() {
+  const result = await chrome.storage.local.get(ENTITLEMENT_KEY);
+  const stored = result[ENTITLEMENT_KEY];
+  return Object.assign(
+    {},
+    DEFAULT_ENTITLEMENT,
+    stored && typeof stored === "object" ? stored : {}
+  );
+}
+
+async function writeEntitlement(patch) {
+  const current = await readEntitlement();
+  const next = Object.assign({}, current, patch || {});
+  await chrome.storage.local.set({ [ENTITLEMENT_KEY]: next });
+  return next;
+}
+
+async function isDevModeEnabled() {
+  const r = await chrome.storage.local.get(DEV_FLAG_KEY);
+  return r[DEV_FLAG_KEY] === true;
+}
+
+function isPremiumActive(ent, nowMs = Date.now()) {
+  if (!ent || ent.tier !== "premium") return false;
+  if (!ent.premiumUntil) return false;
+  return nowMs < Number(ent.premiumUntil);
+}
+
+function cartLimitFor(ent, nowMs = Date.now()) {
+  return isPremiumActive(ent, nowMs) ? PREMIUM_CART_LIMIT : FREE_CART_LIMIT;
+}
+
+function topNCartIdsByLastUsed(carts, n) {
+  if (!Array.isArray(carts) || n <= 0) return [];
+  const sorted = [...carts].sort((a, b) => {
+    const lu = (Number(b.lastUsedAt) || 0) - (Number(a.lastUsedAt) || 0);
+    if (lu !== 0) return lu;
+    const sa = (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0);
+    if (sa !== 0) return sa;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return sorted.slice(0, n).map((c) => c.id);
+}
+
+function computeCartAccess(carts, ent, nowMs = Date.now()) {
+  const limit = cartLimitFor(ent, nowMs);
+  const editableIds = new Set(topNCartIdsByLastUsed(carts, limit));
+  const readOnlyIds = new Set();
+  for (const c of carts || []) {
+    if (c && c.id && !editableIds.has(c.id)) readOnlyIds.add(c.id);
+  }
+  return { editableIds, readOnlyIds, limit };
+}
+
+function canCreateSavedCart(carts, ent, nowMs = Date.now()) {
+  const current = Array.isArray(carts) ? carts.length : 0;
+  const limit = cartLimitFor(ent, nowMs);
+  const premium = isPremiumActive(ent, nowMs);
+  if (current < limit) {
+    return { allowed: true, current, limit, remaining: limit - current, tier: premium ? "premium" : "free" };
+  }
+  return {
+    allowed: false,
+    code: premium ? "PREMIUM_LIMIT_REACHED" : "FREE_LIMIT_REACHED",
+    reason: premium
+      ? `You've reached the maximum of ${limit} saved carts.`
+      : `Free plan is limited to ${limit} saved carts. Upgrade to Premium for up to ${PREMIUM_CART_LIMIT}.`,
+    current,
+    limit,
+    remaining: 0,
+    tier: premium ? "premium" : "free",
+  };
+}
+
+function canEditCart(cartId, carts, ent, nowMs = Date.now()) {
+  const { editableIds } = computeCartAccess(carts, ent, nowMs);
+  if (editableIds.has(cartId)) return { allowed: true };
+  return {
+    allowed: false,
+    code: "CART_LOCKED",
+    reason: isPremiumActive(ent, nowMs)
+      ? "This cart exceeds your plan's limit."
+      : "Renew Premium to edit this cart, or delete other carts to free up a slot.",
+  };
+}
+
+/**
+ * Bump lastUsedAt on a cart. Pass a pre-read carts array if you already have
+ * one (avoids a redundant read). Returns true if the cart existed.
+ */
+async function touchCartLastUsed(cartId, nowMs = Date.now(), carts = null) {
+  const list = carts || (await readCarts());
+  const target = list.find((c) => c && c.id === cartId);
+  if (!target) return false;
+  target.lastUsedAt = nowMs;
+  await writeCarts(list);
+  return true;
 }
 
 async function readSettings() {
@@ -2395,7 +2521,73 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
         case "MC_LIST_CARTS": {
           const carts = await readCarts();
-          sendResponse({ ok: true, carts });
+          const ent = await readEntitlement();
+          const now = Date.now();
+          const access = computeCartAccess(carts, ent, now);
+          const premium = isPremiumActive(ent, now);
+          // Annotate each cart with access state so the popup can render
+          // locked/read-only carts without recomputing the rule client-side.
+          const annotated = carts.map((c) => ({
+            ...c,
+            access: access.editableIds.has(c.id) ? "editable" : "readonly",
+          }));
+          sendResponse({
+            ok: true,
+            carts: annotated,
+            entitlement: {
+              tier: premium ? "premium" : "free",
+              premiumUntil: ent.premiumUntil,
+              autoRenew: !!ent.autoRenew,
+              source: ent.source,
+              isPremium: premium,
+              limit: access.limit,
+              count: carts.length,
+            },
+          });
+          break;
+        }
+
+        case "MC_GET_ENTITLEMENT": {
+          // Convenience read for the popup's status badge / paywall trigger.
+          // Returns the raw entitlement plus derived booleans and limits.
+          const ent = await readEntitlement();
+          const carts = await readCarts();
+          const now = Date.now();
+          const premium = isPremiumActive(ent, now);
+          sendResponse({
+            ok: true,
+            entitlement: {
+              tier: premium ? "premium" : "free",
+              premiumUntil: ent.premiumUntil,
+              autoRenew: !!ent.autoRenew,
+              source: ent.source,
+              lastChecked: ent.lastChecked,
+              isPremium: premium,
+              limit: cartLimitFor(ent, now),
+              count: carts.length,
+            },
+          });
+          break;
+        }
+
+        case "MC_DEV_SET_ENTITLEMENT": {
+          // Hidden testing affordance. Gated by chrome.storage.local["mc.dev.v1"]
+          // — enable manually in DevTools before use. Lets us flip between
+          // free / premium / lapsed states to exercise the gating + paywall UI
+          // before ExtensionPay is wired up.
+          //
+          // Example (in service-worker DevTools console):
+          //   await chrome.storage.local.set({ "mc.dev.v1": true })
+          //   await chrome.runtime.sendMessage({
+          //     type: "MC_DEV_SET_ENTITLEMENT",
+          //     entitlement: { tier: "premium", premiumUntil: Date.now() + 86400000 * 365 }
+          //   })
+          if (!(await isDevModeEnabled())) {
+            sendResponse({ ok: false, error: "Dev mode is not enabled." });
+            break;
+          }
+          const next = await writeEntitlement(msg.entitlement || {});
+          sendResponse({ ok: true, entitlement: next });
           break;
         }
 
@@ -2404,6 +2596,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // be on the cart page. scrapeCartInBackground reuses an existing cart
           // tab if one is open, or opens /gp/cart/view.html silently and closes
           // it when done — the user stays on their current page throughout.
+
+          // Tier gate: check cart count vs. free/premium limit BEFORE scraping
+          // so we don't waste a tab-open/scrape cycle just to refuse the save.
+          {
+            const existing = await readCarts();
+            const ent = await readEntitlement();
+            const gate = canCreateSavedCart(existing, ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+          }
+
           let cart;
           try {
             cart = await scrapeCartInBackground();
@@ -2422,11 +2627,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             break;
           }
           const carts = await readCarts();
+          // Re-check the gate after scraping — defensive, in case another
+          // popup action created a cart concurrently.
+          {
+            const ent = await readEntitlement();
+            const gate = canCreateSavedCart(carts, ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+          }
+          const now = Date.now();
           carts.unshift({
             id: makeId(),
             name: msg.name || "Untitled cart",
             host: cart.host,
             savedAt: cart.capturedAt,
+            lastUsedAt: now,
             items: cart.items,
           });
           await writeCarts(carts);
@@ -2441,7 +2658,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false, error: "Cart not found." });
             break;
           }
+          const ent = await readEntitlement();
+          const gate = canEditCart(target.id, carts, ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
+            break;
+          }
           target.name = msg.name || target.name;
+          target.lastUsedAt = Date.now();
           await writeCarts(carts);
           sendResponse({ ok: true });
           break;
@@ -2462,6 +2686,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false, error: "Cart not found." });
             break;
           }
+          const ent = await readEntitlement();
+          const gate = canEditCart(target.id, carts, ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
+            break;
+          }
           const before = target.items.length;
           target.items = (target.items || []).filter((it) => it.asin !== msg.asin);
           if (target.items.length === before) {
@@ -2475,6 +2705,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: true, cartDeleted: true });
             break;
           }
+          target.lastUsedAt = Date.now();
           await writeCarts(carts);
           sendResponse({ ok: true, remaining: target.items.length });
           break;
@@ -2503,6 +2734,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             break;
           }
 
+          // Tier gate: both source and target must be editable. Merging into
+          // a locked cart would be a write; merging from a locked cart would
+          // resurrect data the user hasn't paid to maintain.
+          {
+            const ent = await readEntitlement();
+            const srcGate = canEditCart(source.id, carts, ent);
+            const tgtGate = canEditCart(target.id, carts, ent);
+            if (!srcGate.allowed || !tgtGate.allowed) {
+              const locked = !srcGate.allowed ? source.name : target.name;
+              sendResponse({
+                ok: false,
+                code: "CART_LOCKED",
+                error: `Can't merge — "${locked}" is read-only. Renew Premium or delete other carts to free up a slot.`,
+              });
+              break;
+            }
+          }
+
           const targetByAsin = new Map();
           (target.items || []).forEach((it) => {
             if (it && it.asin) targetByAsin.set(it.asin, it);
@@ -2527,7 +2776,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             }
           });
 
-          // Drop the source cart from the list.
+          // Drop the source cart from the list. Bump target lastUsedAt so a
+          // freshly-merged cart stays editable through a later lapse.
+          target.lastUsedAt = Date.now();
           const next = carts.filter((c) => c.id !== source.id);
           await writeCarts(next);
           sendResponse({
@@ -2549,12 +2800,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false, error: "Cart not found." });
             break;
           }
+          const ent = await readEntitlement();
+          const gate = canEditCart(target.id, carts, ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
+            break;
+          }
           const item = (target.items || []).find((it) => it.asin === msg.asin);
           if (!item) {
             sendResponse({ ok: false, error: "Item not found in cart." });
             break;
           }
           item.quantity = qty;
+          target.lastUsedAt = Date.now();
           await writeCarts(carts);
           sendResponse({ ok: true, quantity: qty });
           break;
@@ -2567,6 +2825,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false, error: "Cart not found." });
             break;
           }
+          // Restore is a "write" against Amazon's live cart and per the
+          // monetization spec, locked (read-only) carts cannot move-to-Amazon.
+          const ent = await readEntitlement();
+          const gate = canEditCart(target.id, carts, ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
+            break;
+          }
+          // Bump lastUsedAt synchronously — restoring counts as a "use" and we
+          // want the cart to stay editable through any later lapse.
+          target.lastUsedAt = Date.now();
+          await writeCarts(carts);
           // Acknowledge immediately so the popup doesn't time out — this
           // can take a long time for large carts. The popup will likely
           // close before we finish; that's fine.
@@ -2599,6 +2869,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // the user doesn't need to be on the cart page), then clear in the
           // background (fire-and-forget) so the message channel stays open.
 
+          // Tier gate: check BEFORE scraping so we don't waste a tab cycle.
+          {
+            const existing = await readCarts();
+            const ent = await readEntitlement();
+            const gate = canCreateSavedCart(existing, ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+          }
+
           // Capture the origin page NOW, before scraping, so we can return
           // the user to it after the cart is cleared (scraping may take a few
           // seconds and open/close background tabs).
@@ -2622,11 +2903,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             break;
           }
           const carts = await readCarts();
+          // Re-check gate after scraping (concurrent saves are possible).
+          {
+            const ent = await readEntitlement();
+            const gate = canCreateSavedCart(carts, ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+          }
           carts.unshift({
             id: makeId(),
             name: msg.name || "Untitled cart",
             host: scCart.host,
             savedAt: scCart.capturedAt,
+            lastUsedAt: Date.now(),
             items: scCart.items,
           });
           await writeCarts(carts);
@@ -2677,11 +2968,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           }
 
           const carts = await readCarts();
+          // Tier gate — refuse before mutating storage.
+          {
+            const ent = await readEntitlement();
+            const gate = canCreateSavedCart(carts, ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+          }
           const newCart = {
             id: makeId(),
             name,
             host,
             savedAt: new Date().toISOString(),
+            lastUsedAt: Date.now(),
             items: [],
           };
           carts.unshift(newCart);
@@ -2705,6 +3006,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const target = carts.find((c) => c.id === msg.savedCartId);
           if (!target) {
             sendResponse({ ok: false, error: "Cart not found." });
+            break;
+          }
+          const ent = await readEntitlement();
+          const gate = canEditCart(target.id, carts, ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
             break;
           }
           target.items = Array.isArray(target.items) ? target.items : [];
@@ -2732,6 +3039,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             });
             action = "added";
           }
+          target.lastUsedAt = Date.now();
           await writeCarts(carts);
           sendResponse({ ok: true, action, cartName: target.name, itemCount: target.items.length });
           break;

@@ -2,6 +2,11 @@
    Aim: feels native to Amazon (warm, slightly serif headline, the iconic
    yellow-orange CTA) without literally copying their identity. */
 
+/* Author rules like .mc-tier-strip { display: flex } override the user-agent
+   default [hidden] { display: none }. Force the attribute to win globally so
+   element.hidden = true actually hides things. */
+[hidden] { display: none !important; }
+
 :root {
   --mc-bg: #ffffff;
   --mc-bg-soft: #f7f3ec;
@@ -158,6 +163,27 @@ body {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+.mc-brand-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc-header-premium-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mc-accent-ink);
+  background: var(--mc-accent);
+  border: 1px solid var(--mc-accent-strong);
+  white-space: nowrap;
 }
 
 .mc-tag {
@@ -841,22 +867,26 @@ body.mc-combine-active .mc-item:hover {
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
-  background: var(--mc-fg);
-  color: var(--mc-bg);
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 12px;
+  background: var(--mc-bg);
+  color: var(--mc-fg);
+  border: 1px solid var(--mc-line-strong);
+  border-radius: var(--mc-radius);
+  padding: 10px 14px;
+  font-size: 13px;
   font-weight: 500;
+  line-height: 1.35;
   box-shadow: var(--mc-shadow);
-  max-width: 90%;
+  max-width: calc(100% - 32px);
+  width: max-content;
   text-align: center;
   z-index: 50;
-  animation: mc-toast-in 140ms ease-out;
+  animation: mc-toast-in 160ms cubic-bezier(0.2, 0.7, 0.3, 1.15);
 }
 
 .mc-toast.mc-toast-error {
-  background: var(--mc-danger);
-  color: #fff;
+  border-color: var(--mc-danger);
+  color: var(--mc-danger);
+  background: var(--mc-bg);
 }
 
 @keyframes mc-toast-in {
@@ -949,4 +979,335 @@ body.mc-combine-active .mc-item:hover {
 
 .mc-debug-output:not(:empty) {
   display: block;
+}
+
+.mc-debug-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px dashed var(--mc-line);
+}
+.mc-debug-section:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.mc-debug-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mc-fg-muted);
+  font-weight: 600;
+}
+
+.mc-debug-state {
+  font-size: 11px;
+  color: var(--mc-fg-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--mc-bg-sunk);
+  padding: 6px 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.mc-debug-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mc-debug-hint {
+  font-size: 10px;
+  color: var(--mc-fg-muted);
+  line-height: 1.4;
+}
+.mc-debug-hint code {
+  font-size: 10px;
+  background: var(--mc-bg-sunk);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ---- Tier strip (entitlement badge + usage + upgrade CTA) --------------- */
+
+.mc-tier-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 10px;
+  padding: 8px 10px;
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-bg-soft);
+  border: 1px solid var(--mc-line);
+  font-size: 12px;
+}
+
+.mc-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--mc-fg-soft);
+  background: var(--mc-bg-sunk);
+  border: 1px solid var(--mc-line-strong);
+}
+
+.mc-tier-badge[data-tier="premium"] {
+  color: var(--mc-accent-ink);
+  background: var(--mc-accent);
+  border-color: var(--mc-accent-strong);
+}
+
+.mc-tier-usage {
+  flex: 1;
+  color: var(--mc-fg-soft);
+}
+
+.mc-tier-upgrade {
+  flex-shrink: 0;
+}
+
+/* ---- Dismiss × button (tier strip + lapsed banner) ----------------------- */
+
+.mc-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--mc-fg-muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.mc-dismiss:hover,
+.mc-dismiss:focus-visible {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--mc-fg);
+  outline: none;
+}
+
+html[data-theme="dark"] .mc-dismiss:hover,
+html[data-theme="dark"] .mc-dismiss:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .mc-dismiss:hover,
+  html:not([data-theme="light"]) .mc-dismiss:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ---- Banner (lapsed / renewal warnings) -------------------------------- */
+
+.mc-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px 10px;
+  padding: 8px 10px;
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-bg-soft);
+  border: 1px solid var(--mc-line);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mc-banner-warn {
+  background: #fff6e0;
+  border-color: #f1d68b;
+  color: #6c4a00;
+}
+
+html[data-theme="dark"] .mc-banner-warn,
+@media (prefers-color-scheme: dark) {
+  .mc-banner-warn {
+    background: #3a2c0a;
+    border-color: #7a5d18;
+    color: #ffe6a8;
+  }
+}
+
+.mc-banner-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.mc-banner-body {
+  flex: 1;
+}
+
+.mc-banner button {
+  flex-shrink: 0;
+}
+
+/* ---- Locked (read-only) cart -------------------------------------------- */
+
+.mc-item-locked {
+  position: relative;
+  opacity: 0.78;
+}
+
+.mc-item-lock-pill {
+  display: block;
+  margin: 0 0 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6c4a00;
+  background: #fff1c9;
+  border: 1px solid #f1d68b;
+  width: max-content;
+  max-width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.mc-item-lock-pill:hover,
+.mc-item-lock-pill:focus-visible {
+  background: #ffe199;
+  border-color: #e6c465;
+  color: #4a3300;
+  outline: none;
+}
+
+html[data-theme="dark"] .mc-item-lock-pill {
+  color: #ffe6a8;
+  background: #3a2c0a;
+  border-color: #7a5d18;
+}
+
+html[data-theme="dark"] .mc-item-lock-pill:hover,
+html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
+  background: #4d3c12;
+  border-color: #a07d24;
+  color: #fff2c6;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .mc-item-lock-pill {
+    color: #ffe6a8;
+    background: #3a2c0a;
+    border-color: #7a5d18;
+  }
+  html:not([data-theme="light"]) .mc-item-lock-pill:hover,
+  html:not([data-theme="light"]) .mc-item-lock-pill:focus-visible {
+    background: #4d3c12;
+    border-color: #a07d24;
+    color: #fff2c6;
+  }
+}
+
+.mc-item-locked .mc-item-name[disabled] {
+  pointer-events: none;
+  text-decoration: none;
+  cursor: default;
+  opacity: 0.7;
+}
+
+.mc-item-locked button[data-action="restore"],
+.mc-item-locked button[data-action="edit"],
+.mc-item-locked button[data-action="rename"] {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* ---- Paywall modal ------------------------------------------------------ */
+
+.mc-confirm-card {
+  max-width: 320px;
+}
+
+.mc-confirm-card .mc-modal-sub {
+  white-space: pre-line;
+}
+
+.mc-prompt-card {
+  max-width: 340px;
+}
+
+.mc-prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.mc-prompt-form .mc-input {
+  width: 100%;
+}
+
+.mc-input.mc-input-error {
+  border-color: #d93025;
+  box-shadow: 0 0 0 2px rgba(217, 48, 37, 0.18);
+}
+
+.mc-paywall-card {
+  text-align: left;
+}
+
+.mc-paywall-plan {
+  margin: 12px 0;
+  padding: 12px 14px;
+  background: var(--mc-bg-soft);
+  border: 1px solid var(--mc-line);
+  border-radius: var(--mc-radius-sm);
+}
+
+.mc-paywall-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.mc-paywall-amount {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--mc-fg);
+}
+
+.mc-paywall-period {
+  font-size: 13px;
+  color: var(--mc-fg-muted);
+}
+
+.mc-paywall-features {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--mc-fg-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mc-paywall-features li {
+  margin-bottom: 2px;
+}
+
+.mc-paywall-coming-soon {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  background: var(--mc-bg-soft);
+  border-left: 3px solid var(--mc-accent);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--mc-fg-soft);
 }

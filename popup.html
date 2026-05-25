@@ -45,7 +45,15 @@
           <path d="M0 28.5 Q 4 27.8, 8 28.5 T 16 28.5 T 24 28.5 T 32 28.5" stroke="#5db5ff" stroke-width="0.6" fill="none" stroke-linecap="round" opacity="0.25" />
         </svg>
         <div class="mc-brand-text">
-          <h1>Styx Multi-Cart</h1>
+          <div class="mc-brand-title">
+            <h1>Styx Multi-Cart</h1>
+            <span
+              id="mc-header-premium-badge"
+              class="mc-header-premium-badge"
+              hidden
+              title="You have Premium"
+            >Premium</span>
+          </div>
           <p class="mc-tag">Cart Management to Hell and back</p>
         </div>
       </div>
@@ -103,6 +111,54 @@
     </section>
 
     <section class="mc-list-block">
+      <div id="mc-tier-strip" class="mc-tier-strip" hidden>
+        <span id="mc-tier-badge" class="mc-tier-badge" data-tier="free">Free</span>
+        <span id="mc-tier-usage" class="mc-tier-usage">0 / 2 saved carts</span>
+        <button
+          id="mc-tier-upgrade"
+          class="mc-btn mc-btn-primary mc-btn-sm mc-tier-upgrade"
+          type="button"
+          hidden
+        >
+          Upgrade
+        </button>
+        <button
+          class="mc-dismiss"
+          type="button"
+          data-action="dismiss-tier-strip"
+          title="Hide this"
+          aria-label="Hide tier indicator"
+        >×</button>
+      </div>
+
+      <div
+        id="mc-lapsed-banner"
+        class="mc-banner mc-banner-warn"
+        hidden
+        role="status"
+      >
+        <span class="mc-banner-icon" aria-hidden="true">🔒</span>
+        <span class="mc-banner-body">
+          <strong id="mc-lapsed-count">0</strong>
+          <span id="mc-lapsed-suffix"> carts are read-only</span>
+          — Renew Premium to edit them again.
+        </span>
+        <button
+          id="mc-lapsed-renew"
+          class="mc-btn mc-btn-primary mc-btn-sm"
+          type="button"
+        >
+          Renew
+        </button>
+        <button
+          class="mc-dismiss"
+          type="button"
+          data-action="dismiss-lapsed-banner"
+          title="Hide this"
+          aria-label="Hide lapsed banner"
+        >×</button>
+      </div>
+
       <div class="mc-list-header">
         <h2>Saved carts</h2>
         <span id="mc-list-count" class="mc-count">0</span>
@@ -155,10 +211,39 @@
     <details id="mc-debug" class="mc-debug" hidden>
       <summary class="mc-debug-toggle">Debug</summary>
       <div class="mc-debug-body">
-        <button id="mc-diagnose" class="mc-btn mc-btn-ghost mc-btn-sm" type="button">
-          Run cart diagnostics
-        </button>
-        <pre id="mc-debug-output" class="mc-debug-output"></pre>
+        <div class="mc-debug-section">
+          <div class="mc-debug-section-title">Entitlement</div>
+          <div id="mc-debug-ent-state" class="mc-debug-state">loading…</div>
+          <div class="mc-debug-btn-row">
+            <button class="mc-btn mc-btn-ghost mc-btn-sm" type="button" data-debug-ent="premium">
+              Premium · 1y
+            </button>
+            <button class="mc-btn mc-btn-ghost mc-btn-sm" type="button" data-debug-ent="premium-warn">
+              Premium · 5d
+            </button>
+            <button class="mc-btn mc-btn-ghost mc-btn-sm" type="button" data-debug-ent="lapsed">
+              Lapsed
+            </button>
+            <button class="mc-btn mc-btn-ghost mc-btn-sm" type="button" data-debug-ent="free">
+              Free
+            </button>
+            <button class="mc-btn mc-btn-ghost mc-btn-sm" type="button" data-debug-ent="reset-dismiss">
+              Reset dismissed
+            </button>
+          </div>
+          <div class="mc-debug-hint">
+            Ctrl+Shift+D toggles this panel. Changes write directly to
+            <code>chrome.storage.local</code> and reload the popup state.
+          </div>
+        </div>
+
+        <div class="mc-debug-section">
+          <div class="mc-debug-section-title">Cart diagnostics</div>
+          <button id="mc-diagnose" class="mc-btn mc-btn-ghost mc-btn-sm" type="button">
+            Run cart diagnostics
+          </button>
+          <pre id="mc-debug-output" class="mc-debug-output"></pre>
+        </div>
       </div>
     </details>
 
@@ -262,6 +347,140 @@
 
         <div class="mc-modal-actions">
           <button class="mc-btn mc-btn-ghost mc-btn-sm" data-action="modal-cancel" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic confirm modal: replaces native confirm() for in-popup yes/no -->
+    <div
+      id="mc-confirm-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-confirm-title"
+    >
+      <div class="mc-modal-backdrop" data-action="confirm-cancel"></div>
+      <div class="mc-modal-card mc-confirm-card">
+        <h3 id="mc-confirm-title" class="mc-modal-title">Are you sure?</h3>
+        <p id="mc-confirm-body" class="mc-modal-sub"></p>
+        <div class="mc-modal-actions">
+          <button
+            id="mc-confirm-ok"
+            class="mc-btn mc-btn-primary"
+            type="button"
+            data-action="confirm-ok"
+          >
+            OK
+          </button>
+          <button
+            id="mc-confirm-cancel"
+            class="mc-btn mc-btn-ghost"
+            type="button"
+            data-action="confirm-cancel"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic prompt modal: replaces native prompt() for in-popup text input -->
+    <div
+      id="mc-prompt-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-prompt-title"
+    >
+      <div class="mc-modal-backdrop" data-action="prompt-cancel"></div>
+      <div class="mc-modal-card mc-prompt-card">
+        <h3 id="mc-prompt-title" class="mc-modal-title">Enter a value</h3>
+        <p id="mc-prompt-body" class="mc-modal-sub" hidden></p>
+        <form id="mc-prompt-form" class="mc-prompt-form" autocomplete="off">
+          <input
+            id="mc-prompt-input"
+            class="mc-input"
+            type="text"
+            maxlength="60"
+            autocomplete="off"
+          />
+          <div class="mc-modal-actions">
+            <button
+              id="mc-prompt-ok"
+              class="mc-btn mc-btn-primary"
+              type="submit"
+              data-action="prompt-ok"
+            >
+              OK
+            </button>
+            <button
+              id="mc-prompt-cancel"
+              class="mc-btn mc-btn-ghost"
+              type="button"
+              data-action="prompt-cancel"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Paywall modal: shown on free-limit hit or Upgrade click -->
+    <div
+      id="mc-paywall-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-paywall-title"
+    >
+      <div class="mc-modal-backdrop" data-action="paywall-close"></div>
+      <div class="mc-modal-card mc-paywall-card">
+        <h3 id="mc-paywall-title" class="mc-modal-title">Upgrade to Premium</h3>
+        <p id="mc-paywall-sub" class="mc-modal-sub">
+          You're using all your free saved carts. Premium unlocks more space for
+          how you actually shop.
+        </p>
+
+        <div class="mc-paywall-plan">
+          <div class="mc-paywall-price">
+            <span class="mc-paywall-amount">$4.99</span>
+            <span class="mc-paywall-period">/ year</span>
+          </div>
+          <ul class="mc-paywall-features">
+            <li>Up to <strong>20 saved carts</strong> (vs. 2 free)</li>
+            <li>Keep curated lists for gifts, restocks, occasions</li>
+            <li>Cancel anytime — your saved carts stay visible</li>
+          </ul>
+        </div>
+
+        <div class="mc-paywall-coming-soon" id="mc-paywall-stub" hidden>
+          <strong>Coming soon.</strong> Premium isn't live yet — we're polishing
+          the checkout flow. Thanks for being early!
+        </div>
+
+        <div class="mc-modal-actions">
+          <button
+            id="mc-paywall-cta"
+            class="mc-btn mc-btn-primary"
+            type="button"
+            data-action="paywall-upgrade"
+          >
+            Upgrade — $4.99 / yr
+          </button>
+          <button
+            class="mc-btn mc-btn-ghost"
+            type="button"
+            data-action="paywall-close"
+          >
+            Maybe later
+          </button>
         </div>
       </div>
     </div>

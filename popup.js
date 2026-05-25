@@ -21,6 +21,8 @@
   const $template = document.getElementById("mc-item-template");
   const $diagnose = document.getElementById("mc-diagnose");
   const $debugOutput = document.getElementById("mc-debug-output");
+  const $debugPanel = document.getElementById("mc-debug");
+  const $debugEntState = document.getElementById("mc-debug-ent-state");
   const $combineBtn = document.getElementById("mc-combine");
   const $combineBar = document.getElementById("mc-combine-bar");
   const $combineStatus = document.getElementById("mc-combine-status");
@@ -30,6 +32,67 @@
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
   const $createNew = document.getElementById("mc-create-new");
   const $themeToggle = document.getElementById("mc-theme-toggle");
+
+  // Entitlement / paywall UI refs.
+  const $headerPremiumBadge = document.getElementById("mc-header-premium-badge");
+  const $tierStrip = document.getElementById("mc-tier-strip");
+  const $tierBadge = document.getElementById("mc-tier-badge");
+  const $tierUsage = document.getElementById("mc-tier-usage");
+  const $tierUpgrade = document.getElementById("mc-tier-upgrade");
+  const $lapsedBanner = document.getElementById("mc-lapsed-banner");
+  const $lapsedCount = document.getElementById("mc-lapsed-count");
+  const $lapsedSuffix = document.getElementById("mc-lapsed-suffix");
+  const $lapsedRenew = document.getElementById("mc-lapsed-renew");
+  const $paywallModal = document.getElementById("mc-paywall-modal");
+  const $paywallTitle = document.getElementById("mc-paywall-title");
+  const $paywallSub = document.getElementById("mc-paywall-sub");
+  const $paywallStub = document.getElementById("mc-paywall-stub");
+  const $paywallCta = document.getElementById("mc-paywall-cta");
+
+  // Confirm-dialog refs (in-popup replacement for window.confirm).
+  const $confirmModal = document.getElementById("mc-confirm-modal");
+  const $confirmTitle = document.getElementById("mc-confirm-title");
+  const $confirmBody = document.getElementById("mc-confirm-body");
+  const $confirmOk = document.getElementById("mc-confirm-ok");
+  const $confirmCancel = document.getElementById("mc-confirm-cancel");
+
+  // Prompt-dialog refs (in-popup replacement for window.prompt).
+  const $promptModal = document.getElementById("mc-prompt-modal");
+  const $promptTitle = document.getElementById("mc-prompt-title");
+  const $promptBody = document.getElementById("mc-prompt-body");
+  const $promptForm = document.getElementById("mc-prompt-form");
+  const $promptInput = document.getElementById("mc-prompt-input");
+  const $promptOk = document.getElementById("mc-prompt-ok");
+  const $promptCancel = document.getElementById("mc-prompt-cancel");
+
+  // Cached entitlement from the last MC_LIST_CARTS / MC_GET_ENTITLEMENT response.
+  // See docs/MONETIZATION_PLAN.md. Always populated before render() runs.
+  let currentEntitlement = {
+    tier: "free",
+    isPremium: false,
+    limit: 2,
+    count: 0,
+    premiumUntil: null,
+    autoRenew: false,
+    source: null,
+  };
+
+  // Persistent dismissal snoozes for the tier strip and lapsed banner. Each
+  // value is the timestamp at which the user last clicked ×; the surface stays
+  // hidden until DISMISS_SNOOZE_MS has elapsed, then it comes back. Also reset
+  // on entitlement state changes via the debug menu and (eventually) the
+  // payment-provider hook in Phase 3.
+  const DISMISS_KEY = "mc.ui.dismissed.v1";
+  const DISMISS_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  // Shape: { tierStrip: number|null, lapsedBanner: number|null } where number
+  // is a Date.now() timestamp captured when the user clicked ×.
+  let uiDismissed = { tierStrip: null, lapsedBanner: null };
+
+  function isSnoozed(key, now) {
+    const ts = uiDismissed[key];
+    if (!ts) return false;
+    return now - ts < DISMISS_SNOOZE_MS;
+  }
 
   // ---- Messaging ---------------------------------------------------------
 
@@ -74,6 +137,158 @@
       $toast.hidden = true;
     }, 2600);
   }
+
+  // ---- Confirm dialog (in-popup replacement for window.confirm) ----------
+  //
+  // Returns a Promise<boolean>. Resolves true on OK, false on Cancel /
+  // backdrop / Escape. Only one confirm can be live at a time — if a new
+  // call comes in while another is open, the older one auto-cancels.
+
+  let confirmPending = null;
+
+  function confirmDialog(opts) {
+    const {
+      title = "Are you sure?",
+      message = "",
+      okLabel = "OK",
+      cancelLabel = "Cancel",
+      destructive = false,
+    } = opts || {};
+
+    // Auto-cancel any previous pending confirm.
+    if (confirmPending) confirmPending.resolve(false);
+
+    $confirmTitle.textContent = title;
+    $confirmBody.textContent = message;
+    $confirmOk.textContent = okLabel;
+    $confirmCancel.textContent = cancelLabel;
+    $confirmOk.classList.toggle("mc-btn-danger", !!destructive);
+
+    $confirmModal.hidden = false;
+    $confirmModal.removeAttribute("inert");
+    // Give the OK button focus so Enter == confirm.
+    setTimeout(() => $confirmOk.focus(), 0);
+
+    return new Promise((resolve) => {
+      confirmPending = {
+        resolve: (value) => {
+          if (!confirmPending) return;
+          confirmPending = null;
+          $confirmModal.hidden = true;
+          $confirmModal.setAttribute("inert", "");
+          $confirmOk.classList.remove("mc-btn-danger");
+          resolve(value);
+        },
+      };
+    });
+  }
+
+  $confirmModal.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-action]")?.dataset.action;
+    if (action === "confirm-ok") {
+      confirmPending?.resolve(true);
+    } else if (action === "confirm-cancel") {
+      confirmPending?.resolve(false);
+    }
+  });
+
+  // Esc closes (cancel); Enter on OK is handled natively by focus.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (confirmPending) {
+      e.preventDefault();
+      confirmPending.resolve(false);
+    } else if (promptPending) {
+      e.preventDefault();
+      promptPending.resolve(null);
+    }
+  });
+
+  // ---- Prompt dialog (in-popup replacement for window.prompt) ------------
+  //
+  // Returns a Promise<string|null>. Resolves to the entered string on OK
+  // (after trim, if configured), or null on Cancel / backdrop / Escape.
+  // Only one prompt can be live at a time.
+
+  let promptPending = null;
+
+  function promptDialog(opts) {
+    const {
+      title = "Enter a value",
+      message = "",
+      placeholder = "",
+      initialValue = "",
+      okLabel = "OK",
+      cancelLabel = "Cancel",
+      maxLength = 60,
+      allowEmpty = false,
+      trim = true,
+    } = opts || {};
+
+    if (promptPending) promptPending.resolve(null);
+
+    $promptTitle.textContent = title;
+    if (message) {
+      $promptBody.textContent = message;
+      $promptBody.hidden = false;
+    } else {
+      $promptBody.textContent = "";
+      $promptBody.hidden = true;
+    }
+    $promptInput.value = initialValue;
+    $promptInput.placeholder = placeholder;
+    $promptInput.maxLength = maxLength;
+    $promptOk.textContent = okLabel;
+    $promptCancel.textContent = cancelLabel;
+
+    $promptModal.hidden = false;
+    $promptModal.removeAttribute("inert");
+    setTimeout(() => {
+      $promptInput.focus();
+      $promptInput.select();
+    }, 0);
+
+    return new Promise((resolve) => {
+      promptPending = {
+        config: { allowEmpty, trim },
+        resolve: (value) => {
+          if (!promptPending) return;
+          promptPending = null;
+          $promptModal.hidden = true;
+          $promptModal.setAttribute("inert", "");
+          resolve(value);
+        },
+      };
+    });
+  }
+
+  function submitPrompt() {
+    if (!promptPending) return;
+    const { allowEmpty, trim } = promptPending.config;
+    let value = $promptInput.value;
+    if (trim) value = value.trim();
+    if (!allowEmpty && value === "") {
+      // Nudge user — flash the input, keep dialog open.
+      $promptInput.focus();
+      $promptInput.classList.add("mc-input-error");
+      setTimeout(() => $promptInput.classList.remove("mc-input-error"), 400);
+      return;
+    }
+    promptPending.resolve(value);
+  }
+
+  $promptForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitPrompt();
+  });
+
+  $promptModal.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-action]")?.dataset.action;
+    if (action === "prompt-cancel") {
+      promptPending?.resolve(null);
+    }
+    // prompt-ok is the submit button — handled via the form submit listener.
+  });
 
   // ---- Loading helper ----------------------------------------------------
 
@@ -122,6 +337,24 @@
     const node = $template.content.firstElementChild.cloneNode(true);
     node.dataset.id = cart.id;
 
+    // Lapsed-premium read-only carts: visible but action buttons disabled
+    // (except Delete, which is always allowed for cleanup). See
+    // docs/MONETIZATION_PLAN.md.
+    const isLocked = cart.access === "readonly";
+    if (isLocked) {
+      node.classList.add("mc-item-locked");
+      node.dataset.access = "readonly";
+      // Real clickable upgrade pill, replaces the old CSS ::before label.
+      // Clicking it opens the paywall in renew mode.
+      const lockPill = document.createElement("button");
+      lockPill.type = "button";
+      lockPill.className = "mc-item-lock-pill";
+      lockPill.dataset.action = "lock-upgrade";
+      lockPill.title = "Renew Premium to edit this cart";
+      lockPill.textContent = "Read-Only — Go Premium?";
+      node.prepend(lockPill);
+    }
+
     if (combineState.active) {
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -132,7 +365,14 @@
       node.prepend(cb);
     }
 
-    node.querySelector(".mc-item-name").textContent = cart.name;
+    const nameBtn = node.querySelector(".mc-item-name");
+    nameBtn.textContent = cart.name;
+    if (isLocked) {
+      // Strip rename affordance — CSS handles visuals, this kills the action.
+      nameBtn.setAttribute("disabled", "");
+      nameBtn.setAttribute("title", "Locked — renew Premium to rename");
+      nameBtn.dataset.action = "rename-locked";
+    }
 
     const totalQty = (cart.items || []).reduce(
       (n, it) => n + (it.quantity || 1),
@@ -174,7 +414,41 @@
       thumbs.appendChild(more);
     }
 
+    // Disable write actions on locked carts. CSS already grays them, but
+    // setting `disabled` ensures keyboard / screen-reader users see the
+    // locked state, and the delegated click handlers below skip them.
+    if (isLocked) {
+      ["restore", "edit"].forEach((act) => {
+        const btn = node.querySelector(`button[data-action="${act}"]`);
+        if (btn) {
+          btn.setAttribute("disabled", "");
+          btn.setAttribute("title", "Locked — renew Premium to use this cart");
+        }
+      });
+    }
+
     return node;
+  }
+
+  /**
+   * Two-group sort: editable carts A–Z first, then read-only carts A–Z.
+   * Matches the picker's ordering for consistency across surfaces.
+   */
+  function sortCartsForDisplay(carts) {
+    const cmpName = (a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    const editable = [];
+    const locked = [];
+    for (const c of carts || []) {
+      if (c.access === "readonly") locked.push(c);
+      else editable.push(c);
+    }
+    editable.sort(cmpName);
+    locked.sort(cmpName);
+    return editable.concat(locked);
   }
 
   function render(carts) {
@@ -183,7 +457,75 @@
     $list.innerHTML = "";
     $count.textContent = String(carts.length);
     $empty.hidden = carts.length > 0;
-    carts.forEach((cart) => $list.appendChild(renderItem(cart)));
+    const ordered = sortCartsForDisplay(carts);
+    ordered.forEach((cart) => $list.appendChild(renderItem(cart)));
+    renderTierStrip(carts);
+    renderLapsedBanner(carts);
+  }
+
+  // ---- Tier strip + banners ---------------------------------------------
+
+  /**
+   * Render the per-popup tier indicator + usage + upgrade CTA. Hidden when
+   * the popup has no carts AND user is on the free plan — keeps the empty
+   * state clean for first-time users.
+   */
+  function renderTierStrip(carts) {
+    const ent = currentEntitlement;
+    const count = carts.length;
+    const limit = ent.limit || 2;
+    const premium = !!ent.isPremium;
+    const now = Date.now();
+
+    // Premium users see their status in the header badge instead — no strip.
+    // Drive the header badge from this same renderer.
+    if ($headerPremiumBadge) {
+      $headerPremiumBadge.hidden = !premium;
+    }
+
+    // Hide the strip when:
+    //  - user is premium (header badge covers it), OR
+    //  - totally empty free-tier popup (first-run cleanliness), OR
+    //  - any locked carts are present (lapsed banner is the dominant signal —
+    //    "Renew" is the right CTA for an ex-premium user; "Upgrade" would
+    //    be misleading), OR
+    //  - user dismissed within the snooze window.
+    const hasLocked = carts.some((c) => c.access === "readonly");
+    if (premium || count === 0 || hasLocked || isSnoozed("tierStrip", now)) {
+      $tierStrip.hidden = true;
+      return;
+    }
+    $tierStrip.hidden = false;
+
+    $tierBadge.textContent = "Free";
+    $tierBadge.dataset.tier = "free";
+
+    const cartWord = limit === 1 ? "cart" : "carts";
+    $tierUsage.textContent = `${count} / ${limit} saved ${cartWord}`;
+
+    $tierUpgrade.hidden = false;
+  }
+
+  /**
+   * Lapsed banner: shown when a free-tier user has read-only carts visible
+   * (i.e., they were premium, kept >2 carts, and the subscription lapsed).
+   * Per spec, this banner is persistent and only disappears on renewal or
+   * cart cleanup.
+   */
+  function renderLapsedBanner(carts) {
+    const locked = carts.filter((c) => c.access === "readonly").length;
+    const now = Date.now();
+    if (
+      currentEntitlement.isPremium ||
+      locked === 0 ||
+      isSnoozed("lapsedBanner", now)
+    ) {
+      $lapsedBanner.hidden = true;
+      return;
+    }
+    $lapsedBanner.hidden = false;
+    $lapsedCount.textContent = String(locked);
+    $lapsedSuffix.textContent = locked === 1 ? " cart is read-only" : " carts are read-only";
   }
 
   // ---- Edit panel --------------------------------------------------------
@@ -234,7 +576,11 @@
 
   async function refresh() {
     const res = await send({ type: "MC_LIST_CARTS" });
-    if (res.ok) render(res.carts || []);
+    if (!res.ok) return;
+    if (res.entitlement) {
+      currentEntitlement = Object.assign(currentEntitlement, res.entitlement);
+    }
+    render(res.carts || []);
   }
 
   // ---- Settings: ATC intercept toggle ------------------------------------
@@ -338,41 +684,40 @@
         toast(`Saved ${res.count} item${res.count === 1 ? "" : "s"}`);
         $name.value = "";
         await refresh();
-      } else {
+      } else if (!handleEntitlementError(res)) {
         toast(res.error || "Could not save cart", "error");
       }
     });
   });
 
-  $saveAndClear.addEventListener("click", () => {
+  $saveAndClear.addEventListener("click", async () => {
     const name = ($name.value || "").trim() || defaultName();
-    if (
-      !confirm(
-        `Save the current Amazon cart as "${name}" and then remove all items from it?`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: "Save & clear cart?",
+      message: `Save the current Amazon cart as "${name}" and then remove all items from it?`,
+      okLabel: "Save & clear",
+    });
+    if (!ok) return;
     withLoading($saveAndClear, async () => {
       const res = await send({ type: "MC_SAVE_AND_CLEAR", name });
       if (res.ok) {
         toast(`Saved ${res.saved} item${res.saved === 1 ? "" : "s"} — clearing cart in background.`);
         $name.value = "";
         await refresh();
-      } else {
+      } else if (!handleEntitlementError(res)) {
         toast(res.error || "Could not save & clear", "error");
       }
     });
   });
 
-  $clear.addEventListener("click", () => {
-    if (
-      !confirm(
-        "Are you sure you want to clear your current Amazon cart?"
-      )
-    ) {
-      return;
-    }
+  $clear.addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: "Clear Amazon cart?",
+      message: "Are you sure you want to clear your current Amazon cart?",
+      okLabel: "Clear cart",
+      destructive: true,
+    });
+    if (!ok) return;
     withLoading($clear, async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
@@ -506,7 +851,9 @@
       targetId,
     });
     if (!res.ok) {
-      toast(res.error || "Could not combine carts.", "error");
+      if (!handleEntitlementError(res)) {
+        toast(res.error || "Could not combine carts.", "error");
+      }
       return;
     }
     const bits = [];
@@ -541,7 +888,9 @@
       item.quantity = prev;
       updateRowSummary(li, cart);
       if (input) input.value = String(prev);
-      toast(res.error || "Could not update quantity", "error");
+      if (!handleEntitlementError(res)) {
+        toast(res.error || "Could not update quantity", "error");
+      }
     }
   }
 
@@ -551,10 +900,18 @@
     if (!cart) return;
     const item = (cart.items || []).find((it) => it.asin === asin);
     if (!item) return;
-    if (!confirm(`Remove "${item.title || asin}" from this cart?`)) return;
+    const ok = await confirmDialog({
+      title: "Remove item?",
+      message: `Remove "${item.title || asin}" from this cart?`,
+      okLabel: "Remove",
+      destructive: true,
+    });
+    if (!ok) return;
     const res = await send({ type: "MC_REMOVE_ITEM_FROM_CART", id, asin });
     if (!res.ok) {
-      toast(res.error || "Could not remove item", "error");
+      if (!handleEntitlementError(res)) {
+        toast(res.error || "Could not remove item", "error");
+      }
       return;
     }
     if (res.cartDeleted) {
@@ -608,7 +965,7 @@
   });
 
   // Delegated handler for per-cart actions.
-  $list.addEventListener("click", (e) => {
+  $list.addEventListener("click", async (e) => {
     // Edit-panel buttons handled by the dedicated listener above; skip here
     // so we don't double-fire.
     if (e.target.closest(".mc-item-edit")) return;
@@ -619,16 +976,22 @@
     const id = li.dataset.id;
     const action = button.dataset.action;
 
+    // Read-only carts: clicking the upgrade pill opens the paywall in
+    // renew mode. Same destination as the lapsed banner's Renew button.
+    if (action === "lock-upgrade") {
+      openPaywall("renew");
+      return;
+    }
+
     if (action === "restore") {
       const cartName =
         li.querySelector(".mc-item-name").textContent.trim() || "this";
-      if (
-        !confirm(
-          `Are you sure want to clear your current Amazon cart and restore the items from ${cartName} cart?`
-        )
-      ) {
-        return;
-      }
+      const ok = await confirmDialog({
+        title: "Restore this cart?",
+        message: `Clear your current Amazon cart and restore the items from "${cartName}"?`,
+        okLabel: "Restore",
+      });
+      if (!ok) return;
 
       withLoading(button, async () => {
         const res = await send({ type: "MC_RESTORE_CART", id });
@@ -637,25 +1000,29 @@
           toast(
             `Clearing current cart, then restoring ${total} item${total === 1 ? "" : "s"}. If Amazon shows an upsell, choose an option there to continue.`
           );
-        } else {
+        } else if (!handleEntitlementError(res)) {
           toast(res.error || "Could not restore", "error");
         }
       });
     } else if (action === "rename") {
       const current = li.querySelector(".mc-item-name").textContent;
-      const next = prompt("Rename cart:", current);
+      const next = await promptDialog({
+        title: "Rename cart",
+        placeholder: "Cart name",
+        initialValue: current,
+        okLabel: "Rename",
+      });
       if (next == null) return;
-      const trimmed = next.trim();
-      if (!trimmed || trimmed === current) return;
+      if (next === current) return;
       withLoading(button, async () => {
         const res = await send({
           type: "MC_RENAME_CART",
           id,
-          name: trimmed,
+          name: next,
         });
         if (res.ok) {
           await refresh();
-        } else {
+        } else if (!handleEntitlementError(res)) {
           toast(res.error || "Could not rename", "error");
         }
       });
@@ -668,7 +1035,13 @@
       setEditOpen(li, willOpen);
     } else if (action === "delete") {
       const current = li.querySelector(".mc-item-name").textContent;
-      if (!confirm(`Delete saved cart "${current}"?`)) return;
+      const ok = await confirmDialog({
+        title: "Delete saved cart?",
+        message: `"${current}" will be permanently removed.`,
+        okLabel: "Delete",
+        destructive: true,
+      });
+      if (!ok) return;
       withLoading(button, async () => {
         const res = await send({ type: "MC_DELETE_CART", id });
         if (res.ok) {
@@ -683,24 +1056,23 @@
 
   // ---- Combine bar / modal wiring ----------------------------------------
 
-  $createNew.addEventListener("click", () => {
+  $createNew.addEventListener("click", async () => {
     // If the user is mid-Merge selection, exit it first so the new cart
     // doesn't pop up wearing a checkbox.
     if (combineState.active) setCombineMode(false);
 
-    const name = prompt("Name for the new cart:");
-    if (name == null) return; // user cancelled the prompt
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast("Name cannot be empty.", "error");
-      return;
-    }
+    const name = await promptDialog({
+      title: "Create a new cart",
+      placeholder: "e.g. Birthday gifts",
+      okLabel: "Create",
+    });
+    if (name == null) return; // user cancelled
     withLoading($createNew, async () => {
-      const res = await send({ type: "MC_CREATE_EMPTY_CART", name: trimmed });
+      const res = await send({ type: "MC_CREATE_EMPTY_CART", name });
       if (res.ok) {
-        toast(`Created "${trimmed}".`);
+        toast(`Created "${name}".`);
         await refresh();
-      } else {
+      } else if (!handleEntitlementError(res)) {
         toast(res.error || "Could not create cart.", "error");
       }
     });
@@ -738,7 +1110,12 @@
   });
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !$combineModal.hidden) {
+    if (e.key !== "Escape") return;
+    if (!$paywallModal.hidden) {
+      closePaywall();
+      return;
+    }
+    if (!$combineModal.hidden) {
       closeCombineModal();
     }
   });
@@ -783,6 +1160,184 @@
     });
   });
 
+  // ---- Debug: entitlement controls --------------------------------------
+  //
+  // Hidden affordance behind chrome.storage.local["mc.dev.v1"]. Toggle visibility
+  // with Ctrl+Shift+D (also persists the flag so it stays on across popup opens).
+  // Buttons write chrome.storage.local["mc.entitlement.v1"] directly — no
+  // service-worker round trip needed — then trigger a refresh.
+
+  const DEV_FLAG_KEY = "mc.dev.v1";
+  const ENT_KEY = "mc.entitlement.v1";
+  const DAY_MS = 86400000;
+
+  function entPresets(now) {
+    return {
+      premium: {
+        tier: "premium",
+        premiumUntil: now + 365 * DAY_MS,
+        autoRenew: true,
+        source: "dev",
+        lastChecked: now,
+      },
+      "premium-warn": {
+        // Premium, 5 days from expiry, auto-renew off → triggers warning paths.
+        tier: "premium",
+        premiumUntil: now + 5 * DAY_MS,
+        autoRenew: false,
+        source: "dev",
+        lastChecked: now,
+      },
+      lapsed: {
+        // Was premium, expired yesterday → top-N editable, rest read-only.
+        tier: "premium",
+        premiumUntil: now - 1 * DAY_MS,
+        autoRenew: false,
+        source: "dev",
+        lastChecked: now,
+      },
+      free: {
+        tier: "free",
+        premiumUntil: null,
+        autoRenew: false,
+        source: null,
+        lastChecked: now,
+      },
+    };
+  }
+
+  function formatEntForDisplay(ent) {
+    if (!ent) return "(none)";
+    const until = ent.premiumUntil
+      ? new Date(ent.premiumUntil).toISOString().slice(0, 10)
+      : "—";
+    const now = Date.now();
+    const expired = ent.premiumUntil && ent.premiumUntil < now;
+    const status =
+      ent.tier === "premium" && !expired
+        ? "active"
+        : ent.tier === "premium" && expired
+        ? "LAPSED"
+        : "free";
+    return [
+      `tier:        ${ent.tier || "free"} (${status})`,
+      `premiumUntil:${until}`,
+      `autoRenew:   ${ent.autoRenew ? "yes" : "no"}`,
+      `source:      ${ent.source || "—"}`,
+    ].join("\n");
+  }
+
+  async function refreshDebugEntDisplay() {
+    if (!$debugEntState) return;
+    try {
+      const got = await chrome.storage.local.get(ENT_KEY);
+      $debugEntState.textContent = formatEntForDisplay(got[ENT_KEY]);
+    } catch (e) {
+      $debugEntState.textContent = `error: ${e.message}`;
+    }
+  }
+
+  async function setDebugPanelVisible(visible) {
+    if (!$debugPanel) return;
+    $debugPanel.hidden = !visible;
+    if (visible) $debugPanel.open = true;
+    try {
+      await chrome.storage.local.set({ [DEV_FLAG_KEY]: !!visible });
+    } catch (_) {}
+    if (visible) refreshDebugEntDisplay();
+  }
+
+  async function loadDebugPanelVisibility() {
+    try {
+      const got = await chrome.storage.local.get(DEV_FLAG_KEY);
+      if (got[DEV_FLAG_KEY] === true && $debugPanel) {
+        $debugPanel.hidden = false;
+        refreshDebugEntDisplay();
+      }
+    } catch (_) {}
+  }
+
+  // Ctrl+Alt+D toggles the debug panel + persists. (Chrome eats Cmd+Shift+D
+  // on Mac for "Bookmark all tabs", so we avoid that combo.)
+  document.addEventListener("keydown", (e) => {
+    const isToggle =
+      (e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d";
+    if (!isToggle) return;
+    e.preventDefault();
+    const isHidden = !$debugPanel || $debugPanel.hidden;
+    setDebugPanelVisible(isHidden);
+  });
+
+  // Backup affordance: click the tagline 5 times within 2s to toggle.
+  (function attachTaglineUnlock() {
+    const tagline = document.querySelector(".mc-tag");
+    if (!tagline) return;
+    let clicks = 0;
+    let firstAt = 0;
+    tagline.style.cursor = "default";
+    tagline.addEventListener("click", () => {
+      const now = Date.now();
+      if (now - firstAt > 2000) {
+        clicks = 0;
+        firstAt = now;
+      }
+      clicks += 1;
+      if (clicks >= 5) {
+        clicks = 0;
+        const isHidden = !$debugPanel || $debugPanel.hidden;
+        setDebugPanelVisible(isHidden);
+        toast(isHidden ? "Debug menu on" : "Debug menu off", "ok");
+      }
+    });
+  })();
+
+  // Button delegation inside the debug entitlement section.
+  if ($debugPanel) {
+    $debugPanel.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-debug-ent]");
+      if (!btn) return;
+      const action = btn.dataset.debugEnt;
+      const now = Date.now();
+      if (action === "reset-dismiss") {
+        try {
+          await chrome.storage.local.remove(DISMISS_KEY);
+          uiDismissed = { tierStrip: null, lapsedBanner: null };
+          toast("Dismissed flags cleared", "ok");
+          await refresh();
+        } catch (err) {
+          toast(`Reset failed: ${err.message}`, "error");
+        }
+        return;
+      }
+      const presets = entPresets(now);
+      const next = presets[action];
+      if (!next) return;
+      try {
+        await chrome.storage.local.set({ [ENT_KEY]: next });
+        // Reset dismissed UI on entitlement state change so banners come back.
+        uiDismissed = { tierStrip: null, lapsedBanner: null };
+        await chrome.storage.local.set({
+          [DISMISS_KEY]: uiDismissed,
+        });
+        await refreshDebugEntDisplay();
+        await refresh();
+        toast(`Entitlement → ${action}`, "ok");
+      } catch (err) {
+        toast(`Failed: ${err.message}`, "error");
+      }
+    });
+  }
+
+  // Keep display in sync if entitlement is mutated externally (e.g. SW console).
+  if (chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local") return;
+      if (changes[ENT_KEY] && $debugPanel && !$debugPanel.hidden) {
+        refreshDebugEntDisplay();
+      }
+    });
+  }
+
   function formatDebugControl(control) {
     if (!control) return "";
     return (
@@ -801,17 +1356,185 @@
     }
   });
 
+  // ---- Paywall modal -----------------------------------------------------
+  //
+  // Two open triggers:
+  //   - "limit"   → gate refused a save (FREE_LIMIT_REACHED)
+  //   - "cta"     → user clicked an Upgrade button
+  //   - "renew"   → user clicked the Renew button on the lapsed banner
+  // Different trigger → different headline copy. The plan card itself is
+  // identical across triggers.
+  //
+  // Phase 3 will replace the stub with an ExtensionPay.openPaymentPage() call.
+
+  function openPaywall(trigger) {
+    if (trigger === "limit") {
+      $paywallTitle.textContent = "You've used both free carts";
+      $paywallSub.textContent =
+        "Upgrade to Premium to save more — your existing carts stay exactly as they are.";
+    } else if (trigger === "renew") {
+      $paywallTitle.textContent = "Welcome back";
+      $paywallSub.textContent =
+        "Renew Premium to unlock your read-only carts. Everything you saved is still here, waiting.";
+    } else {
+      $paywallTitle.textContent = "Upgrade to Premium";
+      $paywallSub.textContent =
+        "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.";
+    }
+    // Phase 4 stub — surface "coming soon" until ExtensionPay is wired.
+    $paywallStub.hidden = false;
+    $paywallCta.disabled = true;
+    $paywallCta.textContent = "Coming soon";
+
+    $paywallModal.hidden = false;
+    $paywallModal.removeAttribute("inert");
+    // Move focus to the close button so screen readers announce the modal.
+    const closeBtn = $paywallModal.querySelector('[data-action="paywall-close"]');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closePaywall() {
+    const active = document.activeElement;
+    if (active && $paywallModal.contains(active)) active.blur();
+    $paywallModal.setAttribute("inert", "");
+    $paywallModal.hidden = true;
+  }
+
+  $paywallModal.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === "paywall-close") {
+      closePaywall();
+    } else if (action === "paywall-upgrade") {
+      // Phase 3 hook — ExtensionPay.openPaymentPage() goes here.
+      // For now the button is disabled with "Coming soon" copy.
+    }
+  });
+
+  $tierUpgrade.addEventListener("click", () => openPaywall("cta"));
+  $lapsedRenew.addEventListener("click", () => openPaywall("renew"));
+
+  // ---- Dismissal persistence -----------------------------------------------
+
+  async function loadDismissed() {
+    const result = await chrome.storage.local.get(DISMISS_KEY);
+    const stored = result[DISMISS_KEY];
+    if (stored && typeof stored === "object") {
+      // Migrate legacy boolean shape → timestamp shape on read.
+      const migrated = { tierStrip: null, lapsedBanner: null };
+      const now = Date.now();
+      for (const k of ["tierStrip", "lapsedBanner"]) {
+        const v = stored[k];
+        if (typeof v === "number") migrated[k] = v;
+        else if (v === true) migrated[k] = now;
+        else migrated[k] = null;
+      }
+      uiDismissed = migrated;
+    }
+  }
+
+  async function snoozeDismissal(key) {
+    uiDismissed[key] = Date.now();
+    await chrome.storage.local.set({ [DISMISS_KEY]: uiDismissed });
+  }
+
+  // Belt-and-suspenders dismiss handling. We bind:
+  //  (a) direct listeners on each × button at script-load time, AND
+  //  (b) a delegated handler on document (in case the strip/banner is
+  //      re-rendered by some future code path that swaps the node).
+  // The dismiss function is idempotent — running both is harmless.
+  async function dismissSurface(which) {
+    if (which === "tierStrip") $tierStrip.hidden = true;
+    if (which === "lapsedBanner") $lapsedBanner.hidden = true;
+    await snoozeDismissal(which);
+  }
+
+  function bindDirectDismiss() {
+    const tierBtn = $tierStrip.querySelector(
+      "[data-action='dismiss-tier-strip']"
+    );
+    const lapsedBtn = $lapsedBanner.querySelector(
+      "[data-action='dismiss-lapsed-banner']"
+    );
+    if (tierBtn) {
+      tierBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dismissSurface("tierStrip");
+      });
+    }
+    if (lapsedBtn) {
+      lapsedBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dismissSurface("lapsedBanner");
+      });
+    }
+  }
+  bindDirectDismiss();
+
+  // Delegated fallback: catches clicks even if the original × button was
+  // somehow detached and re-inserted (e.g. a future innerHTML swap).
+  document.addEventListener("click", (e) => {
+    const tierX = e.target.closest("[data-action='dismiss-tier-strip']");
+    if (tierX) {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissSurface("tierStrip");
+      return;
+    }
+    const lapsedX = e.target.closest("[data-action='dismiss-lapsed-banner']");
+    if (lapsedX) {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissSurface("lapsedBanner");
+    }
+  });
+
+  /**
+   * Centralized handler for the gate response codes returned by background.
+   * Returns true if a paywall / locked-cart treatment was applied (so the
+   * caller knows it doesn't need to fall back to a generic toast).
+   */
+  function handleEntitlementError(res) {
+    if (!res || res.ok) return false;
+    if (res.code === "FREE_LIMIT_REACHED") {
+      openPaywall("limit");
+      return true;
+    }
+    if (res.code === "PREMIUM_LIMIT_REACHED") {
+      toast(
+        res.error ||
+          `You've reached the 20-cart limit. Delete or merge carts to free up space.`,
+        "error"
+      );
+      return true;
+    }
+    if (res.code === "CART_LOCKED") {
+      toast(
+        res.error ||
+          "This cart is locked — renew Premium or delete others to free a slot.",
+        "error"
+      );
+      return true;
+    }
+    return false;
+  }
+
   // ---- Boot --------------------------------------------------------------
 
-  document.addEventListener("DOMContentLoaded", () => {
+  async function boot() {
     loadThemeSetting();
+    await loadDismissed();
+    loadDebugPanelVisibility();
     refresh();
     loadInterceptSetting();
-  });
+  }
+
+  document.addEventListener("DOMContentLoaded", boot);
   // In case the popup script runs after DOMContentLoaded already fired:
   if (document.readyState !== "loading") {
-    loadThemeSetting();
-    refresh();
-    loadInterceptSetting();
+    boot();
   }
 })();

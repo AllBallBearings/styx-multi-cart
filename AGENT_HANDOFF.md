@@ -1,6 +1,93 @@
 # Agent Handoff
 
-Last updated: 2026-05-15
+Last updated: 2026-05-25
+
+---
+
+## Monetization UI Phase (shipped 2026-05-25)
+
+Phase 3 of the monetization plan landed: the entitlement-aware UI layer plus
+an in-popup modal system to replace native browser dialogs. See
+[`docs/MONETIZATION_PLAN.md`](docs/MONETIZATION_PLAN.md) build-order step 3
+for the canonical checklist.
+
+### What shipped
+
+- **Conditional tier UI**
+  - Tier strip `X / 2 carts (Free)` near header, only when free + has carts +
+    no locked carts present.
+  - Lapsed banner `Renew to unlock N saved carts` when lapsed + locked carts
+    present — pre-empts tier strip (never both at once).
+  - Premium header flair badge (amber pill) next to the extension name when
+    premium is active; both tier strip and lapsed banner stay hidden.
+  - Locked carts render an inline `Read-Only — Go Premium?` button (replaced
+    the old `::before` pseudo-label) that opens the paywall modal.
+- **Dismissibility with snooze**
+  - Tier strip and lapsed banner × buttons write a timestamp to
+    `chrome.storage.local` under `mc.ui.dismissed.v1` and stay hidden for
+    7 days. Legacy boolean shape is migrated on read.
+  - Lapsed banner is still effectively persistent — it reappears on every
+    open after the 7-day snooze, and locked carts always carry the inline
+    lock pill regardless of banner state.
+- **In-popup modals (replaced native `confirm` / `prompt`)**
+  - `confirmDialog({ title, message, okLabel, cancelLabel, destructive })`
+    returns `Promise<boolean>`. Used for: Save & Clear, Clear cart, Remove
+    item, Restore, Delete cart.
+  - `promptDialog({ title, message, placeholder, initialValue, okLabel,
+    maxLength, allowEmpty, trim })` returns `Promise<string|null>`. Used
+    for: Rename cart, Create new cart. Empty input flashes red without
+    closing; ESC cancels; Enter submits.
+  - Singleton `confirmPending` / `promptPending` auto-cancel any prior open
+    dialog so no stacked modals.
+  - All modal buttons equalized (removed `mc-btn-sm` from Cancel / Maybe
+    later in confirm, prompt, and paywall).
+  - Toast restyled from dark-pill to a card matching modal aesthetic
+    (light bg, border, shadow, same cubic-bezier easing). Error variant uses
+    red border + red text instead of solid red bg.
+- **Debug panel** (`#mc-debug` in popup.html)
+  - Buttons to set entitlement state to: premium / premium-warn / lapsed /
+    free, plus a "reset dismissals" action.
+  - Toggle: **Ctrl+Alt+D** (switched from Cmd+Shift+D — Chrome's
+    "Bookmark all tabs" shortcut swallowed it on Mac).
+  - Backup affordance: **5 clicks on the tagline within 2s** also toggles
+    visibility. Visibility persists across opens via `mc.dev.v1`.
+  - Must be hidden / stripped before Chrome Web Store submission.
+
+### Bug fixes worth remembering
+
+- **`[hidden]` was being overridden** by author-level `.mc-tier-strip { display: flex }`.
+  Fixed with a global `[hidden] { display: none !important; }` rule at the
+  top of `popup.css`. The × dismiss buttons looked broken because of this —
+  the JS handlers were firing; only the CSS was wrong.
+- After switching to `promptDialog` (which trims internally) the rename
+  handler still referenced the removed `trimmed` variable — corrected to
+  use the returned `next` string.
+
+### Files touched
+
+- `popup.html` — `#mc-debug` panel, `#mc-header-premium-badge` and
+  `.mc-brand-title` wrapper, `#mc-confirm-modal`, `#mc-prompt-modal`,
+  equal-sized modal buttons.
+- `popup.css` — global `[hidden]` rule, header badge styles, debug panel
+  styles, `.mc-item-lock-pill` replacing pseudo-element, modal card sizes,
+  prompt-form layout, error flash, restyled toast.
+- `popup.js` — entitlement preset helpers, debug panel wiring, snooze-based
+  dismissal model, conditional render logic for tier strip + lapsed banner,
+  `confirmDialog` + `promptDialog` helpers, replaced all 5 `confirm()` calls
+  and both 2 `prompt()` calls.
+
+### Open follow-ups
+
+- Debug panel **must** be gated behind a `DEBUG` build flag (or removed) for
+  the Chrome Web Store build — see Track A1.
+- 30-day / 7-day renewal warning banners deferred until Stripe wiring lands
+  (need real `premiumUntil` values to drive them).
+- Hook entitlement-change callback (from the future Stripe webhook side)
+  to reset `mc.ui.dismissed.v1` automatically so a fresh premium subscriber
+  doesn't see a stale tier strip via snooze leftovers.
+- Consider clearing the `combine` mode's Cancel button if it still uses
+  `mc-btn-sm` for size parity with the rest of the modal family
+  (unverified — user hasn't reported a mismatch there).
 
 ---
 
@@ -61,7 +148,10 @@ pick up coherently.
 - [ ] Strip / wrap all `console.error` and `console.warn` behind a `DEBUG`
       build flag. Web Store reviewers ding extensions that spam the console.
 - [ ] Remove the in-popup Debug panel (`#mc-debug` in popup.html) or hide it
-      behind a "developer mode" toggle.
+      behind a "developer mode" toggle. _As of 2026-05-25 the panel is
+      always present in the bundle but only toggled visible via Ctrl+Alt+D
+      or the 5-click tagline backup — needs hard-removal or build-flag
+      gating before store submission._
 - [ ] Add a `LICENSE` file (MIT or similar) and a real README with
       install/usage instructions and screenshots.
 - [ ] Privacy policy page (hosted, e.g. GitHub Pages) — required by Chrome
@@ -121,6 +211,26 @@ pick up coherently.
 ---
 
 ### Track B — Free vs Pro monetization
+
+> **SUPERSEDED** by [`docs/MONETIZATION_PLAN.md`](docs/MONETIZATION_PLAN.md) (2026-05-21).
+> Final design: **2 free carts → $4.99/yr Premium for up to 20 carts**, via
+> **ExtensionPay** (no backend). Lapsed-premium users keep visibility of all
+> carts but only the top 2 by `lastUsedAt` remain editable; the rest are
+> read-only reference.
+>
+> **Status:**
+> - ✅ Phase 1 (entitlement core + gate functions) shipped 2026-05-21 —
+>   `lib/helpers.js`, `lib/storage.js`, `background.js` entitlement helpers,
+>   `tests/unit/entitlement.test.js`.
+> - ✅ Phase 3 (entitlement-aware UI: tier strip, lapsed banner, premium
+>   flair, lock pill, paywall modal, in-popup confirm/prompt, toast restyle,
+>   debug panel) shipped 2026-05-25 — see the "Monetization UI Phase"
+>   section at the top of this file.
+> - ⏳ Phase 4 (Chrome Web Store readiness — Track A) is the next gate.
+> - ⏳ Phase 5 (Stripe + webhook + real paywall CTA) blocks Phase 6 (live
+>   paywall trigger) and the renewal-warning banners.
+>
+> Sub-sections below kept for historical context.
 
 #### B1. Tier design
 
