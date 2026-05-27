@@ -28,6 +28,10 @@ All injected code lives in the extension's own bundle. The extension never execu
 
 During restore the extension opens one helper tab, navigates it through each saved product page in sequence, and closes the tab when finished. `tabs` is required to create, navigate, and close that helper, and to detect when each product page has finished loading.
 
+## `alarms`
+
+Used solely to schedule a once-per-day wake-up of the service worker so it can refresh the Premium license status from ExtensionPay (see "Outbound non-Amazon network requests" below). Without `alarms`, MV3 service workers are evicted within minutes of inactivity and the license check would never run on its own; the user would have to keep the popup open. No alarms are used for anything else.
+
 ## Host permissions
 
 The extension declares host permissions for the Amazon storefronts it supports:
@@ -36,12 +40,25 @@ The extension declares host permissions for the Amazon storefronts it supports:
 
 The extension's entire purpose is to interact with the Amazon cart page on whichever regional storefront you use. It does not request access to any non-Amazon site. Content scripts are further narrowed to the specific cart, product, and checkout paths the extension needs (see the `content_scripts.matches` entries in `manifest.json`).
 
+## Outbound non-Amazon network requests
+
+The extension communicates with **`extensionpay.com`** to handle Premium licensing:
+
+1. **Checkout** — opening ExtensionPay's hosted Stripe checkout page in a new tab, only when the user explicitly clicks Upgrade. This is the moment an ExtensionPay API key is first generated locally for that install.
+2. **License verification** — a once-per-day `fetch()` (and one on each popup open) that sends only the opaque ExtensionPay API key stored locally; receives a subscription-status response. **This request is only made on installs that have an API key on file**, i.e. installs that have at least clicked Upgrade. Users who never engage with the upgrade flow never contact ExtensionPay — the SDK short-circuits to a local "not paid" response without any network call.
+3. **Post-checkout handshake** — a small content script (`ExtPay.js`, bundled with the extension) runs on `https://extensionpay.com/*` so a successful purchase can `postMessage` back to the extension and update the license state immediately. This script does not run on any other domain.
+
+No cart contents, browsing data, or PII are transmitted in any of these requests. Payment-card data is handled entirely by Stripe on ExtensionPay's hosted page; the extension never sees it. See the [privacy policy](privacy.html) for the full data-handling statement and links to ExtensionPay's and Stripe's policies.
+
+## Bundled third-party code
+
+The extension bundles one third-party JavaScript file: **`ExtPay.js`** (≈55 KB), the official client SDK from [ExtensionPay](https://extensionpay.com). It is delivered as a static asset in the extension package — no remote code is loaded at runtime. The bundled file is identical to the one published at <https://github.com/Glench/ExtPay> and can be regenerated locally by running `npm install extpay@latest` and copying `node_modules/extpay/dist/ExtPay.js`. The extension does not include any analytics SDK, advertising network, fingerprinting library, or other third-party code.
+
 ## What the extension does NOT do
 
-- It does not run on, read from, or transmit data to any non-Amazon website.
+- It does not run on, read from, or transmit data to any non-Amazon website besides `extensionpay.com` (used solely for Premium licensing as described above).
 - It does not collect analytics, telemetry, or any personally identifiable information.
 - It does not transmit your saved carts to any server.
-- It does not bundle or load any third-party SDK, tracker, ad network, or fingerprinting library.
 - It does not read or store your Amazon password — authentication is handled entirely by Amazon in your normal browser session.
 
 See the [privacy policy](privacy.html) for the full data-handling statement.

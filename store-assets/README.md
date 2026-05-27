@@ -7,10 +7,11 @@ Assets uploaded to the Chrome Web Store listing form. **Not bundled into the ext
 | File | Chrome Web Store field | Size | Status |
 |------|------------------------|------|--------|
 | `icon-128.png` | Store icon | 128×128 PNG | ✅ done (copied from `icons/icon128.png`) |
-| `promo-440x280.png` | Small promo tile | 440×280 PNG (no transparency) | ⏳ TODO |
+| `promo-440x280.png` | Small promo tile | 440×280 PNG (no transparency) | ✅ done — regenerate via `python3 store-assets/_render_promo.py` |
 | `screenshots/01-popup.png` | Screenshot 1 | 1280×800 PNG | ⏳ TODO — popup with 2-3 saved carts |
 | `screenshots/02-restoring.png` | Screenshot 2 | 1280×800 PNG | ⏳ TODO — mid-restore status toast on a cart page |
 | `screenshots/03-done.png` | Screenshot 3 | 1280×800 PNG | ⏳ TODO — "Cart restored — N items added" |
+| `screenshots/04-paywall.png` (optional) | Screenshot 4 | 1280×800 PNG | ⏳ optional — the upgrade modal (good for premium-feature legibility) |
 
 Optional (defer until after initial launch):
 

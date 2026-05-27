@@ -452,6 +452,69 @@
   // Refreshed via chrome.storage.onChanged below.
   let _settingsCache = { interceptAtc: true };
   let _cartsCache = [];
+  // Entitlement mirror — see lib/helpers.js / background.js for the source of
+  // truth. Constants duplicated for the same "service-worker can't import
+  // ESM" reason the other mirrors exist.
+  const FREE_CART_LIMIT = 2;
+  const PREMIUM_CART_LIMIT = 20;
+  let _entitlementCache = {
+    tier: "free",
+    premiumUntil: null,
+    autoRenew: false,
+    source: null,
+    lastChecked: 0,
+  };
+
+  function isPremiumActive(ent, nowMs) {
+    if (!ent || ent.tier !== "premium") return false;
+    if (!ent.premiumUntil) return false;
+    return nowMs < Number(ent.premiumUntil);
+  }
+
+  function cartLimitFor(ent, nowMs) {
+    return isPremiumActive(ent, nowMs) ? PREMIUM_CART_LIMIT : FREE_CART_LIMIT;
+  }
+
+  /**
+   * Returns a Set of cart IDs that are currently editable, given the
+   * current entitlement and the cart list. Mirrors computeCartAccess in
+   * lib/helpers.js. Lapsed-premium and free-tier users with more carts
+   * than their limit only get the top-N by lastUsedAt as editable.
+   */
+  function editableCartIds(carts, ent, nowMs) {
+    if (!Array.isArray(carts) || carts.length === 0) return new Set();
+    const n = cartLimitFor(ent, nowMs);
+    const sorted = [...carts].sort((a, b) => {
+      const lu = (Number(b.lastUsedAt) || 0) - (Number(a.lastUsedAt) || 0);
+      if (lu !== 0) return lu;
+      const sa = (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0);
+      if (sa !== 0) return sa;
+      return String(a.id).localeCompare(String(b.id));
+    });
+    return new Set(sorted.slice(0, n).map((c) => c.id));
+  }
+
+  /**
+   * Two-group sort: editable carts alphabetically first, then read-only
+   * carts alphabetically. Used by the picker AND mirrored in popup.js so
+   * the user's cart order is consistent across surfaces.
+   */
+  function sortCartsForDisplay(carts, editableSet) {
+    const cmpName = (a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    const editable = [];
+    const locked = [];
+    for (const c of carts || []) {
+      if (editableSet.has(c.id)) editable.push(c);
+      else locked.push(c);
+    }
+    editable.sort(cmpName);
+    locked.sort(cmpName);
+    return editable.concat(locked);
+  }
 
   function sendRequest(message) {
     return new Promise((resolve) => {
@@ -475,22 +538,33 @@
   // intercept to fall through with an empty carts cache.
   function hydrateCachesFromStorage() {
     try {
-      chrome.storage.local.get(["mc.settings.v1", "mc.carts.v1"], (result) => {
-        if (chrome.runtime.lastError) {
-          dwarn("[Styx ATC] storage.get failed:", chrome.runtime.lastError.message);
-          return;
+      chrome.storage.local.get(
+        ["mc.settings.v1", "mc.carts.v1", "mc.entitlement.v1"],
+        (result) => {
+          if (chrome.runtime.lastError) {
+            dwarn("[Styx ATC] storage.get failed:", chrome.runtime.lastError.message);
+            return;
+          }
+          const settings = result["mc.settings.v1"];
+          if (settings && typeof settings === "object") {
+            _settingsCache = Object.assign({}, _settingsCache, settings);
+          }
+          const carts = result["mc.carts.v1"];
+          if (Array.isArray(carts)) _cartsCache = carts;
+          const ent = result["mc.entitlement.v1"];
+          if (ent && typeof ent === "object") {
+            _entitlementCache = Object.assign({}, _entitlementCache, ent);
+          }
+          dlog(
+            "[Styx ATC] caches hydrated:",
+            {
+              interceptAtc: _settingsCache.interceptAtc,
+              cartCount: _cartsCache.length,
+              tier: _entitlementCache.tier,
+            }
+          );
         }
-        const settings = result["mc.settings.v1"];
-        if (settings && typeof settings === "object") {
-          _settingsCache = Object.assign({}, _settingsCache, settings);
-        }
-        const carts = result["mc.carts.v1"];
-        if (Array.isArray(carts)) _cartsCache = carts;
-        dlog(
-          "[Styx ATC] caches hydrated:",
-          { interceptAtc: _settingsCache.interceptAtc, cartCount: _cartsCache.length }
-        );
-      });
+      );
     } catch (e) {
       dwarn("[Styx ATC] hydration error:", e);
     }
@@ -509,6 +583,12 @@
       if (changes["mc.carts.v1"]) {
         const next = changes["mc.carts.v1"].newValue;
         _cartsCache = Array.isArray(next) ? next : [];
+      }
+      if (changes["mc.entitlement.v1"]) {
+        const next = changes["mc.entitlement.v1"].newValue;
+        if (next && typeof next === "object") {
+          _entitlementCache = Object.assign({}, _entitlementCache, next);
+        }
       }
     });
   }
@@ -854,16 +934,44 @@
         display: flex; align-items: center; gap: 10px;
         cursor: pointer; color: #f3efe6;
         font-family: inherit;
-        transition: background 120ms ease, border-color 120ms ease, transform 100ms ease;
+        transition: background 120ms ease, border-color 120ms ease, transform 100ms ease, box-shadow 120ms ease;
       }
-      #${PICKER_ID} .styx-pk-row:hover {
-        background: #242a32; border-color: #ff9900;
+      /* Editable carts: proactive orange outline + faint glow so the user
+         can see at a glance which carts they can add to. */
+      #${PICKER_ID} .styx-pk-row.styx-pk-editable {
+        border-color: #ff9900;
+        box-shadow: 0 0 0 1px rgba(255, 153, 0, 0.18);
+      }
+      #${PICKER_ID} .styx-pk-row:hover:not([disabled]) {
+        background: #242a32; border-color: #ffb74d;
         transform: translateY(-1px);
+        box-shadow: 0 0 0 1px rgba(255, 153, 0, 0.35), 0 4px 14px rgba(0,0,0,0.35);
       }
-      #${PICKER_ID} .styx-pk-row[disabled] { opacity: 0.55; cursor: default; transform: none; }
+      #${PICKER_ID} .styx-pk-row[disabled] {
+        opacity: 0.6; cursor: not-allowed; transform: none;
+        border-color: #2a3038; box-shadow: none;
+      }
       #${PICKER_ID} .styx-pk-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
       #${PICKER_ID} .styx-pk-row-name { font-size: 13px; font-weight: 600; color: #f3efe6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      #${PICKER_ID} .styx-pk-row-count { font-size: 11px; color: #8a93a0; font-variant-numeric: tabular-nums; }
+      #${PICKER_ID} .styx-pk-row-count {
+        font-size: 11px; color: #8a93a0; font-variant-numeric: tabular-nums;
+        display: inline-flex; align-items: center; gap: 6px;
+      }
+      /* "Read-only" pill sits to the left of the item / qty count on locked
+         carts. Muted yellow so it reads as a status, not an error. */
+      #${PICKER_ID} .styx-pk-row-readonly {
+        display: inline-flex; align-items: center;
+        padding: 1px 6px;
+        background: #3a2c0a;
+        color: #ffe6a8;
+        border: 1px solid #7a5d18;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
       #${PICKER_ID} .styx-pk-row-thumbs { display: flex; gap: 3px; flex-shrink: 0; }
       #${PICKER_ID} .styx-pk-row-thumb {
         width: 28px; height: 28px; border-radius: 4px;
@@ -890,6 +998,130 @@
         text-align: center; padding: 24px;
         animation: styxPkFade 140ms ease-out;
       }
+      /* Inline upgrade screen — shown when the user taps a read-only row. */
+      #${PICKER_ID} .styx-pk-upgrade {
+        padding: 18px 18px 16px;
+        display: flex; flex-direction: column; gap: 10px;
+        animation: styxPkFade 160ms ease-out;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-title {
+        font-size: 16px; font-weight: 700; color: #f3efe6;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-sub {
+        font-size: 12px; color: #c2cbd6; line-height: 1.45;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-plan {
+        padding: 10px 12px; border-radius: 8px;
+        background: #1f242b; border: 1px solid #2a3038;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 4px; }
+      #${PICKER_ID} .styx-pk-upgrade-amount { font-size: 20px; font-weight: 700; color: #f3efe6; }
+      #${PICKER_ID} .styx-pk-upgrade-period { font-size: 12px; color: #8a93a0; }
+      #${PICKER_ID} .styx-pk-upgrade-features {
+        margin: 6px 0 0; padding-left: 18px;
+        font-size: 12px; color: #c2cbd6; line-height: 1.5;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-features b { color: #ff9900; font-weight: 700; }
+      #${PICKER_ID} .styx-pk-upgrade-stub {
+        padding: 8px 10px; border-left: 3px solid #ff9900; border-radius: 4px;
+        background: rgba(255, 153, 0, 0.08);
+        font-size: 12px; color: #ffe6a8;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+      #${PICKER_ID} .styx-pk-upgrade-cta {
+        appearance: none; padding: 10px 14px;
+        background: #ff9900; color: #1a1209;
+        border: 1px solid #e88a00; border-radius: 8px;
+        font-size: 13px; font-weight: 700; font-family: inherit;
+        cursor: pointer;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-cta:disabled {
+        opacity: 0.55; cursor: not-allowed;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-back {
+        appearance: none; padding: 8px 12px;
+        background: transparent; color: #c2cbd6;
+        border: 1px solid #3a414b; border-radius: 8px;
+        font-size: 12px; font-weight: 600; font-family: inherit;
+        cursor: pointer;
+      }
+      #${PICKER_ID} .styx-pk-upgrade-back:hover { background: #1f242b; color: #fff; }
+      /* "+ Create new cart" affordance — lives just below the cart list so
+         users can spin up a fresh cart mid-shop without leaving the page.
+         Dashed border + muted base color marks it as an action row, not
+         another saved cart. */
+      #${PICKER_ID} .styx-pk-create-row {
+        appearance: none; width: 100%; text-align: center;
+        background: transparent; color: #c2cbd6;
+        border: 1px dashed #3a414b; border-radius: 10px;
+        padding: 9px 10px; margin: 2px 10px 8px;
+        width: calc(100% - 20px);
+        font-size: 12px; font-weight: 600; font-family: inherit;
+        cursor: pointer;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 100ms ease;
+      }
+      #${PICKER_ID} .styx-pk-create-row:hover {
+        background: rgba(255, 153, 0, 0.06);
+        border-color: #ff9900; color: #ff9900;
+        transform: translateY(-1px);
+      }
+      /* Inline create-cart screen — swaps in for the list, mirrors the
+         upgrade-screen pattern so we don't lose page context. */
+      #${PICKER_ID} .styx-pk-create {
+        padding: 14px 16px 16px;
+        display: flex; flex-direction: column; gap: 10px;
+        animation: styxPkFade 160ms ease-out;
+      }
+      #${PICKER_ID} .styx-pk-create-title {
+        font-size: 14px; font-weight: 700; color: #f3efe6;
+      }
+      #${PICKER_ID} .styx-pk-create-sub {
+        font-size: 12px; color: #8a93a0; line-height: 1.4;
+      }
+      #${PICKER_ID} .styx-pk-create-input {
+        appearance: none; width: 100%;
+        background: #11151a; color: #f3efe6;
+        border: 1px solid #2a3038; border-radius: 8px;
+        padding: 9px 10px; font-size: 13px; font-family: inherit;
+        outline: none;
+        transition: border-color 120ms ease, box-shadow 120ms ease;
+      }
+      #${PICKER_ID} .styx-pk-create-input:focus {
+        border-color: #ff9900;
+        box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.22);
+      }
+      #${PICKER_ID} .styx-pk-create-input.styx-pk-create-error {
+        border-color: #ff5d4d;
+        box-shadow: 0 0 0 2px rgba(255, 93, 77, 0.22);
+        animation: styxPkShake 220ms ease-out;
+      }
+      @keyframes styxPkShake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-4px); }
+        75% { transform: translateX(4px); }
+      }
+      #${PICKER_ID} .styx-pk-create-err {
+        font-size: 11px; color: #ff8d80; min-height: 14px;
+      }
+      #${PICKER_ID} .styx-pk-create-actions {
+        display: flex; gap: 8px; margin-top: 2px;
+      }
+      #${PICKER_ID} .styx-pk-create-submit {
+        appearance: none; flex: 1;
+        background: #ff9900; color: #1a1209;
+        border: 1px solid #e88a00; border-radius: 8px;
+        padding: 9px 12px; font-size: 13px; font-weight: 700;
+        font-family: inherit; cursor: pointer;
+      }
+      #${PICKER_ID} .styx-pk-create-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+      #${PICKER_ID} .styx-pk-create-back {
+        appearance: none;
+        background: transparent; color: #c2cbd6;
+        border: 1px solid #3a414b; border-radius: 8px;
+        padding: 9px 12px; font-size: 12px; font-weight: 600;
+        font-family: inherit; cursor: pointer;
+      }
+      #${PICKER_ID} .styx-pk-create-back:hover { background: #1f242b; color: #fff; }
     `;
     const style = document.createElement("style");
     style.id = PICKER_STYLE_ID;
@@ -903,10 +1135,199 @@
     document.removeEventListener("keydown", onPickerKeydown, true);
   }
 
+  /**
+   * Swap the open picker's body to a "Renew Premium" CTA, with a Back
+   * button to return to the cart list. Triggered when a user taps a
+   * read-only row. Same picker DOM stays mounted so we don't lose the
+   * Amazon page context.
+   *
+   * Phase 3 will replace the CTA's "Coming soon" stub with an
+   * ExtensionPay.openPaymentPage() call.
+   */
+  function showPickerUpgradeScreen(root) {
+    const modal = root.querySelector(".styx-pk-modal");
+    if (!modal) return;
+    // Preserve the existing innerHTML so Back can restore it without
+    // re-rendering from scratch.
+    if (!modal.dataset.styxOriginalHtml) {
+      modal.dataset.styxOriginalHtml = modal.innerHTML;
+    }
+    modal.innerHTML = `
+      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+      <div class="styx-pk-upgrade">
+        <div class="styx-pk-upgrade-title">Renew Premium</div>
+        <div class="styx-pk-upgrade-sub">
+          This cart is read-only because your Premium has lapsed. Renew to
+          add to all your saved carts again — they're still here, untouched.
+        </div>
+        <div class="styx-pk-upgrade-plan">
+          <div class="styx-pk-upgrade-price">
+            <span class="styx-pk-upgrade-amount">$4.99</span>
+            <span class="styx-pk-upgrade-period">/ year</span>
+          </div>
+          <ul class="styx-pk-upgrade-features">
+            <li>Unlock up to <b>20 saved carts</b></li>
+            <li>Edit, restore, rename, merge — full functionality</li>
+            <li>Cancel anytime; carts stay readable</li>
+          </ul>
+        </div>
+        <div class="styx-pk-upgrade-stub">
+          <b>Coming soon.</b> Premium isn't live yet — checkout is being polished. Thanks for being early!
+        </div>
+        <div class="styx-pk-upgrade-actions">
+          <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" disabled>Renew — $4.99 / yr</button>
+          <button type="button" class="styx-pk-upgrade-back" data-styx-action="upgrade-back">← Back to carts</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function hidePickerUpgradeScreen(root) {
+    const modal = root.querySelector(".styx-pk-modal");
+    if (!modal || !modal.dataset.styxOriginalHtml) return;
+    modal.innerHTML = modal.dataset.styxOriginalHtml;
+    delete modal.dataset.styxOriginalHtml;
+  }
+
+  /**
+   * Swap the picker body to an inline "Create new cart" form. Lets the
+   * user spin up a fresh cart mid-shop without leaving the product page.
+   * Submitting creates the cart AND drops the current item into it in a
+   * single flow, then surfaces the same confirm overlay used by row
+   * clicks. Back returns to the cart list without losing context.
+   */
+  function showPickerCreateScreen(root, item, qty) {
+    const modal = root.querySelector(".styx-pk-modal");
+    if (!modal) return;
+    if (!modal.dataset.styxOriginalHtml) {
+      modal.dataset.styxOriginalHtml = modal.innerHTML;
+    }
+    modal.innerHTML = `
+      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+      <div class="styx-pk-create">
+        <div class="styx-pk-create-title">New cart for this item</div>
+        <div class="styx-pk-create-sub">
+          Name it, and we'll add "${escapeHtml(truncateForLabel(item.title, 60))}" right in.
+        </div>
+        <input
+          type="text"
+          class="styx-pk-create-input"
+          placeholder="e.g. Birthday gifts"
+          maxlength="80"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="styx-pk-create-err" aria-live="polite"></div>
+        <div class="styx-pk-create-actions">
+          <button type="button" class="styx-pk-create-back" data-styx-action="create-back">← Back</button>
+          <button type="button" class="styx-pk-create-submit" data-styx-create-submit>Create &amp; add</button>
+        </div>
+      </div>
+    `;
+
+    const input = modal.querySelector(".styx-pk-create-input");
+    const errSlot = modal.querySelector(".styx-pk-create-err");
+    const submitBtn = modal.querySelector("[data-styx-create-submit]");
+    const backBtn = modal.querySelector(".styx-pk-create-back");
+    if (input) {
+      // Defer focus so the swap animation doesn't eat it.
+      setTimeout(() => { try { input.focus(); input.select(); } catch (_e) {} }, 0);
+      input.addEventListener("input", () => {
+        input.classList.remove("styx-pk-create-error");
+        if (errSlot) errSlot.textContent = "";
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitCreate();
+        }
+      });
+    }
+
+    async function submitCreate() {
+      if (!input) return;
+      const name = (input.value || "").trim();
+      if (!name) {
+        input.classList.add("styx-pk-create-error");
+        if (errSlot) errSlot.textContent = "Give it a name first.";
+        try { input.focus(); } catch (_e) {}
+        return;
+      }
+      submitBtn && submitBtn.setAttribute("disabled", "");
+      backBtn && backBtn.setAttribute("disabled", "");
+
+      const createRes = await sendRequest({
+        type: "MC_CREATE_EMPTY_CART",
+        name,
+      });
+      if (!createRes || !createRes.ok) {
+        // Free-tier cart-count limit (or any other gated denial) — surface
+        // the existing upgrade screen so the user gets a real CTA instead
+        // of an inline error.
+        const looksLikeGate =
+          createRes && (createRes.upsell || /premium|limit|locked|tier/i.test(String(createRes.reason || createRes.error || "")));
+        if (looksLikeGate) {
+          showPickerUpgradeScreen(root);
+          return;
+        }
+        if (errSlot) errSlot.textContent = (createRes && createRes.error) || "Could not create cart.";
+        submitBtn && submitBtn.removeAttribute("disabled");
+        backBtn && backBtn.removeAttribute("disabled");
+        return;
+      }
+
+      const newCart = createRes.cart;
+      const addRes = await sendRequest({
+        type: "MC_ADD_ITEM_TO_SAVED_CART",
+        savedCartId: newCart.id,
+        item: Object.assign({}, item, { quantity: qty }),
+      });
+      if (!addRes || !addRes.ok) {
+        if (errSlot) errSlot.textContent = (addRes && addRes.error) || "Cart created, but could not add the item.";
+        submitBtn && submitBtn.removeAttribute("disabled");
+        backBtn && backBtn.removeAttribute("disabled");
+        return;
+      }
+
+      const confirm = document.createElement("div");
+      confirm.className = "styx-pk-confirm";
+      confirm.textContent = `Added to "${newCart.name}" ✓`;
+      modal.appendChild(confirm);
+      setTimeout(dismissPicker, 1200);
+    }
+
+    if (submitBtn) submitBtn.addEventListener("click", submitCreate);
+  }
+
+  function hidePickerCreateScreen(root) {
+    const modal = root.querySelector(".styx-pk-modal");
+    if (!modal || !modal.dataset.styxOriginalHtml) return;
+    modal.innerHTML = modal.dataset.styxOriginalHtml;
+    delete modal.dataset.styxOriginalHtml;
+  }
+
+  // Picker title can be long. The body text only needs a teaser, so trim
+  // hard with an ellipsis. Used by the create-cart screen subtitle.
+  function truncateForLabel(s, max) {
+    const str = String(s == null ? "" : s);
+    if (str.length <= max) return str;
+    return str.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
+  }
+
   function onPickerKeydown(e) {
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
+      // If we're on a swapped-in sub-screen (create or upgrade), Escape
+      // should back out to the cart list, not destroy the whole picker.
+      // The original-html stash is the signal that a swap is active.
+      const root = document.getElementById(PICKER_ID);
+      const modal = root && root.querySelector(".styx-pk-modal");
+      if (modal && modal.dataset.styxOriginalHtml) {
+        modal.innerHTML = modal.dataset.styxOriginalHtml;
+        delete modal.dataset.styxOriginalHtml;
+        return;
+      }
       dismissPicker();
     }
   }
@@ -923,7 +1344,13 @@
     const qty = Math.max(1, Math.min(99, Number(item.quantity) || 1));
     const priceBit = item.price ? `${escapeHtml(item.price)} · ` : "";
 
-    const cartsHtml = _cartsCache
+    // Compute which carts are editable right now, then sort: editable A–Z
+    // first, then read-only A–Z below. Locked rows are kept visible (and
+    // clickable) so users can tap them to see the renewal CTA.
+    const editable = editableCartIds(_cartsCache, _entitlementCache, Date.now());
+    const sortedCarts = sortCartsForDisplay(_cartsCache, editable);
+
+    const cartsHtml = sortedCarts
       .map((cart) => {
         const totalQty = (cart.items || []).reduce(
           (n, it) => n + (Number(it.quantity) || 1),
@@ -938,12 +1365,25 @@
               `<img class="styx-pk-row-thumb" src="${escapeHtml(it.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()" />`
           )
           .join("");
+        const isEditable = editable.has(cart.id);
+        // Locked rows: stay clickable (no `disabled` attribute) so a click
+        // surfaces the renewal CTA. aria-disabled + the .styx-pk-locked
+        // class give us the visual + a11y treatment.
+        const rowClass = isEditable
+          ? "styx-pk-row styx-pk-editable"
+          : "styx-pk-row styx-pk-locked";
+        const ariaAttr = isEditable
+          ? ""
+          : 'aria-disabled="true" title="Locked — click to renew Premium"';
+        const readOnlyPill = isEditable
+          ? ""
+          : `<span class="styx-pk-row-readonly">Read-only</span>`;
         return `
           <li>
-            <button type="button" class="styx-pk-row" data-cart-id="${escapeHtml(cart.id)}" data-cart-name="${escapeHtml(cart.name)}">
+            <button type="button" class="${rowClass}" data-cart-id="${escapeHtml(cart.id)}" data-cart-name="${escapeHtml(cart.name)}" ${ariaAttr}>
               <div class="styx-pk-row-main">
                 <div class="styx-pk-row-name">${escapeHtml(cart.name)}</div>
-                <div class="styx-pk-row-count">${(cart.items || []).length} ${itemWord} · ${totalQty} qty</div>
+                <div class="styx-pk-row-count">${readOnlyPill}${(cart.items || []).length} ${itemWord} · ${totalQty} qty</div>
               </div>
               <div class="styx-pk-row-thumbs">${thumbs}</div>
             </button>
@@ -968,6 +1408,7 @@
         </div>
         <div class="styx-pk-prompt">Add to which saved cart?</div>
         <ul class="styx-pk-list">${cartsHtml}</ul>
+        <button type="button" class="styx-pk-create-row" data-styx-action="create-new">+ Create new cart</button>
         <div class="styx-pk-footer">
           <button type="button" class="styx-pk-escape" data-styx-action="escape">Just add to Amazon cart</button>
         </div>
@@ -991,18 +1432,39 @@
             originalAtcButton.dataset.styxBypass = "1";
             try { originalAtcButton.click(); } catch (_err) { /* noop */ }
           }
+        } else if (action.dataset.styxAction === "upgrade-back") {
+          hidePickerUpgradeScreen(root);
+        } else if (action.dataset.styxAction === "upgrade-go") {
+          // Phase 3: hook ExtensionPay.openPaymentPage() here.
+        } else if (action.dataset.styxAction === "create-new") {
+          showPickerCreateScreen(root, item, qty);
+        } else if (action.dataset.styxAction === "create-back") {
+          hidePickerCreateScreen(root);
         }
         return;
       }
 
       const row = e.target.closest(".styx-pk-row");
       if (!row) return;
-      if (row.hasAttribute("disabled")) return;
 
-      // Lock the UI while the round-trip happens.
-      Array.from(root.querySelectorAll(".styx-pk-row")).forEach((r) =>
-        r.setAttribute("disabled", "")
+      // Locked (read-only) row → swap the picker contents to a renewal CTA.
+      // Lets the user discover *why* the row is dim without losing context
+      // on the Amazon page.
+      if (row.getAttribute("aria-disabled") === "true") {
+        showPickerUpgradeScreen(root);
+        return;
+      }
+
+      // Lock the UI while the round-trip happens. Remember which rows were
+      // ALREADY locked (aria-disabled read-only carts) so we don't
+      // accidentally promote them to editable on a subsequent failure.
+      const pickerRows = Array.from(root.querySelectorAll(".styx-pk-row"));
+      const preLocked = new Set(
+        pickerRows
+          .filter((r) => r.getAttribute("aria-disabled") === "true")
+          .map((r) => r.dataset.cartId)
       );
+      pickerRows.forEach((r) => r.setAttribute("disabled", ""));
 
       const cartId = row.dataset.cartId;
       const cartName = row.dataset.cartName || "cart";
@@ -1013,9 +1475,11 @@
       });
 
       if (!res || !res.ok) {
-        Array.from(root.querySelectorAll(".styx-pk-row")).forEach((r) =>
-          r.removeAttribute("disabled")
-        );
+        // Restore only the rows that were editable before the click — leave
+        // read-only rows disabled.
+        pickerRows.forEach((r) => {
+          if (!preLocked.has(r.dataset.cartId)) r.removeAttribute("disabled");
+        });
         const sub = root.querySelector(".styx-pk-sub");
         if (sub) {
           sub.textContent = (res && res.error) || "Could not add item.";
