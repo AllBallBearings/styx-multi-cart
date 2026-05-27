@@ -57,15 +57,30 @@
           <p class="mc-tag">Cart Management to Hell and back</p>
         </div>
       </div>
-      <button
-        id="mc-theme-toggle"
-        class="mc-theme-toggle"
-        type="button"
-        aria-label="Toggle light/dark mode"
-        title="Toggle light/dark mode"
-      >
-        <!-- icon injected by popup.js -->
-      </button>
+      <div class="mc-header-actions">
+        <button
+          id="mc-settings-toggle"
+          class="mc-icon-btn"
+          type="button"
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <!-- gear icon -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <button
+          id="mc-theme-toggle"
+          class="mc-icon-btn mc-theme-toggle"
+          type="button"
+          aria-label="Toggle light/dark mode"
+          title="Toggle light/dark mode"
+        >
+          <!-- icon injected by popup.js -->
+        </button>
+      </div>
     </header>
 
     <section class="mc-save-block">
@@ -465,6 +480,30 @@
           the checkout flow. Thanks for being early!
         </div>
 
+        <details class="mc-paywall-promo" id="mc-paywall-promo">
+          <summary>Have a code?</summary>
+          <form id="mc-promo-form" class="mc-promo-form" autocomplete="off">
+            <label class="mc-sr-only" for="mc-promo-input">Promo code</label>
+            <input
+              id="mc-promo-input"
+              class="mc-input"
+              type="text"
+              placeholder="Enter code"
+              spellcheck="false"
+              autocapitalize="characters"
+              maxlength="32"
+            />
+            <button
+              id="mc-promo-submit"
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="submit"
+            >
+              Redeem
+            </button>
+          </form>
+          <p id="mc-promo-msg" class="mc-promo-msg" role="status" aria-live="polite"></p>
+        </details>
+
         <div class="mc-modal-actions">
           <button
             id="mc-paywall-cta"
@@ -480,6 +519,46 @@
             data-action="paywall-close"
           >
             Maybe later
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="mc-settings-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-settings-title"
+    >
+      <div class="mc-modal-backdrop" data-action="settings-close"></div>
+      <div class="mc-modal-card">
+        <h3 id="mc-settings-title" class="mc-modal-title">Settings</h3>
+
+        <div class="mc-settings-section">
+          <h4 class="mc-settings-heading">Developer</h4>
+          <label class="mc-toggle">
+            <input id="mc-devmode-toggle" type="checkbox" />
+            <span class="mc-toggle-label">
+              Developer mode
+              <span class="mc-toggle-sub">
+                Shows the debug panel at the bottom of the popup and enables
+                verbose logs in the service worker console. Safe to leave off.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div class="mc-settings-footer">
+          <span id="mc-settings-version" class="mc-settings-version" aria-label="Version"></span>
+          <button
+            class="mc-btn mc-btn-ghost"
+            type="button"
+            data-action="settings-close"
+          >
+            Done
           </button>
         </div>
       </div>

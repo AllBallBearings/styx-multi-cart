@@ -1046,6 +1046,82 @@
         cursor: pointer;
       }
       #${PICKER_ID} .styx-pk-upgrade-back:hover { background: #1f242b; color: #fff; }
+      /* "+ Create new cart" affordance — lives just below the cart list so
+         users can spin up a fresh cart mid-shop without leaving the page.
+         Dashed border + muted base color marks it as an action row, not
+         another saved cart. */
+      #${PICKER_ID} .styx-pk-create-row {
+        appearance: none; width: 100%; text-align: center;
+        background: transparent; color: #c2cbd6;
+        border: 1px dashed #3a414b; border-radius: 10px;
+        padding: 9px 10px; margin: 2px 10px 8px;
+        width: calc(100% - 20px);
+        font-size: 12px; font-weight: 600; font-family: inherit;
+        cursor: pointer;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 100ms ease;
+      }
+      #${PICKER_ID} .styx-pk-create-row:hover {
+        background: rgba(255, 153, 0, 0.06);
+        border-color: #ff9900; color: #ff9900;
+        transform: translateY(-1px);
+      }
+      /* Inline create-cart screen — swaps in for the list, mirrors the
+         upgrade-screen pattern so we don't lose page context. */
+      #${PICKER_ID} .styx-pk-create {
+        padding: 14px 16px 16px;
+        display: flex; flex-direction: column; gap: 10px;
+        animation: styxPkFade 160ms ease-out;
+      }
+      #${PICKER_ID} .styx-pk-create-title {
+        font-size: 14px; font-weight: 700; color: #f3efe6;
+      }
+      #${PICKER_ID} .styx-pk-create-sub {
+        font-size: 12px; color: #8a93a0; line-height: 1.4;
+      }
+      #${PICKER_ID} .styx-pk-create-input {
+        appearance: none; width: 100%;
+        background: #11151a; color: #f3efe6;
+        border: 1px solid #2a3038; border-radius: 8px;
+        padding: 9px 10px; font-size: 13px; font-family: inherit;
+        outline: none;
+        transition: border-color 120ms ease, box-shadow 120ms ease;
+      }
+      #${PICKER_ID} .styx-pk-create-input:focus {
+        border-color: #ff9900;
+        box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.22);
+      }
+      #${PICKER_ID} .styx-pk-create-input.styx-pk-create-error {
+        border-color: #ff5d4d;
+        box-shadow: 0 0 0 2px rgba(255, 93, 77, 0.22);
+        animation: styxPkShake 220ms ease-out;
+      }
+      @keyframes styxPkShake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-4px); }
+        75% { transform: translateX(4px); }
+      }
+      #${PICKER_ID} .styx-pk-create-err {
+        font-size: 11px; color: #ff8d80; min-height: 14px;
+      }
+      #${PICKER_ID} .styx-pk-create-actions {
+        display: flex; gap: 8px; margin-top: 2px;
+      }
+      #${PICKER_ID} .styx-pk-create-submit {
+        appearance: none; flex: 1;
+        background: #ff9900; color: #1a1209;
+        border: 1px solid #e88a00; border-radius: 8px;
+        padding: 9px 12px; font-size: 13px; font-weight: 700;
+        font-family: inherit; cursor: pointer;
+      }
+      #${PICKER_ID} .styx-pk-create-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+      #${PICKER_ID} .styx-pk-create-back {
+        appearance: none;
+        background: transparent; color: #c2cbd6;
+        border: 1px solid #3a414b; border-radius: 8px;
+        padding: 9px 12px; font-size: 12px; font-weight: 600;
+        font-family: inherit; cursor: pointer;
+      }
+      #${PICKER_ID} .styx-pk-create-back:hover { background: #1f242b; color: #fff; }
     `;
     const style = document.createElement("style");
     style.id = PICKER_STYLE_ID;
@@ -1113,10 +1189,145 @@
     delete modal.dataset.styxOriginalHtml;
   }
 
+  /**
+   * Swap the picker body to an inline "Create new cart" form. Lets the
+   * user spin up a fresh cart mid-shop without leaving the product page.
+   * Submitting creates the cart AND drops the current item into it in a
+   * single flow, then surfaces the same confirm overlay used by row
+   * clicks. Back returns to the cart list without losing context.
+   */
+  function showPickerCreateScreen(root, item, qty) {
+    const modal = root.querySelector(".styx-pk-modal");
+    if (!modal) return;
+    if (!modal.dataset.styxOriginalHtml) {
+      modal.dataset.styxOriginalHtml = modal.innerHTML;
+    }
+    modal.innerHTML = `
+      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+      <div class="styx-pk-create">
+        <div class="styx-pk-create-title">New cart for this item</div>
+        <div class="styx-pk-create-sub">
+          Name it, and we'll add "${escapeHtml(truncateForLabel(item.title, 60))}" right in.
+        </div>
+        <input
+          type="text"
+          class="styx-pk-create-input"
+          placeholder="e.g. Birthday gifts"
+          maxlength="80"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="styx-pk-create-err" aria-live="polite"></div>
+        <div class="styx-pk-create-actions">
+          <button type="button" class="styx-pk-create-back" data-styx-action="create-back">← Back</button>
+          <button type="button" class="styx-pk-create-submit" data-styx-create-submit>Create &amp; add</button>
+        </div>
+      </div>
+    `;
+
+    const input = modal.querySelector(".styx-pk-create-input");
+    const errSlot = modal.querySelector(".styx-pk-create-err");
+    const submitBtn = modal.querySelector("[data-styx-create-submit]");
+    const backBtn = modal.querySelector(".styx-pk-create-back");
+    if (input) {
+      // Defer focus so the swap animation doesn't eat it.
+      setTimeout(() => { try { input.focus(); input.select(); } catch (_e) {} }, 0);
+      input.addEventListener("input", () => {
+        input.classList.remove("styx-pk-create-error");
+        if (errSlot) errSlot.textContent = "";
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitCreate();
+        }
+      });
+    }
+
+    async function submitCreate() {
+      if (!input) return;
+      const name = (input.value || "").trim();
+      if (!name) {
+        input.classList.add("styx-pk-create-error");
+        if (errSlot) errSlot.textContent = "Give it a name first.";
+        try { input.focus(); } catch (_e) {}
+        return;
+      }
+      submitBtn && submitBtn.setAttribute("disabled", "");
+      backBtn && backBtn.setAttribute("disabled", "");
+
+      const createRes = await sendRequest({
+        type: "MC_CREATE_EMPTY_CART",
+        name,
+      });
+      if (!createRes || !createRes.ok) {
+        // Free-tier cart-count limit (or any other gated denial) — surface
+        // the existing upgrade screen so the user gets a real CTA instead
+        // of an inline error.
+        const looksLikeGate =
+          createRes && (createRes.upsell || /premium|limit|locked|tier/i.test(String(createRes.reason || createRes.error || "")));
+        if (looksLikeGate) {
+          showPickerUpgradeScreen(root);
+          return;
+        }
+        if (errSlot) errSlot.textContent = (createRes && createRes.error) || "Could not create cart.";
+        submitBtn && submitBtn.removeAttribute("disabled");
+        backBtn && backBtn.removeAttribute("disabled");
+        return;
+      }
+
+      const newCart = createRes.cart;
+      const addRes = await sendRequest({
+        type: "MC_ADD_ITEM_TO_SAVED_CART",
+        savedCartId: newCart.id,
+        item: Object.assign({}, item, { quantity: qty }),
+      });
+      if (!addRes || !addRes.ok) {
+        if (errSlot) errSlot.textContent = (addRes && addRes.error) || "Cart created, but could not add the item.";
+        submitBtn && submitBtn.removeAttribute("disabled");
+        backBtn && backBtn.removeAttribute("disabled");
+        return;
+      }
+
+      const confirm = document.createElement("div");
+      confirm.className = "styx-pk-confirm";
+      confirm.textContent = `Added to "${newCart.name}" ✓`;
+      modal.appendChild(confirm);
+      setTimeout(dismissPicker, 1200);
+    }
+
+    if (submitBtn) submitBtn.addEventListener("click", submitCreate);
+  }
+
+  function hidePickerCreateScreen(root) {
+    const modal = root.querySelector(".styx-pk-modal");
+    if (!modal || !modal.dataset.styxOriginalHtml) return;
+    modal.innerHTML = modal.dataset.styxOriginalHtml;
+    delete modal.dataset.styxOriginalHtml;
+  }
+
+  // Picker title can be long. The body text only needs a teaser, so trim
+  // hard with an ellipsis. Used by the create-cart screen subtitle.
+  function truncateForLabel(s, max) {
+    const str = String(s == null ? "" : s);
+    if (str.length <= max) return str;
+    return str.slice(0, Math.max(0, max - 1)).trimEnd() + "…";
+  }
+
   function onPickerKeydown(e) {
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
+      // If we're on a swapped-in sub-screen (create or upgrade), Escape
+      // should back out to the cart list, not destroy the whole picker.
+      // The original-html stash is the signal that a swap is active.
+      const root = document.getElementById(PICKER_ID);
+      const modal = root && root.querySelector(".styx-pk-modal");
+      if (modal && modal.dataset.styxOriginalHtml) {
+        modal.innerHTML = modal.dataset.styxOriginalHtml;
+        delete modal.dataset.styxOriginalHtml;
+        return;
+      }
       dismissPicker();
     }
   }
@@ -1197,6 +1408,7 @@
         </div>
         <div class="styx-pk-prompt">Add to which saved cart?</div>
         <ul class="styx-pk-list">${cartsHtml}</ul>
+        <button type="button" class="styx-pk-create-row" data-styx-action="create-new">+ Create new cart</button>
         <div class="styx-pk-footer">
           <button type="button" class="styx-pk-escape" data-styx-action="escape">Just add to Amazon cart</button>
         </div>
@@ -1224,6 +1436,10 @@
           hidePickerUpgradeScreen(root);
         } else if (action.dataset.styxAction === "upgrade-go") {
           // Phase 3: hook ExtensionPay.openPaymentPage() here.
+        } else if (action.dataset.styxAction === "create-new") {
+          showPickerCreateScreen(root, item, qty);
+        } else if (action.dataset.styxAction === "create-back") {
+          hidePickerCreateScreen(root);
         }
         return;
       }

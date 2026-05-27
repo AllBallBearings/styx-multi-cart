@@ -65,6 +65,12 @@
   const $promptOk = document.getElementById("mc-prompt-ok");
   const $promptCancel = document.getElementById("mc-prompt-cancel");
 
+  // Cached at popup boot. The Ctrl+Alt+D + 5-click-tagline debug unlocks are
+  // *only* live when this is true — production users never see them.
+  // Bootstrap dev mode by setting `mc.dev.v1 = true` in chrome.storage.local
+  // via DevTools on the service worker.
+  let devModeEnabled = false;
+
   // Cached entitlement from the last MC_LIST_CARTS / MC_GET_ENTITLEMENT response.
   // See docs/MONETIZATION_PLAN.md. Always populated before render() runs.
   let currentEntitlement = {
@@ -1241,6 +1247,7 @@
     if (!$debugPanel) return;
     $debugPanel.hidden = !visible;
     if (visible) $debugPanel.open = true;
+    devModeEnabled = !!visible;
     try {
       await chrome.storage.local.set({ [DEV_FLAG_KEY]: !!visible });
     } catch (_) {}
@@ -1250,7 +1257,9 @@
   async function loadDebugPanelVisibility() {
     try {
       const got = await chrome.storage.local.get(DEV_FLAG_KEY);
-      if (got[DEV_FLAG_KEY] === true && $debugPanel) {
+      const on = got[DEV_FLAG_KEY] === true;
+      devModeEnabled = on;
+      if (on && $debugPanel) {
         $debugPanel.hidden = false;
         refreshDebugEntDisplay();
       }
@@ -1259,7 +1268,10 @@
 
   // Ctrl+Alt+D toggles the debug panel + persists. (Chrome eats Cmd+Shift+D
   // on Mac for "Bookmark all tabs", so we avoid that combo.)
+  // Production users never trigger this — gated on devModeEnabled, which is
+  // only true if `mc.dev.v1` was already set in chrome.storage.local.
   document.addEventListener("keydown", (e) => {
+    if (!devModeEnabled) return;
     const isToggle =
       (e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d";
     if (!isToggle) return;
@@ -1269,6 +1281,7 @@
   });
 
   // Backup affordance: click the tagline 5 times within 2s to toggle.
+  // Same dev-mode gate as the keyboard shortcut.
   (function attachTaglineUnlock() {
     const tagline = document.querySelector(".mc-tag");
     if (!tagline) return;
@@ -1276,6 +1289,7 @@
     let firstAt = 0;
     tagline.style.cursor = "default";
     tagline.addEventListener("click", () => {
+      if (!devModeEnabled) return;
       const now = Date.now();
       if (now - firstAt > 2000) {
         clicks = 0;
@@ -1381,10 +1395,10 @@
       $paywallSub.textContent =
         "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.";
     }
-    // Phase 4 stub — surface "coming soon" until ExtensionPay is wired.
-    $paywallStub.hidden = false;
-    $paywallCta.disabled = true;
-    $paywallCta.textContent = "Coming soon";
+    // ExtensionPay is wired; the CTA opens the hosted Stripe checkout.
+    $paywallStub.hidden = true;
+    $paywallCta.disabled = false;
+    $paywallCta.textContent = "Upgrade — $4.99 / yr";
 
     $paywallModal.hidden = false;
     $paywallModal.removeAttribute("inert");
@@ -1400,20 +1414,151 @@
     $paywallModal.hidden = true;
   }
 
-  $paywallModal.addEventListener("click", (e) => {
+  $paywallModal.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const action = btn.dataset.action;
     if (action === "paywall-close") {
       closePaywall();
     } else if (action === "paywall-upgrade") {
-      // Phase 3 hook — ExtensionPay.openPaymentPage() goes here.
-      // For now the button is disabled with "Coming soon" copy.
+      // Open the ExtensionPay-hosted Stripe checkout in a new tab. The popup
+      // closes by Chrome anyway when focus moves; we also call closePaywall
+      // so reopening the popup later starts fresh. extpay.onPaid fires in
+      // background.js when the user completes checkout and refreshes the
+      // entitlement automatically.
+      $paywallCta.disabled = true;
+      $paywallCta.textContent = "Opening checkout…";
+      const res = await send({ type: "MC_OPEN_PAYMENT_PAGE" });
+      $paywallCta.disabled = false;
+      $paywallCta.textContent = "Upgrade — $4.99 / yr";
+      if (!res || !res.ok) {
+        toast((res && res.error) || "Couldn't open checkout.", "err");
+        return;
+      }
+      closePaywall();
     }
   });
 
+  // ---- Promo code redemption (inside the paywall modal) -------------------
+  // Friends-and-family / trial path that grants 90 days of Premium without
+  // payment. See background.js → redeemPromoCode for the validation logic;
+  // shipped bundle only contains SHA-256 hashes of valid codes.
+  const $promoForm = document.getElementById("mc-promo-form");
+  const $promoInput = document.getElementById("mc-promo-input");
+  const $promoSubmit = document.getElementById("mc-promo-submit");
+  const $promoMsg = document.getElementById("mc-promo-msg");
+
+  function setPromoMsg(text, kind) {
+    if (!$promoMsg) return;
+    $promoMsg.textContent = text || "";
+    $promoMsg.classList.toggle("is-ok", kind === "ok");
+    $promoMsg.classList.toggle("is-err", kind === "err");
+  }
+
+  if ($promoForm) {
+    $promoForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const code = ($promoInput.value || "").trim();
+      if (!code) {
+        setPromoMsg("Enter a code.", "err");
+        return;
+      }
+      $promoSubmit.disabled = true;
+      setPromoMsg("Checking…");
+      const res = await send({ type: "MC_REDEEM_PROMO", code });
+      $promoSubmit.disabled = false;
+      if (!res || !res.ok) {
+        setPromoMsg(
+          (res && res.error) || "Something went wrong. Try again.",
+          "err",
+        );
+        return;
+      }
+      // Success — clear the field, surface a toast, refresh entitlement-driven
+      // UI, and close the paywall after a beat so the user reads the message.
+      $promoInput.value = "";
+      setPromoMsg("Premium unlocked for 90 days!", "ok");
+      toast("Premium unlocked — enjoy!", "ok");
+      try {
+        await refresh();
+      } catch (_) {}
+      setTimeout(() => {
+        closePaywall();
+        setPromoMsg("");
+      }, 1200);
+    });
+  }
+
   $tierUpgrade.addEventListener("click", () => openPaywall("cta"));
   $lapsedRenew.addEventListener("click", () => openPaywall("renew"));
+
+  // ---- Settings modal ------------------------------------------------------
+  // Gear icon in the header opens this. Currently holds one switch:
+  // Developer mode → toggles mc.dev.v1, which controls (a) the debug panel
+  // at the bottom of the popup, (b) verbose logs from the service worker
+  // (background.js reads the same flag at runtime), and (c) the Ctrl+Alt+D
+  // shortcut affordance. setDebugPanelVisible() handles all the storage
+  // side-effects for us.
+  const $settingsToggle = document.getElementById("mc-settings-toggle");
+  const $settingsModal = document.getElementById("mc-settings-modal");
+  const $devModeToggle = document.getElementById("mc-devmode-toggle");
+  const $settingsVersion = document.getElementById("mc-settings-version");
+
+  function openSettings() {
+    if (!$settingsModal) return;
+    // Reflect current state in case it was changed elsewhere (Ctrl+Alt+D,
+    // tagline unlock, another popup instance).
+    if ($devModeToggle) $devModeToggle.checked = !!devModeEnabled;
+    // Populate version from manifest.
+    if ($settingsVersion) {
+      try {
+        const v = chrome.runtime.getManifest().version;
+        $settingsVersion.textContent = `Styx Multi-Cart v${v}`;
+      } catch (_) {
+        $settingsVersion.textContent = "";
+      }
+    }
+    $settingsModal.hidden = false;
+    $settingsModal.removeAttribute("inert");
+    const closeBtn = $settingsModal.querySelector('[data-action="settings-close"]');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  function closeSettings() {
+    if (!$settingsModal) return;
+    const active = document.activeElement;
+    if (active && $settingsModal.contains(active)) active.blur();
+    $settingsModal.setAttribute("inert", "");
+    $settingsModal.hidden = true;
+  }
+
+  if ($settingsToggle) {
+    $settingsToggle.addEventListener("click", openSettings);
+  }
+
+  if ($settingsModal) {
+    $settingsModal.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      if (btn.dataset.action === "settings-close") closeSettings();
+    });
+  }
+
+  if ($devModeToggle) {
+    $devModeToggle.addEventListener("change", async () => {
+      const want = !!$devModeToggle.checked;
+      await setDebugPanelVisible(want);
+      // The toast confirms the side-effect since the debug panel itself is
+      // below the fold of a 600px popup and easy to miss appearing.
+      toast(want ? "Developer mode on" : "Developer mode off", "ok");
+    });
+  }
+
+  // Close on Escape, matching the rest of the modal patterns in the popup.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if ($settingsModal && !$settingsModal.hidden) closeSettings();
+  });
 
   // ---- Dismissal persistence -----------------------------------------------
 
@@ -1530,6 +1675,14 @@
     loadDebugPanelVisibility();
     refresh();
     loadInterceptSetting();
+    // Fire-and-forget: ask the background to re-sync entitlement from
+    // ExtensionPay. If the user just returned from a successful checkout,
+    // the onPaid listener has usually already updated storage before we
+    // got here, but this catches edge cases (slow network, tab closed
+    // mid-callback). When it returns, re-render entitlement-driven UI.
+    send({ type: "MC_REFRESH_ENTITLEMENT" }).then((res) => {
+      if (res && res.ok) refresh();
+    });
   }
 
   document.addEventListener("DOMContentLoaded", boot);

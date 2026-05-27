@@ -6,3 +6,8 @@ coverage/
 safari/build/
 safari/*.xcodeproj/xcuserdata/
 safari/*.xcodeproj/project.xcworkspace/xcuserdata/
+__pycache__/
+*.pyc
+
+# Private operational notes (promo code plaintext, EXTPAY_ID, etc.)
+docs/internal/

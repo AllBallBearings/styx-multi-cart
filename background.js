@@ -5,18 +5,67 @@
  *   - Storage layer (chrome.storage.local) for saved carts.
  *   - Restore logic: clears the active cart and drives product-page Add to Cart.
  *   - Tab discovery: finds (or opens) an Amazon cart tab to send messages to.
+ *   - ExtensionPay entitlement sync (daily alarm + onPaid listener).
  *
  * Testing note: pure helpers and storage wrappers in this file are mirrored
- * byte-for-byte in lib/helpers.js, lib/storage.js, and lib/scrape.js
- * (pageScrapeCart + pageGetCartCount) so they can be unit-tested under Vitest.
- * If you change a helper here, change it there. A future PR can collapse the
- * duplication by loading background.js as an ES module.
+ * byte-for-byte in lib/helpers.js, lib/storage.js, lib/scrape.js
+ * (pageScrapeCart + pageGetCartCount), and lib/extpay-sync.js so they can be
+ * unit-tested under Vitest. If you change a helper here, change it there.
+ * A future PR can collapse the duplication by loading background.js as an
+ * ES module.
  */
+
+// ExtensionPay SDK. Must come before any reference to `ExtPay(...)`.
+// Vendored from `npm install extpay` → node_modules/extpay/dist/ExtPay.js.
+importScripts("ExtPay.js");
+
+// Verbose service-worker logging. Controlled at runtime by the
+// `mc.dev.v1` flag — toggle it from the popup's Settings → Developer mode
+// switch (no source edits needed). This let is intentionally NOT a const:
+// it's hydrated from storage at SW startup and updated live via the
+// chrome.storage.onChanged listener farther down. console.error is always
+// unconditional regardless of this flag.
+//
+// IMPORTANT: never hard-code `let DEBUG = true` and ship — the build script
+// (scripts/build-zip.sh) refuses to package a zip when it sees that.
+//
+// ⚠️ DO NOT use these helpers inside any `function page*(...)` defined below
+// — those run in an injected Amazon page context that has zero access to
+// this scope, so a call like `dlog(...)` throws ReferenceError, rejects the
+// wrapping Promise, and bubbles up as a generic failure with no visible
+// diagnostic in the service-worker console. Inside page-injected functions
+// always use raw `console.log` / `console.warn`.
+let DEBUG = false;
+const dlog = (...a) => { if (DEBUG) console.log(...a); };
+const dinfo = (...a) => { if (DEBUG) console.info(...a); };
+const dwarn = (...a) => { if (DEBUG) console.warn(...a); };
 
 const STORAGE_KEY = "mc.carts.v1";
 const SETTINGS_KEY = "mc.settings.v1";
 const ENTITLEMENT_KEY = "mc.entitlement.v1";
 const DEV_FLAG_KEY = "mc.dev.v1";
+const PROMO_KEY = "mc.promos.v1"; // { [sha256(code)]: redeemedAtMs }
+
+// SHA-256 hashes of valid friends-and-family promo codes. Each grants 90 days
+// of Premium and is one-redemption-per-device (we record the hash in PROMO_KEY
+// so re-entering on the same machine no-ops).
+//
+// Plaintext codes and the hash → code mapping live in
+// docs/internal/PROMO-CODES.md (gitignored). DO NOT paste plaintext codes here,
+// in trailing comments, or in placeholder text — anything in this file ships
+// to every install and is readable by unzipping the .crx, which would defeat
+// the entire point of hashing.
+//
+// To rotate, hash a new code locally and append it here:
+//   printf %s 'YOUR-NEW-CODE' | shasum -a 256
+const PROMO_HASHES = Object.freeze([
+  "47f0ec155e6bcfcdf6f63f88879a868a7dbaafdd1f95913eed6aa221fc7e9961",
+  "848eebb65c9c41aac69fc477bc1945d549bae0a695424e82f7785b26f44cbdd8",
+  "e65b027f86e44c499b56389e48809f522b95f6db5cf03d60a36d6ebbcd12bb39",
+  "81c7ad92980b69076455644934ebaf932c3bbcdfbedd28b867d98c2dfe0f6cf7",
+  "e0a8d5a301195b7f3386f8b419ace9e8b55f1e7137ff0b5aa8e24753580a9b13",
+]);
+const PROMO_GRANT_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 // Tier limits — keep in sync with lib/helpers.js. See docs/MONETIZATION_PLAN.md.
 const FREE_CART_LIMIT = 2;
@@ -84,6 +133,202 @@ async function writeEntitlement(patch) {
 async function isDevModeEnabled() {
   const r = await chrome.storage.local.get(DEV_FLAG_KEY);
   return r[DEV_FLAG_KEY] === true;
+}
+
+// ---- Promo code redemption (friends-and-family trial) --------------------
+// Pre-ExtensionPay path for granting Premium. The shipped bundle only
+// contains SHA-256 hashes of valid codes (see PROMO_HASHES); a leaked code
+// can be revoked in the next release by removing its hash.
+
+async function sha256Hex(input) {
+  const buf = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function redeemPromoCode(rawCode) {
+  const norm = String(rawCode || "")
+    .trim()
+    .toUpperCase();
+  if (!norm) return { ok: false, error: "Enter a code." };
+
+  const hash = await sha256Hex(norm);
+  if (!PROMO_HASHES.includes(hash)) {
+    return { ok: false, error: "That code isn't valid." };
+  }
+
+  const got = await chrome.storage.local.get(PROMO_KEY);
+  const redeemed = (got[PROMO_KEY] && typeof got[PROMO_KEY] === "object") ? got[PROMO_KEY] : {};
+  if (redeemed[hash]) {
+    return { ok: false, error: "This code has already been used on this device." };
+  }
+
+  const now = Date.now();
+  const current = await readEntitlement();
+  // If they already have a longer premium window (e.g. real subscription),
+  // don't shorten it — extend from whichever is later.
+  const baseline =
+    typeof current.premiumUntil === "number" && current.premiumUntil > now
+      ? current.premiumUntil
+      : now;
+  const premiumUntil = baseline + PROMO_GRANT_MS;
+
+  const next = await writeEntitlement({
+    tier: "premium",
+    premiumUntil,
+    autoRenew: false,
+    source: "promo",
+    lastChecked: now,
+  });
+
+  await chrome.storage.local.set({
+    [PROMO_KEY]: { ...redeemed, [hash]: now },
+  });
+
+  return { ok: true, entitlement: next, premiumUntil };
+}
+
+// ---- ExtensionPay integration --------------------------------------------
+// Replace EXTPAY_ID with the extension ID assigned at extensionpay.com after
+// registering this extension. See docs/internal/EXTENSIONPAY-SETUP.md.
+// While EXTPAY_ID === "REPLACE_ME", we still expose the upgrade path but
+// every checkout will redirect to ExtensionPay's 404 — fine for local dev,
+// not fine to ship. The build check below logs a console.error if the
+// placeholder is still present so a release build is hard to miss.
+const EXTPAY_ID = "REPLACE_ME";
+const EXTPAY_SYNC_ALARM = "mc-extpay-sync";
+const EXTPAY_SYNC_PERIOD_MIN = 60 * 24; // daily
+
+const extpay = typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
+if (!extpay) {
+  // ExtPay.js failed to load — shouldn't happen in production but might in
+  // a half-broken dev unpack. The rest of the extension keeps working;
+  // upgrades and license-sync are just no-ops until reload.
+  console.error("[Styx Multi-Cart] ExtPay SDK not available — payment paths disabled.");
+} else {
+  // Required: makes the SDK listen for postMessage from extensionpay.com so
+  // a successful checkout actually flips the user to paid in storage.
+  extpay.startBackground();
+  if (EXTPAY_ID === "REPLACE_ME") {
+    console.error(
+      "[Styx Multi-Cart] EXTPAY_ID is still 'REPLACE_ME' — set it before " +
+        "publishing. See docs/internal/EXTENSIONPAY-SETUP.md.",
+    );
+  }
+}
+
+// EXTPAY_PREMIUM_BUFFER_MS + extpayUserToEntitlementPatch:
+// mirrored byte-for-byte from lib/extpay-sync.js (see file header).
+const EXTPAY_PREMIUM_BUFFER_MS = 28 * 24 * 60 * 60 * 1000; // 28 days
+
+function extpayUserToEntitlementPatch(user, current, nowMs) {
+  const safeCurrent = current && typeof current === "object" ? current : {};
+
+  if (user && user.paid === true) {
+    let cancelAt = null;
+    if (user.subscriptionCancelAt) {
+      cancelAt =
+        user.subscriptionCancelAt instanceof Date
+          ? user.subscriptionCancelAt.getTime()
+          : Date.parse(user.subscriptionCancelAt);
+      if (!Number.isFinite(cancelAt)) cancelAt = null;
+    }
+
+    const subscriptionUntil =
+      cancelAt && cancelAt > nowMs ? cancelAt : nowMs + EXTPAY_PREMIUM_BUFFER_MS;
+
+    const promoFloor =
+      safeCurrent.source === "promo" &&
+      typeof safeCurrent.premiumUntil === "number" &&
+      safeCurrent.premiumUntil > nowMs
+        ? safeCurrent.premiumUntil
+        : 0;
+
+    const premiumUntil = Math.max(subscriptionUntil, promoFloor);
+
+    return {
+      tier: "premium",
+      premiumUntil,
+      autoRenew: !cancelAt,
+      source: "extensionpay",
+      lastChecked: nowMs,
+    };
+  }
+
+  if (
+    safeCurrent.source === "promo" &&
+    typeof safeCurrent.premiumUntil === "number" &&
+    safeCurrent.premiumUntil > nowMs
+  ) {
+    return { lastChecked: nowMs };
+  }
+
+  return {
+    tier: "free",
+    premiumUntil: null,
+    autoRenew: false,
+    source: null,
+    lastChecked: nowMs,
+  };
+}
+
+/**
+ * Pull the current ExtPay user, translate to an entitlement patch, write.
+ * Safe to call freely — on network/SDK error, leaves entitlement untouched
+ * so a user with active premium doesn't get downgraded by a flaky network.
+ */
+async function syncEntitlementFromExtPay() {
+  if (!extpay) return;
+  let user;
+  try {
+    user = await extpay.getUser();
+  } catch (err) {
+    dwarn("[Styx Multi-Cart] ExtPay getUser failed; leaving entitlement alone:", err);
+    return;
+  }
+  const current = await readEntitlement();
+  const patch = extpayUserToEntitlementPatch(user, current, Date.now());
+  await writeEntitlement(patch);
+  dlog("[Styx Multi-Cart] entitlement synced from ExtPay:", patch);
+}
+
+// Daily alarm wakes the service worker even if the popup is never opened.
+chrome.alarms.create(EXTPAY_SYNC_ALARM, {
+  periodInMinutes: EXTPAY_SYNC_PERIOD_MIN,
+});
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlementFromExtPay();
+});
+
+// Sync once when the service worker spins up (e.g. on browser startup, on
+// install/update, or after the worker has been suspended). Doesn't block
+// other event registration because top-level awaits aren't allowed here.
+syncEntitlementFromExtPay();
+
+// Hydrate the DEBUG flag from storage at SW startup, and keep it in sync
+// when the user flips Settings → Developer mode in the popup. mc.dev.v1
+// is the single source of truth for both the debug panel UI and verbose
+// background logging.
+chrome.storage.local.get(DEV_FLAG_KEY).then((r) => {
+  DEBUG = r[DEV_FLAG_KEY] === true;
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local") return;
+  if (Object.prototype.hasOwnProperty.call(changes, DEV_FLAG_KEY)) {
+    DEBUG = changes[DEV_FLAG_KEY].newValue === true;
+  }
+});
+
+// Immediate flip when the user completes checkout — ExtPay fires onPaid
+// when paidAt transitions from null to set. Re-sync to populate the rest
+// of the entitlement record consistently.
+if (extpay) {
+  extpay.onPaid.addListener(() => {
+    dinfo("[Styx Multi-Cart] ExtPay onPaid fired; refreshing entitlement.");
+    syncEntitlementFromExtPay();
+  });
 }
 
 function isPremiumActive(ent, nowMs = Date.now()) {
@@ -970,6 +1215,13 @@ function chunkItemsForBulk(items, size = 30) {
  * the same page (e.g. for a multi-chunk restore) is harmless.
  */
 function pageHighlightBulkConfirm() {
+  // NOTE: this function is INJECTED into the Amazon page via
+  // chrome.scripting.executeScript. The page context has no access to the
+  // service worker's scope, so service-worker helpers like dlog/dinfo/dwarn
+  // are NOT defined here — calling one throws ReferenceError, which rejects
+  // the wrapping Promise and bubbles up as a generic "highlight failed
+  // (unknown)" in the caller, completely bypassing the selector loop. Use
+  // raw console.log / console.warn inside this function.
   return new Promise((resolve) => {
     console.log("[Styx Multi-Cart] searching for bulk-confirm button…");
 
@@ -983,7 +1235,10 @@ function pageHighlightBulkConfirm() {
 
     // Tier 1: selector-based — fast path, covers Amazon's standard ATC
     // naming. Different surfaces use different conventions, so we cast wide.
+    // /gp/aws/cart/add.html is a legacy surface and uses older naming than
+    // modern PDPs, so the cart-form fallbacks below matter a lot.
     const SELECTORS = [
+      // Modern PDP / newer surfaces
       "#add-to-cart-button",
       "input#add-to-cart-button",
       "input[name='submit.add-to-cart']",
@@ -991,9 +1246,20 @@ function pageHighlightBulkConfirm() {
       "input[name='submit.add-to-cart-button']",
       "button[name='submit.add-to-cart']",
       "input.a-button-input[aria-labelledby*='add-to-cart']",
-      "input[type='submit'][value*='Add' i][value*='Cart' i]",
+      // Legacy bulk add page — these are the most likely hits on /gp/aws/cart/add.html
+      "input[name='add']",
+      "input[name='submit.add']",
+      "input[name='proceedToCheckout']",
       "form[action*='cart/add' i] input[type='submit']",
       "form[action*='cart/add' i] button[type='submit']",
+      "form[action*='cart' i] input[type='submit']",
+      "form[action*='cart' i] button[type='submit']",
+      "form[action*='handle-buy-box' i] input[type='submit']",
+      // Value-based — works even when name/id are unusual
+      "input[type='submit'][value*='Add' i][value*='Cart' i]",
+      "input.a-button-input[value*='Add' i][value*='Cart' i]",
+      // Last-resort generic submit (use with extreme care; isVisible filters)
+      "input.a-button-input",
     ];
 
     // Tier 2: text-based fallback — find any visible <input type=submit>,
@@ -1152,7 +1418,9 @@ function pageHighlightBulkConfirm() {
  * user input — but we still set them via textContent so a defensive
  * mistake doesn't open an XSS hole.
  */
-function pagePromptYesNo(title, message, yesLabel, noLabel) {
+function pagePromptChoice(title, message, choices) {
+  // choices: [{ label, value, style: 'primary'|'secondary'|'ghost' }]
+  // Resolves with the chosen `value`, or "dismissed" if user clicks the backdrop.
   return new Promise((resolve) => {
     const ID = "__styx-prompt-modal";
     const existing = document.getElementById(ID);
@@ -1168,7 +1436,7 @@ function pagePromptYesNo(title, message, yesLabel, noLabel) {
     const modal = document.createElement("div");
     modal.style.cssText =
       "background:#131a22;color:#fff;border:1px solid #ff9900;" +
-      "border-radius:14px;padding:22px 26px;max-width:460px;width:90%;" +
+      "border-radius:14px;padding:22px 26px;max-width:480px;width:90%;" +
       "box-shadow:0 0 0 1px #ff9900,0 6px 32px rgba(0,0,0,.6);";
 
     const h = document.createElement("div");
@@ -1182,29 +1450,36 @@ function pagePromptYesNo(title, message, yesLabel, noLabel) {
     modal.appendChild(p);
 
     const row = document.createElement("div");
-    row.style.cssText = "display:flex;gap:10px;justify-content:flex-end;";
+    row.style.cssText = "display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;";
 
-    const noBtn = document.createElement("button");
-    noBtn.textContent = noLabel;
-    noBtn.style.cssText =
-      "padding:9px 16px;border-radius:8px;border:1px solid #4b5563;" +
-      "background:transparent;color:#fff;cursor:pointer;font-size:14px;";
-    row.appendChild(noBtn);
+    const styleFor = (style) => {
+      if (style === "primary") {
+        return "padding:9px 18px;border-radius:8px;border:1px solid #ff9900;" +
+               "background:#ff9900;color:#131a22;cursor:pointer;font-size:14px;font-weight:700;";
+      }
+      if (style === "secondary") {
+        return "padding:9px 16px;border-radius:8px;border:1px solid #ff9900;" +
+               "background:transparent;color:#ff9900;cursor:pointer;font-size:14px;font-weight:600;";
+      }
+      // ghost
+      return "padding:9px 16px;border-radius:8px;border:1px solid #4b5563;" +
+             "background:transparent;color:#fff;cursor:pointer;font-size:14px;";
+    };
 
-    const yesBtn = document.createElement("button");
-    yesBtn.textContent = yesLabel;
-    yesBtn.style.cssText =
-      "padding:9px 18px;border-radius:8px;border:1px solid #ff9900;" +
-      "background:#ff9900;color:#131a22;cursor:pointer;font-size:14px;font-weight:700;";
-    row.appendChild(yesBtn);
+    const cleanup = (answer) => { try { overlay.remove(); } catch (_e) {} resolve(answer); };
+
+    for (const ch of (choices || [])) {
+      const btn = document.createElement("button");
+      btn.textContent = ch.label;
+      btn.style.cssText = styleFor(ch.style || "ghost");
+      btn.addEventListener("click", () => cleanup(ch.value));
+      row.appendChild(btn);
+    }
 
     modal.appendChild(row);
     overlay.appendChild(modal);
     (document.body || document.documentElement).appendChild(overlay);
 
-    const cleanup = (answer) => { try { overlay.remove(); } catch (_e) {} resolve(answer); };
-    yesBtn.addEventListener("click", () => cleanup("yes"));
-    noBtn.addEventListener("click", () => cleanup("no"));
     overlay.addEventListener("click", (e) => { if (e.target === overlay) cleanup("dismissed"); });
   });
 }
@@ -1334,7 +1609,7 @@ async function restoreCartBulk(savedCart) {
         // Path (b): highlight failed. Tell the user we're falling through
         // to reconciliation rather than leaving the toast on "Loading…"
         // indefinitely. Console has the dump of visible buttons for debug.
-        console.info(
+        dinfo(
           `[Styx Multi-Cart] bulk chunk ${c + 1} highlight failed (${(hr && hr.error) || "unknown"}); ` +
             `proceeding to cart reconciliation.`
         );
@@ -1385,25 +1660,126 @@ async function restoreCartBulk(savedCart) {
       ? `Bulk add only got ${addedCount} of ${allItems.length} items into your cart.\n\nWould you like to restore the remaining ${missing.length} one at a time? This is slower but more reliable.`
       : `The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).\n\nWould you like to restore all ${allItems.length} items one at a time instead?`;
 
-    let userChoice = "no";
+    // Detect whether the helper tab is still on the bulk confirm page.
+    // If so, the user can still click the real "Add To Cart" themselves
+    // — that's almost always preferable to per-item fallback when the
+    // page is right there. Offer it as the primary choice.
+    let stillOnConfirmPage = false;
+    try {
+      const tab = await chrome.tabs.get(helperTab.id);
+      stillOnConfirmPage = /\/gp\/aws\/cart\/add\.html/i.test(tab.url || "");
+    } catch (_e) { /* tab might be closed */ }
+
+    const choices = [];
+    if (stillOnConfirmPage) {
+      choices.push({
+        label: "I'll click \"Add To Cart\" myself",
+        value: "manual",
+        style: "primary",
+      });
+      choices.push({
+        label: "Restore one by one",
+        value: "fallback",
+        style: "secondary",
+      });
+    } else {
+      choices.push({
+        label: "Restore one by one",
+        value: "fallback",
+        style: "primary",
+      });
+    }
+    choices.push({ label: "Cancel", value: "cancel", style: "ghost" });
+
+    let userChoice = "cancel";
     try {
       const promptRes = await chrome.scripting.executeScript({
         target: { tabId: helperTab.id },
-        func: pagePromptYesNo,
-        args: [
-          "Bulk add incomplete",
-          summary,
-          "Restore one by one",
-          "Cancel",
-        ],
+        func: pagePromptChoice,
+        args: ["Bulk add incomplete", summary, choices],
       });
-      userChoice = (promptRes && promptRes[0] && promptRes[0].result) || "no";
+      userChoice = (promptRes && promptRes[0] && promptRes[0].result) || "cancel";
     } catch (_e) {
-      // Tab closed or injection failed — treat as no.
-      userChoice = "no";
+      // Tab closed or injection failed — treat as cancel.
+      userChoice = "cancel";
     }
 
-    if (userChoice === "yes") {
+    if (userChoice === "manual") {
+      // User wants to click the button themselves. Help them by scrolling
+      // any plausible submit into view (we know our selectors miss it,
+      // so best-effort: scroll to the bottom of the form or page) then
+      // wait for the same navigation signal the happy path uses.
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: helperTab.id },
+          func: () => {
+            const guesses = [
+              "form[action*='cart' i] input[type='submit']",
+              "form[action*='cart' i] button[type='submit']",
+              "form[action*='cart' i] input.a-button-input",
+              "input[type='submit']",
+              "button[type='submit']",
+            ];
+            for (const sel of guesses) {
+              const el = document.querySelector(sel);
+              if (el && el.getBoundingClientRect().width > 0) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+              }
+            }
+            // Nothing matched — scroll to bottom so the user can see the
+            // confirm button without hunting.
+            window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+          },
+        });
+      } catch (_e) { /* best-effort */ }
+
+      await showStatus(
+        helperTab.id,
+        "Click \"Add To Cart\" on the page when you're ready — restore continues automatically",
+        "loading"
+      );
+
+      const manualRes = await waitForUserBulkConfirm(helperTab.id);
+      if (!manualRes.ok) {
+        // User closed tab / 5-min timeout.
+        return {
+          ok: false,
+          error: `User did not confirm bulk add: ${manualRes.error}`,
+          host,
+          helperTabId: helperTab && helperTab.id,
+          missing: allItems,
+          userAbandoned: true,
+        };
+      }
+      await waitForTabComplete(helperTab.id, 20000);
+
+      // Re-reconcile against the live cart after their click.
+      let cart2 = null;
+      try { cart2 = await scrapeCartInBackground(host); } catch (_e) { /* treat as empty */ }
+      const inCart2 = new Map();
+      if (cart2 && Array.isArray(cart2.items)) {
+        for (const it of cart2.items) {
+          inCart2.set(String(it.asin).toUpperCase(), Number(it.quantity) || 1);
+        }
+      }
+      const missing2 = [];
+      for (const want of allItems) {
+        const wantQty = Math.max(1, Number(want.quantity) || 1);
+        const have = inCart2.get(String(want.asin).toUpperCase()) || 0;
+        if (have < wantQty) missing2.push({ ...want, quantity: wantQty - have });
+      }
+      return {
+        ok: true,
+        host,
+        helperTabId: helperTab && helperTab.id,
+        total: allItems.length,
+        added: allItems.length - missing2.length,
+        missing: missing2,
+      };
+    }
+
+    if (userChoice === "fallback") {
       // Caller will run restoreCart on the missing subset.
       return {
         ok: true,
@@ -1415,9 +1791,9 @@ async function restoreCartBulk(savedCart) {
       };
     }
 
-    // User declined fallback (or dismissed). Return ok with empty
-    // missing so the caller doesn't run per-item. We still paint a
-    // final status reflecting the partial result.
+    // userChoice === "cancel" or "dismissed". Return ok with empty
+    // missing AND the userDeclinedFallback flag so the caller doesn't
+    // run per-item AND doesn't paint the success-navigation flow.
     const partialMsg = addedCount > 0
       ? `Bulk restore added ${addedCount} of ${allItems.length} items — ${missing.length} skipped`
       : `Bulk restore added 0 items — try again or restore one by one`;
@@ -1676,7 +2052,7 @@ async function clearThenRestoreCart(target) {
     if (currentCount !== 0) {
       const cleared = await clearAmazonCart(target.host);
       if (!cleared || !cleared.ok) {
-        console.warn(
+        dwarn(
           "[Styx Multi-Cart] restore could not clear existing cart",
           cleared
         );
@@ -1702,6 +2078,26 @@ async function clearThenRestoreCart(target) {
     // through to the per-item engine, which is slower but proven.
     const bulk = await restoreCartBulk(target);
 
+    // User explicitly declined the per-item fallback in the bulk
+    // reconciliation prompt — respect that and stop. Bulk already
+    // painted a partial-result toast. Must come BEFORE the success path
+    // because declined returns missing:[] too, but we don't want to
+    // navigate them away from wherever they are.
+    if (bulk.ok && bulk.userDeclinedFallback) {
+      dinfo(
+        `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
+          `user declined per-item fallback`
+      );
+      return;
+    }
+
+    // User abandoned the bulk confirm page (closed tab / 5-min timeout).
+    // No automatic fallback — they walked away on purpose.
+    if (!bulk.ok && bulk.userAbandoned) {
+      dinfo("[Styx Multi-Cart] user abandoned bulk confirm — not falling back");
+      return;
+    }
+
     if (bulk.ok && bulk.missing.length === 0) {
       // Everything landed in one shot. Land the user on the cart view
       // and paint the done toast.
@@ -1721,24 +2117,6 @@ async function clearThenRestoreCart(target) {
       return;
     }
 
-    // User explicitly declined the per-item fallback in the bulk
-    // reconciliation prompt — respect that and stop. Bulk already
-    // painted a partial-result toast.
-    if (bulk.ok && bulk.userDeclinedFallback) {
-      console.info(
-        `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
-          `user declined per-item fallback`
-      );
-      return;
-    }
-
-    // User abandoned the bulk confirm page (closed tab / 5-min timeout).
-    // No automatic fallback — they walked away on purpose.
-    if (!bulk.ok && bulk.userAbandoned) {
-      console.info("[Styx Multi-Cart] user abandoned bulk confirm — not falling back");
-      return;
-    }
-
     // Otherwise: bulk had a hard failure (couldn't navigate, scripting
     // error, etc.) OR partial success where the user chose "Restore one
     // by one". Drive the remainder through the per-item engine.
@@ -1746,12 +2124,12 @@ async function clearThenRestoreCart(target) {
       ? bulk.missing
       : target.items;
     if (!bulk.ok) {
-      console.info(
+      dinfo(
         "[Styx Multi-Cart] bulk restore failed, falling back to per-item:",
         bulk.error
       );
     } else {
-      console.info(
+      dinfo(
         `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
           `user opted to per-item-fill ${bulk.missing.length} missing`
       );
@@ -2588,6 +2966,43 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           }
           const next = await writeEntitlement(msg.entitlement || {});
           sendResponse({ ok: true, entitlement: next });
+          break;
+        }
+
+        case "MC_REDEEM_PROMO": {
+          // Public, ungated: the upgrade modal exposes "Have a code?" to any user.
+          // redeemPromoCode handles validation, single-use-per-device, and
+          // entitlement update. Failure responses use a stable shape so the popup
+          // can render the error inline.
+          const result = await redeemPromoCode(msg.code);
+          sendResponse(result);
+          break;
+        }
+
+        case "MC_OPEN_PAYMENT_PAGE": {
+          // Open ExtensionPay-hosted Stripe checkout in a new tab.
+          // The popup closes itself after the call (the modal lives there).
+          // If the user actually pays, extpay.onPaid fires and we re-sync.
+          if (!extpay) {
+            sendResponse({ ok: false, error: "Payment service not available." });
+            break;
+          }
+          try {
+            extpay.openPaymentPage();
+            sendResponse({ ok: true });
+          } catch (err) {
+            console.error("[Styx Multi-Cart] openPaymentPage failed:", err);
+            sendResponse({ ok: false, error: "Couldn't open checkout." });
+          }
+          break;
+        }
+
+        case "MC_REFRESH_ENTITLEMENT": {
+          // Lets the popup ask for a fresh ExtPay-backed entitlement check
+          // (e.g. user returns from checkout tab). Best-effort; the response
+          // ignores the result and lets the caller re-query MC_GET_ENTITLEMENT.
+          await syncEntitlementFromExtPay();
+          sendResponse({ ok: true });
           break;
         }
 
