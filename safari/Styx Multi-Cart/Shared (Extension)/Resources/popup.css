@@ -460,6 +460,11 @@ body {
   flex-wrap: wrap;
 }
 
+.mc-item-actions button[data-action="restore"] {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
 /* ---- Inline edit panel -------------------------------------------------- */
 
 .mc-item-edit {

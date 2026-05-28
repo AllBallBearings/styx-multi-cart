@@ -145,6 +145,38 @@ test.describe("popup — managing existing carts", () => {
       .textContent();
     expect(cartBCount).toContain("2 items");
     expect(cartBCount).toContain("5 qty");
+
+    await expect(
+      page.locator('#mc-list .mc-item:has-text("Cart A") [data-action="restore"]')
+    ).toHaveText("Switch to This Cart");
+  });
+
+  test("thumbnail strip skips image-less rows and shows later usable thumbnails", async ({
+    popup,
+  }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-late-image",
+          name: "Late Image",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BNOIMG1", title: "No Image 1", quantity: 1, price: "", image: "", url: "" },
+            { asin: "BNOIMG2", title: "No Image 2", quantity: 1, price: "", image: "", url: "" },
+            { asin: "BNOIMG3", title: "No Image 3", quantity: 1, price: "", image: "", url: "" },
+            { asin: "BNOIMG4", title: "No Image 4", quantity: 1, price: "", image: "", url: "" },
+            { asin: "BNOIMG5", title: "No Image 5", quantity: 1, price: "", image: "", url: "" },
+            { asin: "BNOIMG6", title: "No Image 6", quantity: 1, price: "", image: "", url: "" },
+            { asin: "BHASIMG7", title: "Has Image 7", quantity: 1, price: "", image: "icons/icon32.png", url: "" },
+          ],
+        },
+      ],
+    });
+
+    const cart = page.locator('#mc-list .mc-item:has-text("Late Image")');
+    await expect(cart.locator(".mc-item-thumb")).toHaveCount(1);
+    await expect(cart.locator(".mc-item-thumb")).toHaveAttribute("title", "Has Image 7");
   });
 
   test("rename emits MC_RENAME_CART and updates the row in place", async ({
@@ -207,6 +239,35 @@ test.describe("popup — managing existing carts", () => {
     await expect(page.locator("#mc-list .mc-item")).toHaveCount(2);
     const log = await page.evaluate(() => window.__mcMessageLog);
     expect(log.some((m) => m.type === "MC_DELETE_CART")).toBe(false);
+  });
+
+  test("removing an item refreshes the cart thumbnail strip", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-images",
+          name: "Cart Images",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BIMG1", title: "First Image", quantity: 1, price: "", image: "icons/icon16.png", url: "" },
+            { asin: "BIMG2", title: "Second Image", quantity: 1, price: "", image: "icons/icon32.png", url: "" },
+          ],
+        },
+      ],
+    });
+
+    const cart = page.locator('#mc-list .mc-item:has-text("Cart Images")');
+    await expect(cart.locator(".mc-item-thumb")).toHaveCount(2);
+
+    await cart.locator('[data-action="edit"]').click();
+    await cart.locator('.mc-edit-row[data-asin="BIMG1"] [data-action="item-remove"]').click();
+    await expect(page.locator("#mc-confirm-body .mc-confirm-emphasis")).toHaveText("First Image");
+    await page.locator("#mc-confirm-ok").click();
+
+    await expect(cart.locator(".mc-item-count")).toContainText("1 item");
+    await expect(cart.locator(".mc-item-thumb")).toHaveCount(1);
+    await expect(cart.locator(".mc-item-thumb")).toHaveAttribute("title", "Second Image");
   });
 });
 

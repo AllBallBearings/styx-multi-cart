@@ -136,6 +136,22 @@ function buildInitScript(initial) {
             return;
           }
 
+          case "MC_REMOVE_ITEM_FROM_CART": {
+            const c = store[STORAGE_KEY].find((c) => c.id === message.id);
+            if (!c) { respond({ ok: false, error: "not found" }); return; }
+            const before = Array.isArray(c.items) ? c.items.length : 0;
+            c.items = (c.items || []).filter((it) => it.asin !== message.asin);
+            if (c.items.length === before) { respond({ ok: false, error: "item not found" }); return; }
+            if (c.items.length === 0) {
+              const idx = store[STORAGE_KEY].findIndex((cart) => cart.id === message.id);
+              if (idx >= 0) store[STORAGE_KEY].splice(idx, 1);
+              respond({ ok: true, cartDeleted: true });
+              return;
+            }
+            respond({ ok: true, remaining: c.items.length });
+            return;
+          }
+
           case "MC_CLEAR_CURRENT":
             respond({ ok: true, cleared: 0 });
             return;

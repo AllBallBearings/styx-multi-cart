@@ -29,16 +29,16 @@ first Chrome Web Store submission:
     visibility during early launch — but no unconditional logs)
   - The `formatEntForDisplay` / `refreshDebugEntDisplay` helpers and any
     other dead code that only the debug panel uses
-      Rationale: as long as `Ctrl+Alt+D` exists in the shipped bundle,
-      anyone who reads this handoff file (or just pokes around the JS)
-      can grant themselves premium. That's the actual leak — not the
-      public repo.
+    Rationale: as long as `Ctrl+Alt+D` exists in the shipped bundle,
+    anyone who reads this handoff file (or just pokes around the JS)
+    can grant themselves premium. That's the actual leak — not the
+    public repo.
 
 - [ ] **2. Sensitive strategy docs out of the public repo.**
       Move the parts of `docs/MONETIZATION_PLAN.md` that are competitive
       / strategic (pricing rationale, conversion logic, planned upsell
       points, threat-model assumptions) to a private gist or Notion page.
-      Keep only the *public-facing* policy in the repo — i.e. what tier
+      Keep only the _public-facing_ policy in the repo — i.e. what tier
       gets what, what happens on lapse, privacy stance. The "why $4.99
       not $9.99" reasoning and the "lapsed read-only is a deliberate
       retention lever" framing don't need to live in front of users.
@@ -99,7 +99,7 @@ for the canonical checklist.
     returns `Promise<boolean>`. Used for: Save & Clear, Clear cart, Remove
     item, Restore, Delete cart.
   - `promptDialog({ title, message, placeholder, initialValue, okLabel,
-    maxLength, allowEmpty, trim })` returns `Promise<string|null>`. Used
+maxLength, allowEmpty, trim })` returns `Promise<string|null>`. Used
     for: Rename cart, Create new cart. Empty input flashes red without
     closing; ESC cancels; Enter submits.
   - Singleton `confirmPending` / `promptPending` auto-cancel any prior open
@@ -284,6 +284,7 @@ pick up coherently.
 > read-only reference.
 >
 > **Status:**
+>
 > - ✅ Phase 1 (entitlement core + gate functions) shipped 2026-05-21 —
 >   `lib/helpers.js`, `lib/storage.js`, `background.js` entitlement helpers,
 >   `tests/unit/entitlement.test.js`.
@@ -411,7 +412,7 @@ Also shipped this round (UX polish around D1):
 - Rename button removed; the cart name itself is now a clickable button
   (`<button class="mc-item-name" data-action="rename">`) — single-click
   to rename.
-- Hover tooltips added to **Restore** ("Move all items to Amazon cart"),
+- Hover tooltips added to **Restore** ("Move all items to your Amazon cart"),
   **Edit** ("Remove or Multiply Items"), and **Delete** ("Delete entire
   cart").
 

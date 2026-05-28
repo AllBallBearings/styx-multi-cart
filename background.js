@@ -3441,9 +3441,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             if (item.variantLabel && !existing.variantLabel) {
               existing.variantLabel = String(item.variantLabel).slice(0, 200);
             }
+            if (item.image && !existing.image) {
+              existing.image = item.image;
+            }
+            if (item.title && (!existing.title || existing.title === "(untitled)")) {
+              existing.title = item.title;
+            }
+            if (item.price && !existing.price) {
+              existing.price = item.price;
+            }
+            if (item.url && !existing.url) {
+              existing.url = item.url;
+            }
             action = "bumped";
           } else {
-            target.items.push({
+            target.items.unshift({
               asin: item.asin,
               title: item.title || "(untitled)",
               quantity: reqQty,
