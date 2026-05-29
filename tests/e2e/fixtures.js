@@ -152,6 +152,13 @@ function buildInitScript(initial) {
             return;
           }
 
+          case "MC_RESTORE_CART": {
+            const c = store[STORAGE_KEY].find((c) => c.id === message.id);
+            if (!c) { respond({ ok: false, error: "not found" }); return; }
+            respond({ ok: true, total: (c.items || []).length });
+            return;
+          }
+
           case "MC_CLEAR_CURRENT":
             respond({ ok: true, cleared: 0 });
             return;

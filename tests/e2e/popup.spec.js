@@ -179,6 +179,26 @@ test.describe("popup — managing existing carts", () => {
     await expect(cart.locator(".mc-item-thumb")).toHaveAttribute("title", "Has Image 7");
   });
 
+  test("switch cart confirmation explains that the Amazon cart is replaced", async ({
+    popup,
+  }) => {
+    const page = await popup({ carts: seedCarts });
+
+    await page
+      .locator('#mc-list .mc-item:has-text("Cart A") [data-action="restore"]')
+      .click();
+
+    await expect(page.locator("#mc-confirm-title")).toHaveText("Switch to this cart?");
+    await expect(page.locator("#mc-confirm-body")).toHaveText(
+      'This will replace your current Amazon cart with "Cart A".'
+    );
+
+    await page.locator("#mc-confirm-ok").click();
+    const log = await page.evaluate(() => window.__mcMessageLog);
+    const restore = log.find((m) => m.type === "MC_RESTORE_CART");
+    expect(restore).toMatchObject({ id: "cart-a" });
+  });
+
   test("rename emits MC_RENAME_CART and updates the row in place", async ({
     popup,
   }) => {
