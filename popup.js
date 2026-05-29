@@ -156,6 +156,7 @@
     const {
       title = "Are you sure?",
       message = "",
+      emphasis = null,
       okLabel = "OK",
       cancelLabel = "Cancel",
       destructive = false,
@@ -165,7 +166,20 @@
     if (confirmPending) confirmPending.resolve(false);
 
     $confirmTitle.textContent = title;
-    $confirmBody.textContent = message;
+    $confirmBody.textContent = "";
+    if (emphasis && typeof emphasis === "object") {
+      const before = emphasis.before || "";
+      const text = emphasis.text || "";
+      const after = emphasis.after || "";
+      if (before) $confirmBody.appendChild(document.createTextNode(before));
+      const strong = document.createElement("strong");
+      strong.className = "mc-confirm-emphasis";
+      strong.textContent = text;
+      $confirmBody.appendChild(strong);
+      if (after) $confirmBody.appendChild(document.createTextNode(after));
+    } else {
+      $confirmBody.textContent = message;
+    }
     $confirmOk.textContent = okLabel;
     $confirmCancel.textContent = cancelLabel;
     $confirmOk.classList.toggle("mc-btn-danger", !!destructive);
@@ -339,6 +353,36 @@
     );
   }
 
+  function renderCartThumbs(thumbs, cart) {
+    if (!thumbs) return;
+    thumbs.innerHTML = "";
+    // Show up to six actual thumbnails, not merely thumbnails from the
+    // first six items. Older carts can contain image-less rows, and those
+    // should not hide later items that do have usable images.
+    const thumbItems = (cart.items || [])
+      .filter((it) => it && isUsableThumb(it.image))
+      .slice(0, 6);
+    for (const it of thumbItems) {
+      const img = document.createElement("img");
+      img.className = "mc-item-thumb";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.src = it.image;
+      img.alt = "";
+      img.title = it.title || "";
+      // If Amazon's CDN refuses the URL or it 404s, drop the element so
+      // the placeholder doesn't sit there forever.
+      img.onerror = () => img.remove();
+      thumbs.appendChild(img);
+    }
+    if (cart.items.length > 6) {
+      const more = document.createElement("div");
+      more.className = "mc-item-thumb-more";
+      more.textContent = `+${cart.items.length - 6}`;
+      thumbs.appendChild(more);
+    }
+  }
+
   function renderItem(cart) {
     const node = $template.content.firstElementChild.cloneNode(true);
     node.dataset.id = cart.id;
@@ -393,32 +437,7 @@
       `${host} · saved ${formatRelative(cart.savedAt)}`;
 
     const thumbs = node.querySelector(".mc-item-thumbs");
-    const showCount = Math.min(6, cart.items.length);
-    for (let i = 0; i < showCount; i++) {
-      const it = cart.items[i];
-      if (!it) continue;
-      // Skip bad image URLs: empty, data: placeholders, or Amazon's own
-      // lazy-load spinner gif (loadIndicators) that gets captured before
-      // IntersectionObserver has fired the real product image into place.
-      if (!isUsableThumb(it.image)) continue;
-      const img = document.createElement("img");
-      img.className = "mc-item-thumb";
-      img.loading = "lazy";
-      img.referrerPolicy = "no-referrer";
-      img.src = it.image;
-      img.alt = "";
-      img.title = it.title || "";
-      // If Amazon's CDN refuses the URL or it 404s, drop the element so
-      // the placeholder doesn't sit there forever.
-      img.onerror = () => img.remove();
-      thumbs.appendChild(img);
-    }
-    if (cart.items.length > showCount) {
-      const more = document.createElement("div");
-      more.className = "mc-item-thumb-more";
-      more.textContent = `+${cart.items.length - showCount}`;
-      thumbs.appendChild(more);
-    }
+    renderCartThumbs(thumbs, cart);
 
     // Disable write actions on locked carts. CSS already grays them, but
     // setting `disabled` ensures keyboard / screen-reader users see the
@@ -906,9 +925,14 @@
     if (!cart) return;
     const item = (cart.items || []).find((it) => it.asin === asin);
     if (!item) return;
+    const itemName = item.title || asin;
     const ok = await confirmDialog({
       title: "Remove item?",
-      message: `Remove "${item.title || asin}" from this cart?`,
+      emphasis: {
+        before: "Remove ",
+        text: itemName,
+        after: " from this cart?",
+      },
       okLabel: "Remove",
       destructive: true,
     });
@@ -927,6 +951,7 @@
     }
     cart.items = cart.items.filter((it) => it.asin !== asin);
     updateRowSummary(li, cart);
+    renderCartThumbs(li.querySelector(".mc-item-thumbs"), cart);
     renderEditPanel(li, cart);
   }
 
@@ -993,9 +1018,9 @@
       const cartName =
         li.querySelector(".mc-item-name").textContent.trim() || "this";
       const ok = await confirmDialog({
-        title: "Restore this cart?",
-        message: `Clear your current Amazon cart and restore the items from "${cartName}"?`,
-        okLabel: "Restore",
+        title: "Switch to this cart?",
+        message: `This will replace your current Amazon cart with "${cartName}".`,
+        okLabel: "Switch",
       });
       if (!ok) return;
 
@@ -1004,10 +1029,10 @@
         if (res.ok) {
           const total = res.total || 0;
           toast(
-            `Clearing current cart, then restoring ${total} item${total === 1 ? "" : "s"}. If Amazon shows an upsell, choose an option there to continue.`
+            `Switching carts — loading ${total} item${total === 1 ? "" : "s"}. If Amazon shows an upsell, choose an option there to continue.`
           );
         } else if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not restore", "error");
+          toast(res.error || "Could not switch carts", "error");
         }
       });
     } else if (action === "rename") {

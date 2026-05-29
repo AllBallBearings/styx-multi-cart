@@ -498,6 +498,11 @@ body {
   flex-wrap: wrap;
 }
 
+.mc-item-actions button[data-action="restore"] {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
 /* ---- Inline edit panel -------------------------------------------------- */
 
 .mc-item-edit {
@@ -1250,6 +1255,11 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
 
 .mc-confirm-card .mc-modal-sub {
   white-space: pre-line;
+}
+
+.mc-confirm-emphasis {
+  color: #b45309;
+  font-weight: 800;
 }
 
 .mc-prompt-card {

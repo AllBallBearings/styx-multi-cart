@@ -2135,9 +2135,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           if (existing) {
             const merged = Math.max(1, Math.min(99, (Number(existing.quantity) || 1) + reqQty));
             existing.quantity = merged;
+            if (item.image && !existing.image) {
+              existing.image = item.image;
+            }
+            if (item.title && (!existing.title || existing.title === "(untitled)")) {
+              existing.title = item.title;
+            }
+            if (item.price && !existing.price) {
+              existing.price = item.price;
+            }
+            if (item.url && !existing.url) {
+              existing.url = item.url;
+            }
             action = "bumped";
           } else {
-            target.items.push({
+            target.items.unshift({
               asin: item.asin,
               title: item.title || "(untitled)",
               quantity: reqQty,

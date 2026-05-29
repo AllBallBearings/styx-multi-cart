@@ -68,6 +68,26 @@
 
   // ---- Helpers ------------------------------------------------------------
 
+  function accessibleDocuments() {
+    const docs = [document];
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        docs.push(window.parent.document);
+      }
+    } catch (_e) { /* cross-origin or sandboxed parent */ }
+    try {
+      if (
+        window.top &&
+        window.top !== window &&
+        window.top.document &&
+        !docs.includes(window.top.document)
+      ) {
+        docs.push(window.top.document);
+      }
+    } catch (_e) { /* cross-origin or sandboxed top */ }
+    return docs;
+  }
+
   function getAsinFromPage() {
     const bodyAsin =
       document.body && document.body.getAttribute("data-asin");
@@ -83,31 +103,102 @@
     );
     if (asinInput && asinInput.value) return asinInput.value;
 
+    try {
+      const params = new URLSearchParams(location.search || "");
+      for (const name of ["asin", "ASIN", "pd_rd_i"]) {
+        const asin = firstValidAsin(params.get(name));
+        if (asin) return asin;
+      }
+    } catch (_e) { /* ignore */ }
+
     return null;
   }
 
   function getProductTitle() {
-    const t = document.getElementById("productTitle");
-    if (t && t.textContent) return t.textContent.trim().slice(0, 200);
+    for (const doc of accessibleDocuments()) {
+      const t = doc.getElementById("productTitle");
+      if (t && t.textContent) return t.textContent.trim().slice(0, 200);
+    }
+    const mainTitle = accessibleDocuments()
+      .map((doc) => doc.title || "")
+      .find((title) => title && !/^Customize$/i.test(title.trim()));
+    if (mainTitle) return mainTitle.replace(/^Amazon\.com\s*[:|-]\s*/, "").trim().slice(0, 200);
     return (document.title || "").replace(/^Amazon\.com\s*[:|-]\s*/, "").trim();
   }
 
+  function isUsableImageUrl(url) {
+    return Boolean(
+      url &&
+        !url.startsWith("data:") &&
+        !url.includes("loadIndicators") &&
+        !url.includes("transparent-pixel")
+    );
+  }
+
+  function pickLargestDynamicImage(img) {
+    const dyn = img && img.getAttribute("data-a-dynamic-image");
+    if (!dyn) return "";
+    try {
+      const map = JSON.parse(dyn);
+      let best = "";
+      let bestArea = -1;
+      for (const url of Object.keys(map || {})) {
+        if (!isUsableImageUrl(url)) continue;
+        const dims = map[url] || [0, 0];
+        const area = (Number(dims[0]) || 0) * (Number(dims[1]) || 0);
+        if (area > bestArea) {
+          best = url;
+          bestArea = area;
+        }
+      }
+      return best;
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function pickFromSrcset(value) {
+    if (!value) return "";
+    const parts = String(value)
+      .split(",")
+      .map((part) => part.trim().split(/\s+/)[0])
+      .filter(isUsableImageUrl);
+    return parts.length ? parts[parts.length - 1] : "";
+  }
+
+  function getImageUrlFromImg(img) {
+    if (!img || (img.closest && img.closest(".sc-list-item-spinner"))) return "";
+    const hires = img.getAttribute("data-old-hires");
+    return (
+      (isUsableImageUrl(hires) ? hires : "") ||
+      pickLargestDynamicImage(img) ||
+      (isUsableImageUrl(img.currentSrc) ? img.currentSrc : "") ||
+      (isUsableImageUrl(img.getAttribute("data-src")) ? img.getAttribute("data-src") : "") ||
+      pickFromSrcset(img.getAttribute("data-srcset") || img.getAttribute("srcset")) ||
+      (isUsableImageUrl(img.getAttribute("src")) ? img.getAttribute("src") : "")
+    );
+  }
+
   function getProductImageFromPage() {
-    // Try the hi-res "old hires" attribute first — it's the full-size URL
-    // Amazon loads when the user hovers. Falls back to the visible img src.
+    // Try the hi-res/lazy-load attributes before visible src; Amazon often
+    // leaves a placeholder in src until its own lazy loader runs.
     const candidates = [
       "#landingImage",
       "#imgBlkFront",
       "#main-image-container img",
       "#imageBlock img",
       "img.a-dynamic-image",
+      "img[data-a-dynamic-image]",
+      "img[data-old-hires]",
+      "img[data-src]",
     ];
-    for (const sel of candidates) {
-      const img = document.querySelector(sel);
-      if (!img) continue;
-      const hires = img.getAttribute("data-old-hires");
-      if (hires) return hires;
-      if (img.src && !img.src.startsWith("data:")) return img.src;
+    for (const doc of accessibleDocuments()) {
+      for (const sel of candidates) {
+        const img = doc.querySelector(sel);
+        if (!img) continue;
+        const url = getImageUrlFromImg(img);
+        if (url) return url;
+      }
     }
     return "";
   }
@@ -161,14 +252,66 @@
 
   /**
    * Find the ASIN that owns a given ATC button by walking up the
-   * ancestor chain. Most surfaces put data-asin on some ancestor div.
+   * ancestor chain. Most surfaces put data-asin on some ancestor div,
+   * but recommendation rails often put the ASIN payload on the submit
+   * control itself as data-asins='["B..."]'.
    */
+  function firstValidAsin(value) {
+    if (!value) return null;
+    const text = String(value);
+    const direct = text.match(/^[A-Z0-9]{10}$/i);
+    if (direct) return direct[0].toUpperCase();
+    const embedded = text.match(/\b([A-Z0-9]{10})\b/i);
+    return embedded ? embedded[1].toUpperCase() : null;
+  }
+
+  function findAsinInJsonishList(value) {
+    if (!value) return null;
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        for (const candidate of parsed) {
+          const asin = firstValidAsin(candidate);
+          if (asin) return asin;
+        }
+      }
+    } catch (_e) {
+      // Amazon sometimes ships JSON-ish attributes; fall through to regex.
+    }
+    return firstValidAsin(value);
+  }
+
+  function findAsinInUrl(value) {
+    if (!value) return null;
+    try {
+      const url = new URL(String(value), location.origin);
+      const paramNames = ["asin", "ASIN", "pd_rd_i"];
+      for (const name of paramNames) {
+        const asin = firstValidAsin(url.searchParams.get(name));
+        if (asin) return asin;
+      }
+      const pathMatch = url.pathname.match(/\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/i);
+      if (pathMatch) return pathMatch[1].toUpperCase();
+    } catch (_e) {
+      // Ignore malformed relative fragments and use the generic fallback.
+    }
+    return firstValidAsin(value);
+  }
+
   function findAsinFromButton(btn) {
     let el = btn;
     for (let i = 0; i < 16 && el && el !== document.body; i++) {
       if (el.getAttribute) {
-        const a = el.getAttribute("data-asin");
-        if (a && /^[A-Z0-9]{10}$/i.test(a)) return a.toUpperCase();
+        const attrCandidates = [
+          ["data-asin", firstValidAsin],
+          ["data-csa-c-asin", firstValidAsin],
+          ["data-asins", findAsinInJsonishList],
+          ["data-url", findAsinInUrl],
+        ];
+        for (const [name, reader] of attrCandidates) {
+          const asin = reader(el.getAttribute(name));
+          if (asin) return asin;
+        }
         // Some Amazon tile IDs encode the ASIN as `gridCell-{ASIN}` /
         // `gridElement-{ASIN}` / `atc-container-{ASIN}`.
         const id = el.id || "";
@@ -178,6 +321,27 @@
       el = el.parentElement;
     }
     return null;
+  }
+
+  function getTitleFromAtcButton(btn) {
+    if (!btn || !btn.getAttribute) return "";
+    const raw = (
+      btn.getAttribute("aria-label") ||
+      btn.getAttribute("title") ||
+      btn.value ||
+      btn.textContent ||
+      ""
+    ).trim();
+    return raw
+      .replace(/^(?:add|move)\s+to\s+(?:cart|basket)\s*,?\s*/i, "")
+      .trim()
+      .slice(0, 200);
+  }
+
+  function getQuantityFromAtcButton(btn) {
+    if (!btn || !btn.getAttribute) return 1;
+    const n = parseInt(btn.getAttribute("data-numitems") || "", 10);
+    return n > 0 ? Math.min(n, 99) : 1;
   }
 
   /**
@@ -198,16 +362,42 @@
         const t = document.getElementById(id);
         if (t) return t;
       }
+      const linked = document.querySelector(
+        `[data-asin='${asin}'], a[href*='/dp/${asin}'], a[href*='/gp/product/${asin}']`
+      );
+      if (linked) {
+        const linkedTile =
+          linked.closest("[data-component-type='s-search-result'], .sc-list-item, .a-carousel-card, li[data-uuid], [data-cel-widget], [role='listitem']") ||
+          linked.closest("div, li");
+        if (linkedTile) return linkedTile;
+      }
     }
     const TILE_SELECTORS = [
       "[data-component-type='s-search-result']",
+      ".sc-list-item",
+      ".a-carousel-card",
       "li[data-uuid]",
       "[data-cel-widget][data-csa-c-asin]",
+      "[data-csa-c-item-id]",
       "[role='listitem']",
     ];
     for (const sel of TILE_SELECTORS) {
       const t = btn.closest(sel);
       if (t) return t;
+    }
+    // Some recommendation rails don't mark the card with product data;
+    // the submit input owns data-asins and the nearest useful ancestor
+    // only reveals itself by containing the product image/link.
+    let card = btn.parentElement;
+    for (let i = 0; i < 12 && card && card !== document.body; i++) {
+      if (
+        card.querySelector &&
+        card.querySelector("img") &&
+        card.querySelector("a[href*='/dp/'], a[href*='/gp/product/'], .sc-product-title, h2")
+      ) {
+        return card;
+      }
+      card = card.parentElement;
     }
     // Last resort: nearest data-asin ancestor, no height filter.
     let el = btn.parentElement;
@@ -229,9 +419,11 @@
 
     // Title: prefer the h2 (search), then aria-labelled link, then any link
     const titleEl =
+      tile.querySelector(".sc-product-title") ||
       tile.querySelector("h2 a span, h2 span, h2") ||
       tile.querySelector("[aria-label][role='link']") ||
-      tile.querySelector("a.a-link-normal[title]");
+      tile.querySelector("a.a-link-normal[title]") ||
+      tile.querySelector("a.sc-product-link");
     let title = "";
     if (titleEl) {
       title = (titleEl.getAttribute("title") || titleEl.textContent || "").trim();
@@ -242,16 +434,71 @@
     }
     title = (title || "(untitled)").slice(0, 200);
 
-    // Image: search uses img.s-image; deals/rails use various
-    const imgEl =
-      tile.querySelector("img.s-image") ||
-      tile.querySelector("img[data-image-latency]") ||
-      tile.querySelector("img");
+    function isUsableImageUrl(url) {
+      return Boolean(
+        url &&
+          !url.startsWith("data:") &&
+          !url.includes("loadIndicators") &&
+          !url.includes("transparent-pixel")
+      );
+    }
+
+    function pickLargestDynamicImage(img) {
+      const dyn = img && img.getAttribute("data-a-dynamic-image");
+      if (!dyn) return "";
+      try {
+        const map = JSON.parse(dyn);
+        let best = "";
+        let bestArea = -1;
+        for (const url of Object.keys(map || {})) {
+          if (!isUsableImageUrl(url)) continue;
+          const dims = map[url] || [0, 0];
+          const area = (Number(dims[0]) || 0) * (Number(dims[1]) || 0);
+          if (area > bestArea) {
+            best = url;
+            bestArea = area;
+          }
+        }
+        return best;
+      } catch (_e) {
+        return "";
+      }
+    }
+
+    function pickFromSrcset(value) {
+      if (!value) return "";
+      const parts = String(value)
+        .split(",")
+        .map((part) => part.trim().split(/\s+/)[0])
+        .filter(isUsableImageUrl);
+      return parts.length ? parts[parts.length - 1] : "";
+    }
+
+    function getImageUrlFromImg(img) {
+      if (!img || (img.closest && img.closest(".sc-list-item-spinner"))) return "";
+      return (
+        pickLargestDynamicImage(img) ||
+        (isUsableImageUrl(img.currentSrc) ? img.currentSrc : "") ||
+        (isUsableImageUrl(img.getAttribute("data-src")) ? img.getAttribute("data-src") : "") ||
+        pickFromSrcset(img.getAttribute("data-srcset") || img.getAttribute("srcset")) ||
+        (isUsableImageUrl(img.getAttribute("src")) ? img.getAttribute("src") : "")
+      );
+    }
+
+    const imgCandidates = [
+      tile.querySelector("img.sc-product-image"),
+      tile.querySelector("img.s-image"),
+      tile.querySelector("img[data-a-dynamic-image]"),
+      tile.querySelector("img[data-src]"),
+      tile.querySelector("img[data-srcset]"),
+      tile.querySelector("img[srcset]"),
+      tile.querySelector("img[data-image-latency]"),
+      ...Array.from(tile.querySelectorAll("img")).slice(0, 8),
+    ].filter(Boolean);
     let image = "";
-    if (imgEl) {
-      image = imgEl.getAttribute("src") || "";
-      // Skip placeholder data: URIs and Amazon's tiny gif spinners.
-      if (image.startsWith("data:") || image.includes("loadIndicators")) image = "";
+    for (const img of imgCandidates) {
+      image = getImageUrlFromImg(img);
+      if (image) break;
     }
 
     // Price: .a-offscreen is the screen-reader text (full formatted price);
@@ -292,22 +539,37 @@
   function buildItemForClick(btn) {
     const asin = findAsinFromButton(btn);
     if (asin) {
+      const quantity = getQuantityFromAtcButton(btn);
+      const buttonTitle = getTitleFromAtcButton(btn);
       const tile = findTileForAsin(asin, btn);
       if (tile) {
         const fromTile = buildItemFromTile(tile, asin);
-        if (fromTile) return fromTile;
+        if (fromTile) {
+          if (
+            buttonTitle &&
+            (
+              !fromTile.title ||
+              fromTile.title === "(untitled)" ||
+              /^customers also bought$/i.test(fromTile.title)
+            )
+          ) {
+            fromTile.title = buttonTitle;
+          }
+          return Object.assign(fromTile, { quantity });
+        }
       }
       // Minimal fallback — we know the ASIN but couldn't enrich.
       return {
         asin: asin.toUpperCase(),
-        title: "(item)",
-        quantity: 1,
+        title: buttonTitle || "(item)",
+        quantity,
         price: "",
         image: "",
         url: `https://${location.hostname}/dp/${asin}`,
       };
     }
-    if (isProductPage()) return buildItemFromProductPage();
+    const pageItem = buildItemFromProductPage();
+    if (pageItem) return pageItem;
     return null;
   }
 
@@ -342,6 +604,20 @@
     "button[aria-label^='Add to cart' i]",
     "a[aria-label^='Add to cart' i]",
     "input[aria-label^='Add to cart' i]",
+    // Gift/customization iframe flow. The final post-customization ATC is
+    // a Mantine button inside /customization/form, not a normal Amazon
+    // submit input.
+    "button[data-testid='gc-add-to-cart-button' i]",
+    "[role='button'][data-testid='gc-add-to-cart-button' i]",
+    // Cart / saved-for-later surfaces. Amazon renders "Move to cart" as
+    // a submit input with data-action or a generated submit.move-to-cart.*
+    // name rather than the normal add-to-cart names.
+    "input[data-action='move-to-cart' i]",
+    "button[data-action='move-to-cart' i]",
+    "input[name^='submit.move-to-cart.' i]",
+    "button[name^='submit.move-to-cart.' i]",
+    "input[aria-label^='Move to cart' i]",
+    "button[aria-label^='Move to cart' i]",
   ];
 
   /**
@@ -354,7 +630,8 @@
     // closest() with multiple selectors as one comma-separated string.
     const combined = ATC_SELECTORS.join(",");
     try {
-      return target.closest(combined);
+      const hit = target.closest(combined);
+      if (hit) return hit;
     } catch (_e) {
       // Fall back to per-selector iteration if combined parses badly
       // in some browser engine variant.
@@ -364,8 +641,22 @@
           if (hit) return hit;
         } catch (_inner) { /* skip */ }
       }
-      return null;
     }
+    const candidate = target.closest("button, a, input, [role='button']");
+    if (!candidate) return null;
+    const text = (
+      candidate.innerText ||
+      candidate.value ||
+      candidate.getAttribute("aria-label") ||
+      candidate.textContent ||
+      ""
+    ).toLowerCase();
+    const looksAtc =
+      text.includes("add to cart") ||
+      text.includes("add to basket") ||
+      text.includes("move to cart") ||
+      text.includes("move to basket");
+    return looksAtc ? candidate : null;
   }
 
   function watchAtcClicks() {
@@ -374,12 +665,12 @@
       (e) => {
         const btn = findAtcButton(e.target);
         if (!btn) return;
-        const asin = getAsinFromPage();
-        if (!asin) return;
+        const item = buildItemForClick(btn);
+        if (!item || !item.asin) return;
         send({
           type: "MC_OBSERVE_ATC",
-          asin,
-          title: getProductTitle(),
+          asin: item.asin,
+          title: item.title || getProductTitle(),
           host: location.hostname,
         });
       },
@@ -477,6 +768,8 @@
         const looksAtc =
           text.indexOf("add to cart") >= 0 ||
           text.indexOf("add to basket") >= 0 ||
+          text.indexOf("move to cart") >= 0 ||
+          text.indexOf("move to basket") >= 0 ||
           text.indexOf("buy now") >= 0;
         if (!looksAtc) return;
         const matchedBySelectors = !!findAtcButton(e.target);
