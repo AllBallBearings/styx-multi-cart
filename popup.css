@@ -524,8 +524,8 @@ body {
 
 .mc-thumb-remove {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 0;
+  right: 0;
   width: 16px;
   height: 16px;
   padding: 0;
@@ -550,8 +550,8 @@ body {
 
 .mc-thumb-qty {
   position: absolute;
-  bottom: 2px;
-  left: 2px;
+  bottom: 0;
+  left: 0;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
