@@ -187,6 +187,17 @@ function buildInitScript(initial) {
             return;
           }
 
+          case "MC_UPDATE_ITEM_QUANTITY": {
+            const c = store[STORAGE_KEY].find((c) => c.id === message.id);
+            if (!c) { respond({ ok: false, error: "not found" }); return; }
+            const item = (c.items || []).find((it) => it.asin === message.asin);
+            if (!item) { respond({ ok: false, error: "item not found" }); return; }
+            const qty = Math.max(1, Math.min(99, Number(message.quantity) || 1));
+            item.quantity = qty;
+            respond({ ok: true, quantity: qty });
+            return;
+          }
+
           case "MC_RESTORE_CART": {
             const c = store[STORAGE_KEY].find((c) => c.id === message.id);
             if (!c) { respond({ ok: false, error: "not found" }); return; }

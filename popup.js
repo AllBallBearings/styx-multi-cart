@@ -33,6 +33,8 @@
   const $moveList = $moveModal.querySelector(".mc-move-list");
   const $moveThumb = $moveModal.querySelector(".mc-move-thumb");
   const $moveItemName = $moveModal.querySelector(".mc-move-item-name");
+  const $qtyPop = document.getElementById("mc-qty-pop");
+  const $qtyPopVal = $qtyPop.querySelector(".mc-qty-pop-val");
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
   const $createNew = document.getElementById("mc-create-new");
   const $themeToggle = document.getElementById("mc-theme-toggle");
@@ -357,32 +359,107 @@
     );
   }
 
+  // How many tiles show before the strip collapses behind a "+N more" toggle.
+  const THUMB_CAP = 6;
+  // Cart ids whose thumbnail strip is currently expanded past the cap.
+  const expandedThumbs = new Set();
+
+  // Build one interactive item tile. On editable carts the tile carries the
+  // controls the old Edit panel used to: an X to remove, a quantity badge
+  // that opens the +/- popover, and click-the-picture to move the item.
+  function makeThumbTile(item, locked) {
+    const tile = document.createElement("div");
+    tile.className = "mc-thumb";
+    tile.dataset.asin = item.asin || "";
+    tile.title = item.title || item.asin || "";
+
+    if (isUsableThumb(item.image)) {
+      const img = document.createElement("img");
+      img.className = "mc-thumb-img";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.src = item.image;
+      img.alt = "";
+      // If Amazon's CDN refuses the URL, fall back to the title placeholder.
+      img.onerror = () => {
+        img.remove();
+        tile.classList.add("mc-thumb-noimg");
+      };
+      tile.appendChild(img);
+    } else {
+      tile.classList.add("mc-thumb-noimg");
+    }
+
+    const ph = document.createElement("span");
+    ph.className = "mc-thumb-ph";
+    ph.setAttribute("aria-hidden", "true");
+    ph.textContent = (item.title || item.asin || "?").slice(0, 16);
+    tile.appendChild(ph);
+
+    if (locked) {
+      // Read-only carts: no controls, but keep the count visible.
+      const qty = document.createElement("span");
+      qty.className = "mc-thumb-qty mc-thumb-qty-static";
+      qty.textContent = String(item.quantity || 1);
+      tile.appendChild(qty);
+      return tile;
+    }
+
+    // The tile body is the "move" affordance.
+    tile.dataset.action = "thumb-move";
+    tile.setAttribute("role", "button");
+    tile.tabIndex = 0;
+    tile.setAttribute(
+      "aria-label",
+      `${item.title || item.asin || "Item"} — click to move to another cart`
+    );
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "mc-thumb-remove";
+    remove.dataset.action = "thumb-remove";
+    remove.title = "Remove item";
+    remove.setAttribute("aria-label", `Remove ${item.title || item.asin || "item"}`);
+    remove.textContent = "×";
+    tile.appendChild(remove);
+
+    const qty = document.createElement("button");
+    qty.type = "button";
+    qty.className = "mc-thumb-qty";
+    qty.dataset.action = "thumb-qty";
+    qty.title = "Change quantity";
+    qty.setAttribute("aria-label", `Quantity ${item.quantity || 1}, click to change`);
+    qty.textContent = String(item.quantity || 1);
+    tile.appendChild(qty);
+
+    return tile;
+  }
+
   function renderCartThumbs(thumbs, cart) {
     if (!thumbs) return;
     thumbs.innerHTML = "";
-    // Show up to six actual thumbnails, not merely thumbnails from the
-    // first six items. Older carts can contain image-less rows, and those
-    // should not hide later items that do have usable images.
-    const thumbItems = (cart.items || [])
-      .filter((it) => it && isUsableThumb(it.image))
-      .slice(0, 6);
-    for (const it of thumbItems) {
-      const img = document.createElement("img");
-      img.className = "mc-item-thumb";
-      img.loading = "lazy";
-      img.referrerPolicy = "no-referrer";
-      img.src = it.image;
-      img.alt = "";
-      img.title = it.title || "";
-      // If Amazon's CDN refuses the URL or it 404s, drop the element so
-      // the placeholder doesn't sit there forever.
-      img.onerror = () => img.remove();
-      thumbs.appendChild(img);
+    const items = cart.items || [];
+    if (items.length === 0) return;
+    const locked = cart.access === "readonly";
+    const overflow = items.length > THUMB_CAP;
+    const expanded = expandedThumbs.has(cart.id);
+    const shown = !overflow || expanded ? items.length : THUMB_CAP;
+
+    for (let i = 0; i < shown; i++) {
+      thumbs.appendChild(makeThumbTile(items[i], locked));
     }
-    if (cart.items.length > 6) {
-      const more = document.createElement("div");
+    if (overflow) {
+      const more = document.createElement("button");
+      more.type = "button";
       more.className = "mc-item-thumb-more";
-      more.textContent = `+${cart.items.length - 6}`;
+      more.dataset.action = "thumb-more";
+      if (expanded) {
+        more.textContent = "Show less";
+        more.setAttribute("aria-label", "Show fewer items");
+      } else {
+        more.textContent = `+${items.length - THUMB_CAP}`;
+        more.setAttribute("aria-label", `Show ${items.length - THUMB_CAP} more items`);
+      }
       thumbs.appendChild(more);
     }
   }
@@ -447,13 +524,11 @@
     // setting `disabled` ensures keyboard / screen-reader users see the
     // locked state, and the delegated click handlers below skip them.
     if (isLocked) {
-      ["restore", "edit"].forEach((act) => {
-        const btn = node.querySelector(`button[data-action="${act}"]`);
-        if (btn) {
-          btn.setAttribute("disabled", "");
-          btn.setAttribute("title", "Locked — renew Premium to use this cart");
-        }
-      });
+      const btn = node.querySelector('button[data-action="restore"]');
+      if (btn) {
+        btn.setAttribute("disabled", "");
+        btn.setAttribute("title", "Locked — renew Premium to use this cart");
+      }
     }
 
     return node;
@@ -557,44 +632,7 @@
     $lapsedSuffix.textContent = locked === 1 ? " cart is read-only" : " carts are read-only";
   }
 
-  // ---- Edit panel --------------------------------------------------------
-
-  const $editRowTemplate = document.getElementById("mc-edit-row-template");
-
-  function renderEditPanel(li, cart) {
-    const panel = li.querySelector(".mc-item-edit");
-    const list = panel.querySelector(".mc-edit-list");
-    list.innerHTML = "";
-    (cart.items || []).forEach((item) => {
-      const row = $editRowTemplate.content.firstElementChild.cloneNode(true);
-      row.dataset.asin = item.asin || "";
-
-      const img = row.querySelector(".mc-edit-thumb");
-      if (isUsableThumb(item.image)) {
-        img.src = item.image;
-        img.onerror = () => { img.style.visibility = "hidden"; };
-      } else {
-        img.style.visibility = "hidden";
-      }
-
-      row.querySelector(".mc-edit-title").textContent = item.title || "(untitled)";
-      row.querySelector(".mc-edit-asin").textContent = item.asin || "";
-      row.querySelector(".mc-qty-input").value = String(item.quantity || 1);
-
-      list.appendChild(row);
-    });
-  }
-
-  function setEditOpen(li, open) {
-    const panel = li.querySelector(".mc-item-edit");
-    const btn = li.querySelector('button[data-action="edit"]');
-    panel.hidden = !open;
-    li.classList.toggle("mc-item-editing", open);
-    if (btn) {
-      btn.textContent = open ? "Done" : "Edit";
-      btn.setAttribute("aria-expanded", open ? "true" : "false");
-    }
-  }
+  // ---- Item tile helpers -------------------------------------------------
 
   function updateRowSummary(li, cart) {
     const totalQty = (cart.items || []).reduce((n, it) => n + (it.quantity || 1), 0);
@@ -999,21 +1037,26 @@
       return;
     }
     closeMoveModal();
+    closeQtyPop();
     const where = (target && target.name) || res.targetName || "cart";
     toast(`Moved "${res.itemTitle}" to "${where}".`);
-    // Refresh so both carts reflect the move, then re-open the source cart's
-    // edit panel (unless the move emptied — and therefore deleted — it).
+    // Refresh so both the source and destination carts reflect the move.
     await refresh();
-    if (res.sourceDeleted) return;
-    const li = $list.querySelector(`li.mc-item[data-id="${CSS.escape(sourceId)}"]`);
-    if (!li) return;
-    const cart = cartCache.get(sourceId);
-    if (!cart) return;
-    renderEditPanel(li, cart);
-    setEditOpen(li, true);
   }
 
-  // ---- Delegated handlers for the edit panel -----------------------------
+  // ---- Item tile actions -------------------------------------------------
+
+  // Reflect a quantity change on the tile badge (and the live popover, if it
+  // happens to be open for this same item).
+  function updateQtyBadge(li, asin, qty) {
+    const badge = li.querySelector(
+      `.mc-thumb[data-asin="${CSS.escape(asin)}"] .mc-thumb-qty`
+    );
+    if (badge) badge.textContent = String(qty);
+    if (qtyPopCtx && qtyPopCtx.cartId === li.dataset.id && qtyPopCtx.asin === asin) {
+      $qtyPopVal.textContent = String(qty);
+    }
+  }
 
   async function applyQuantity(li, asin, nextQty) {
     const id = li.dataset.id;
@@ -1026,13 +1069,12 @@
     const prev = item.quantity;
     item.quantity = clamped;
     updateRowSummary(li, cart);
-    const input = li.querySelector(`.mc-edit-row[data-asin="${CSS.escape(asin)}"] .mc-qty-input`);
-    if (input) input.value = String(clamped);
+    updateQtyBadge(li, asin, clamped);
     const res = await send({ type: "MC_UPDATE_ITEM_QUANTITY", id, asin, quantity: clamped });
     if (!res.ok) {
       item.quantity = prev;
       updateRowSummary(li, cart);
-      if (input) input.value = String(prev);
+      updateQtyBadge(li, asin, prev);
       if (!handleEntitlementError(res)) {
         toast(res.error || "Could not update quantity", "error");
       }
@@ -1046,17 +1088,23 @@
     const item = (cart.items || []).find((it) => it.asin === asin);
     if (!item) return;
     const itemName = item.title || asin;
-    const ok = await confirmDialog({
-      title: "Remove item?",
-      emphasis: {
-        before: "Remove ",
-        text: itemName,
-        after: " from this cart?",
-      },
-      okLabel: "Remove",
-      destructive: true,
-    });
-    if (!ok) return;
+    // Removing the cart's last item deletes the cart itself — confirm that
+    // case only. Ordinary removals are instant (per the X-on-a-tile model).
+    const isLast = (cart.items || []).length <= 1;
+    if (isLast) {
+      const ok = await confirmDialog({
+        title: "Remove last item?",
+        emphasis: {
+          before: "Removing ",
+          text: itemName,
+          after: " empties and deletes this cart.",
+        },
+        okLabel: "Remove & delete",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    closeQtyPop();
     const res = await send({ type: "MC_REMOVE_ITEM_FROM_CART", id, asin });
     if (!res.ok) {
       if (!handleEntitlementError(res)) {
@@ -1072,13 +1120,76 @@
     cart.items = cart.items.filter((it) => it.asin !== asin);
     updateRowSummary(li, cart);
     renderCartThumbs(li.querySelector(".mc-item-thumbs"), cart);
-    renderEditPanel(li, cart);
   }
+
+  // ---- Quantity popover --------------------------------------------------
+  //
+  // Clicking a tile's count badge opens a small −/+ popover anchored to it.
+  // It stays open across clicks so the user can tap several times; an outside
+  // click or Escape closes it.
+
+  let qtyPopCtx = null; // { cartId, asin } while open
+
+  function openQtyPop(anchorEl, cartId, asin) {
+    const cart = cartCache.get(cartId);
+    const item = cart && (cart.items || []).find((it) => it.asin === asin);
+    if (!item) return;
+    qtyPopCtx = { cartId, asin };
+    $qtyPopVal.textContent = String(item.quantity || 1);
+
+    // Reveal first so we can measure it, then anchor above the badge (or
+    // below if there's no room up top).
+    $qtyPop.hidden = false;
+    $qtyPop.style.left = "0px";
+    $qtyPop.style.top = "0px";
+    const a = anchorEl.getBoundingClientRect();
+    const p = $qtyPop.getBoundingClientRect();
+    let left = a.left + a.width / 2 - p.width / 2;
+    let top = a.top - p.height - 6;
+    if (top < 4) top = a.bottom + 6;
+    left = Math.max(4, Math.min(left, window.innerWidth - p.width - 4));
+    $qtyPop.style.left = `${left}px`;
+    $qtyPop.style.top = `${top}px`;
+  }
+
+  function closeQtyPop() {
+    if (!qtyPopCtx && $qtyPop.hidden) return;
+    $qtyPop.hidden = true;
+    qtyPopCtx = null;
+  }
+
+  $qtyPop.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn || !qtyPopCtx) return;
+    const { cartId, asin } = qtyPopCtx;
+    const li = $list.querySelector(`li.mc-item[data-id="${CSS.escape(cartId)}"]`);
+    const cart = cartCache.get(cartId);
+    const item = cart && (cart.items || []).find((it) => it.asin === asin);
+    if (!li || !item) return;
+    const cur = item.quantity || 1;
+    const next = btn.dataset.action === "qty-pop-inc" ? cur + 1 : cur - 1;
+    applyQuantity(li, asin, next);
+  });
+
+  // Outside-click closes the popover. Capture phase so it settles before the
+  // $list handler that may be (re)opening it from a badge click.
+  document.addEventListener(
+    "click",
+    (e) => {
+      if ($qtyPop.hidden) return;
+      if ($qtyPop.contains(e.target)) return;
+      // A click on a count badge re-opens/repositions; let that handler run.
+      if (e.target.closest('[data-action="thumb-qty"]')) return;
+      closeQtyPop();
+    },
+    true
+  );
+
+  // ---- Tile interactions (remove / quantity / move / expand) -------------
 
   $list.addEventListener("click", (e) => {
     // Combine mode swallows clicks on a row as selection toggles. We
-    // intentionally ignore the action buttons (restore/edit/etc) while
-    // in this mode — the user is picking carts, not operating on them.
+    // intentionally ignore item controls while picking carts.
     if (combineState.active) {
       const li = e.target.closest("li.mc-item");
       if (!li) return;
@@ -1088,40 +1199,49 @@
       return;
     }
 
-    const editBtn = e.target.closest(".mc-item-edit button[data-action]");
-    if (editBtn) {
-      const li = editBtn.closest("li.mc-item");
-      const row = editBtn.closest(".mc-edit-row");
-      if (!li || !row) return;
-      const asin = row.dataset.asin;
-      const action = editBtn.dataset.action;
-      if (action === "qty-inc" || action === "qty-dec") {
-        const input = row.querySelector(".mc-qty-input");
-        const current = Number(input.value) || 1;
-        applyQuantity(li, asin, action === "qty-inc" ? current + 1 : current - 1);
-      } else if (action === "item-remove") {
-        removeItem(li, asin);
-      } else if (action === "move-item") {
-        openMoveModal(li, asin);
-      }
+    const hit = e.target.closest(".mc-item-thumbs [data-action]");
+    if (!hit) return;
+    const li = hit.closest("li.mc-item");
+    if (!li) return;
+    const action = hit.dataset.action;
+
+    if (action === "thumb-more") {
+      const id = li.dataset.id;
+      if (expandedThumbs.has(id)) expandedThumbs.delete(id);
+      else expandedThumbs.add(id);
+      const cart = cartCache.get(id);
+      if (cart) renderCartThumbs(li.querySelector(".mc-item-thumbs"), cart);
       return;
+    }
+
+    const tile = hit.closest(".mc-thumb");
+    const asin = tile ? tile.dataset.asin : hit.dataset.asin;
+    if (action === "thumb-remove") {
+      removeItem(li, asin);
+    } else if (action === "thumb-qty") {
+      openQtyPop(hit, li.dataset.id, asin);
+    } else if (action === "thumb-move") {
+      openMoveModal(li, asin);
     }
   });
 
-  $list.addEventListener("change", (e) => {
-    const input = e.target.closest(".mc-edit-row .mc-qty-input");
-    if (!input) return;
-    const li = input.closest("li.mc-item");
-    const row = input.closest(".mc-edit-row");
-    if (!li || !row) return;
-    applyQuantity(li, row.dataset.asin, Number(input.value));
+  // Keyboard activation for the move tile (role="button"). Only the tile
+  // itself activates — the inner X / quantity buttons handle their own keys.
+  $list.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const tile = e.target;
+    if (!(tile.classList && tile.classList.contains("mc-thumb"))) return;
+    if (tile.dataset.action !== "thumb-move") return;
+    e.preventDefault();
+    const li = tile.closest("li.mc-item");
+    if (li) openMoveModal(li, tile.dataset.asin);
   });
 
   // Delegated handler for per-cart actions.
   $list.addEventListener("click", async (e) => {
-    // Edit-panel buttons handled by the dedicated listener above; skip here
-    // so we don't double-fire.
-    if (e.target.closest(".mc-item-edit")) return;
+    // Item-tile controls are handled by the dedicated listener above; skip
+    // here so we don't double-fire on their data-action buttons.
+    if (e.target.closest(".mc-item-thumbs")) return;
     const button = e.target.closest("button[data-action]");
     if (!button) return;
     const li = button.closest("li.mc-item");
@@ -1179,13 +1299,6 @@
           toast(res.error || "Could not rename", "error");
         }
       });
-    } else if (action === "edit") {
-      const cart = cartCache.get(id);
-      if (!cart) return;
-      const panel = li.querySelector(".mc-item-edit");
-      const willOpen = panel.hidden;
-      if (willOpen) renderEditPanel(li, cart);
-      setEditOpen(li, willOpen);
     } else if (action === "delete") {
       const current = li.querySelector(".mc-item-name").textContent;
       const ok = await confirmDialog({
@@ -1280,6 +1393,10 @@
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    if (!$qtyPop.hidden) {
+      closeQtyPop();
+      return;
+    }
     if (!$paywallModal.hidden) {
       closePaywall();
       return;
