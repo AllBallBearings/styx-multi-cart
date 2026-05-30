@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Styx Multi-Cart",
-  "version": "0.9.8",
+  "version": "0.9.10",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
   "description": "Save, switch, and restore multiple Amazon shopping carts. Local-only storage, no tracking, no account required.",

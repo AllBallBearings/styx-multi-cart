@@ -112,7 +112,7 @@ function buildInitScript(initial) {
               id: makeId(),
               name: String(message.name || "Untitled"),
               savedAt: new Date().toISOString(),
-              host: "www.amazon.com",
+              host: String(message.host || "www.amazon.com"),
               items: [],
             };
             store[STORAGE_KEY].push(cart);
@@ -149,6 +149,52 @@ function buildInitScript(initial) {
               return;
             }
             respond({ ok: true, remaining: c.items.length });
+            return;
+          }
+
+          case "MC_MOVE_ITEM_BETWEEN_CARTS": {
+            const source = store[STORAGE_KEY].find((c) => c.id === message.sourceId);
+            const target = store[STORAGE_KEY].find((c) => c.id === message.targetId);
+            if (!source || !target) { respond({ ok: false, error: "not found" }); return; }
+            const moving = (source.items || []).find((it) => it.asin === message.asin);
+            if (!moving) { respond({ ok: false, error: "item not found" }); return; }
+            source.items = (source.items || []).filter((it) => it.asin !== message.asin);
+            target.items = Array.isArray(target.items) ? target.items : [];
+            const existing = target.items.find((it) => it.asin === moving.asin);
+            let action;
+            if (existing) {
+              existing.quantity = Math.max(Number(existing.quantity) || 1, Number(moving.quantity) || 1);
+              action = "merged";
+            } else {
+              target.items.unshift(Object.assign({}, moving));
+              action = "added";
+            }
+            let sourceDeleted = false;
+            if (source.items.length === 0) {
+              const idx = store[STORAGE_KEY].findIndex((c) => c.id === source.id);
+              if (idx >= 0) store[STORAGE_KEY].splice(idx, 1);
+              sourceDeleted = true;
+            }
+            respond({
+              ok: true,
+              action,
+              sourceDeleted,
+              sourceName: source.name,
+              targetName: target.name,
+              itemTitle: moving.title || moving.asin,
+              targetCount: target.items.length,
+            });
+            return;
+          }
+
+          case "MC_UPDATE_ITEM_QUANTITY": {
+            const c = store[STORAGE_KEY].find((c) => c.id === message.id);
+            if (!c) { respond({ ok: false, error: "not found" }); return; }
+            const item = (c.items || []).find((it) => it.asin === message.asin);
+            if (!item) { respond({ ok: false, error: "item not found" }); return; }
+            const qty = Math.max(1, Math.min(99, Number(message.quantity) || 1));
+            item.quantity = qty;
+            respond({ ok: true, quantity: qty });
             return;
           }
 

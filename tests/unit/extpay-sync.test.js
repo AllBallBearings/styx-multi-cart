@@ -80,6 +80,61 @@ describe("extpayUserToEntitlementPatch", () => {
     expect(patch).toEqual({ lastChecked: NOW });
   });
 
+  it("not paid + active dev grant (source 'dev') → leave premium intact", () => {
+    const current = {
+      tier: "premium",
+      premiumUntil: NOW + 60 * DAY,
+      source: "dev",
+      lastChecked: NOW - DAY,
+    };
+    const patch = extpayUserToEntitlementPatch({ paid: false }, current, NOW);
+    expect(patch).toEqual({ lastChecked: NOW });
+  });
+
+  it("not paid + active grant with no recorded source (legacy dev-set) → intact", () => {
+    const current = {
+      tier: "premium",
+      premiumUntil: NOW + 60 * DAY,
+      source: null,
+      lastChecked: NOW - DAY,
+    };
+    const patch = extpayUserToEntitlementPatch({ paid: false }, current, NOW);
+    expect(patch).toEqual({ lastChecked: NOW });
+  });
+
+  it("not paid + active extensionpay grace window → leave premium intact", () => {
+    const current = {
+      tier: "premium",
+      premiumUntil: NOW + 14 * DAY,
+      source: "extensionpay",
+      autoRenew: true,
+      lastChecked: NOW - DAY,
+    };
+    const patch = extpayUserToEntitlementPatch({ paid: false }, current, NOW);
+    expect(patch).toEqual({ lastChecked: NOW });
+  });
+
+  it("paid + active longer dev grant → premiumUntil takes MAX as floor", () => {
+    const devUntil = NOW + 200 * DAY;
+    const current = { tier: "premium", premiumUntil: devUntil, source: "dev" };
+    const patch = extpayUserToEntitlementPatch({ paid: true }, current, NOW);
+    expect(patch.source).toBe("extensionpay");
+    expect(patch.premiumUntil).toBe(devUntil);
+  });
+
+  it("paid + active longer extensionpay window → does not shorten it", () => {
+    const currentUntil = NOW + 60 * DAY;
+    const current = {
+      tier: "premium",
+      premiumUntil: currentUntil,
+      source: "extensionpay",
+      autoRenew: true,
+    };
+    const patch = extpayUserToEntitlementPatch({ paid: true }, current, NOW);
+    expect(patch.source).toBe("extensionpay");
+    expect(patch.premiumUntil).toBe(currentUntil);
+  });
+
   it("not paid + expired promo grant → free tier", () => {
     const current = {
       tier: "premium",

@@ -79,11 +79,10 @@ test.describe("popup — saving carts", () => {
   test("Create new adds an empty cart row", async ({ popup }) => {
     const page = await popup({ carts: [] });
 
-    // popup.js prompts for a name via window.prompt — stub it.
-    await page.evaluate(() => {
-      window.prompt = () => "Empty Cart Test";
-    });
     await page.locator("#mc-create-new").click();
+    await expect(page.locator("#mc-prompt-title")).toHaveText("Create a new cart");
+    await page.locator("#mc-prompt-input").fill("Empty Cart Test");
+    await page.locator("#mc-prompt-ok").click();
 
     await expect(page.locator("#mc-list .mc-item")).toHaveCount(1);
     await expect(page.locator("#mc-list .mc-item-name").first()).toHaveText(
@@ -151,7 +150,7 @@ test.describe("popup — managing existing carts", () => {
     ).toHaveText("Switch to This Cart");
   });
 
-  test("thumbnail strip skips image-less rows and shows later usable thumbnails", async ({
+  test("renders one tile per item (placeholders included), capped behind a +N toggle", async ({
     popup,
   }) => {
     const page = await popup({
@@ -175,8 +174,17 @@ test.describe("popup — managing existing carts", () => {
     });
 
     const cart = page.locator('#mc-list .mc-item:has-text("Late Image")');
-    await expect(cart.locator(".mc-item-thumb")).toHaveCount(1);
-    await expect(cart.locator(".mc-item-thumb")).toHaveAttribute("title", "Has Image 7");
+    // 7 items, cap 6 → 6 tiles plus a "+1" toggle. Image-less items still get
+    // a (placeholder) tile so they remain manageable.
+    await expect(cart.locator(".mc-thumb")).toHaveCount(6);
+    await expect(cart.locator(".mc-thumb.mc-thumb-noimg").first()).toBeVisible();
+    const more = cart.locator(".mc-item-thumb-more");
+    await expect(more).toHaveText("+1");
+
+    // Expanding reveals every item and flips the toggle label.
+    await more.click();
+    await expect(cart.locator(".mc-thumb")).toHaveCount(7);
+    await expect(cart.locator(".mc-item-thumb-more")).toHaveText("Show less");
   });
 
   test("switch cart confirmation explains that the Amazon cart is replaced", async ({
@@ -204,13 +212,13 @@ test.describe("popup — managing existing carts", () => {
   }) => {
     const page = await popup({ carts: seedCarts });
 
-    await page.evaluate(() => {
-      window.prompt = () => "Cart A Renamed";
-    });
     // The .mc-item-name button is data-action="rename" — clicking it triggers rename.
     await page
       .locator('#mc-list .mc-item:has-text("Cart A") [data-action="rename"]')
       .click();
+    await expect(page.locator("#mc-prompt-title")).toHaveText("Rename cart");
+    await page.locator("#mc-prompt-input").fill("Cart A Renamed");
+    await page.locator("#mc-prompt-ok").click();
 
     await expect(
       page.locator("#mc-list .mc-item-name").first()
@@ -226,13 +234,11 @@ test.describe("popup — managing existing carts", () => {
   }) => {
     const page = await popup({ carts: seedCarts });
 
-    // popup.js uses window.confirm to gate deletion.
-    await page.evaluate(() => {
-      window.confirm = () => true;
-    });
     await page
       .locator('#mc-list .mc-item:has-text("Cart A") [data-action="delete"]')
       .click();
+    await expect(page.locator("#mc-confirm-title")).toHaveText("Delete saved cart?");
+    await page.locator("#mc-confirm-ok").click();
 
     await expect(page.locator("#mc-list .mc-item")).toHaveCount(1);
     await expect(page.locator("#mc-list .mc-item-name").first()).toHaveText(
@@ -261,7 +267,7 @@ test.describe("popup — managing existing carts", () => {
     expect(log.some((m) => m.type === "MC_DELETE_CART")).toBe(false);
   });
 
-  test("removing an item refreshes the cart thumbnail strip", async ({ popup }) => {
+  test("the tile X removes an item instantly (no confirm) when others remain", async ({ popup }) => {
     const page = await popup({
       carts: [
         {
@@ -278,16 +284,236 @@ test.describe("popup — managing existing carts", () => {
     });
 
     const cart = page.locator('#mc-list .mc-item:has-text("Cart Images")');
-    await expect(cart.locator(".mc-item-thumb")).toHaveCount(2);
+    await expect(cart.locator(".mc-thumb")).toHaveCount(2);
 
-    await cart.locator('[data-action="edit"]').click();
-    await cart.locator('.mc-edit-row[data-asin="BIMG1"] [data-action="item-remove"]').click();
-    await expect(page.locator("#mc-confirm-body .mc-confirm-emphasis")).toHaveText("First Image");
+    await cart.locator('.mc-thumb[data-asin="BIMG1"] [data-action="thumb-remove"]').click();
+
+    // No confirmation gate for a non-final item.
+    await expect(page.locator("#mc-confirm-modal")).toBeHidden();
+    await expect(cart.locator(".mc-item-count")).toContainText("1 item");
+    await expect(cart.locator(".mc-thumb")).toHaveCount(1);
+    await expect(cart.locator('.mc-thumb[data-asin="BIMG2"]')).toHaveCount(1);
+  });
+
+  test("removing the last item confirms first, then deletes the cart", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-solo",
+          name: "Solo Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BSOLO", title: "Lone Item", quantity: 1, price: "", image: "", url: "" },
+          ],
+        },
+      ],
+    });
+
+    const cart = page.locator('#mc-list .mc-item:has-text("Solo Cart")');
+    await cart.locator('.mc-thumb[data-asin="BSOLO"] [data-action="thumb-remove"]').click();
+
+    await expect(page.locator("#mc-confirm-title")).toHaveText("Remove last item?");
     await page.locator("#mc-confirm-ok").click();
 
-    await expect(cart.locator(".mc-item-count")).toContainText("1 item");
-    await expect(cart.locator(".mc-item-thumb")).toHaveCount(1);
-    await expect(cart.locator(".mc-item-thumb")).toHaveAttribute("title", "Second Image");
+    await expect(page.locator("#mc-list .mc-item")).toHaveCount(0);
+  });
+
+  test("the count badge popover adjusts an item's quantity", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-qty",
+          name: "Qty Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BQTY1", title: "Counter", quantity: 1, price: "", image: "icons/icon16.png", url: "" },
+          ],
+        },
+      ],
+    });
+
+    const cart = page.locator('#mc-list .mc-item:has-text("Qty Cart")');
+    const badge = cart.locator('.mc-thumb[data-asin="BQTY1"] .mc-thumb-qty');
+    await expect(badge).toHaveText("1");
+
+    await badge.click();
+    await expect(page.locator("#mc-qty-pop")).toBeVisible();
+    await page.locator('#mc-qty-pop [data-action="qty-pop-inc"]').click();
+    await page.locator('#mc-qty-pop [data-action="qty-pop-inc"]').click();
+
+    await expect(badge).toHaveText("3");
+    await expect(cart.locator(".mc-item-count")).toContainText("3 qty");
+
+    const log = await page.evaluate(() => window.__mcMessageLog);
+    expect(log.some((m) => m.type === "MC_UPDATE_ITEM_QUANTITY" && m.quantity === 3)).toBe(true);
+  });
+});
+
+test.describe("popup — moving items between carts", () => {
+  const twoCarts = () => ({
+    carts: [
+      {
+        id: "cart-src",
+        name: "Source Cart",
+        savedAt: new Date().toISOString(),
+        host: "www.amazon.com",
+        items: [
+          { asin: "BMOVE1", title: "Movable Item", quantity: 1, price: "", image: "icons/icon16.png", url: "" },
+          { asin: "BMOVE2", title: "Stays Put", quantity: 1, price: "", image: "icons/icon32.png", url: "" },
+        ],
+      },
+      {
+        id: "cart-dst",
+        name: "Dest Cart",
+        savedAt: new Date().toISOString(),
+        host: "www.amazon.com",
+        items: [],
+      },
+    ],
+  });
+
+  test("clicking an item thumbnail opens the move modal listing other carts", async ({ popup }) => {
+    const page = await popup(twoCarts());
+    const cart = page.locator('#mc-list .mc-item:has-text("Source Cart")');
+
+    await cart.locator('.mc-thumb[data-asin="BMOVE1"]').click();
+
+    await expect(page.locator("#mc-move-modal")).toBeVisible();
+    await expect(page.locator("#mc-move-modal .mc-move-item-name")).toHaveText("Movable Item");
+    // Only the OTHER cart is offered as a destination.
+    const opts = page.locator("#mc-move-modal .mc-move-option");
+    await expect(opts).toHaveCount(1);
+    await expect(opts.first().locator(".mc-move-option-name")).toHaveText("Dest Cart");
+  });
+
+  test("move modal expands for several destinations and scrolls the rest", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-src",
+          name: "Source Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BMOVE1", title: "Movable Item", quantity: 1, price: "", image: "icons/icon16.png", url: "" },
+          ],
+        },
+        ...Array.from({ length: 5 }, (_, i) => ({
+          id: `cart-dst-${i + 1}`,
+          name: `Dest Cart ${i + 1}`,
+          savedAt: new Date().toISOString(),
+          // Hostless legacy carts should be treated like the default US cart.
+          host: i === 0 ? undefined : "www.amazon.com",
+          items: [],
+        })),
+      ],
+    });
+    const cart = page.locator('#mc-list .mc-item:has-text("Source Cart")');
+
+    await cart.locator('.mc-thumb[data-asin="BMOVE1"]').click();
+
+    const opts = page.locator("#mc-move-modal .mc-move-option");
+    await expect(opts).toHaveCount(5);
+    await expect(page.locator("body")).toHaveClass(/mc-move-modal-open/);
+    await expect(page.locator("#mc-move-modal .mc-move-list")).toHaveClass(
+      /mc-move-list-scrollable/
+    );
+
+    const metrics = await page.locator("#mc-move-modal .mc-move-list").evaluate((el) => ({
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+    }));
+    expect(metrics.clientHeight).toBeGreaterThanOrEqual(168);
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  });
+
+  test("picking a destination moves the item and updates both carts", async ({ popup }) => {
+    const page = await popup(twoCarts());
+    const src = page.locator('#mc-list .mc-item:has-text("Source Cart")');
+    const dst = page.locator('#mc-list .mc-item:has-text("Dest Cart")');
+
+    await src.locator('.mc-thumb[data-asin="BMOVE1"]').click();
+    await page.locator('#mc-move-modal .mc-move-option[data-target-id="cart-dst"]').click();
+
+    // Modal closes, the right message went out.
+    await expect(page.locator("#mc-move-modal")).toBeHidden();
+    const log = await page.evaluate(() => window.__mcMessageLog);
+    const move = log.find((m) => m.type === "MC_MOVE_ITEM_BETWEEN_CARTS");
+    expect(move).toMatchObject({ sourceId: "cart-src", targetId: "cart-dst", asin: "BMOVE1" });
+
+    // Source loses the item, destination gains it.
+    await expect(src.locator(".mc-item-count")).toContainText("1 item");
+    await expect(dst.locator(".mc-item-count")).toContainText("1 item");
+    await expect(src.locator('.mc-thumb[data-asin="BMOVE1"]')).toHaveCount(0);
+  });
+
+  test("creating a destination from the move modal creates a same-host cart and moves the item", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-src",
+          name: "Source Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.co.uk",
+          items: [
+            { asin: "BMOVE1", title: "Movable Item", quantity: 1, price: "", image: "icons/icon16.png", url: "" },
+            { asin: "BMOVE2", title: "Stays Put", quantity: 1, price: "", image: "icons/icon32.png", url: "" },
+          ],
+        },
+      ],
+    });
+
+    await page.locator('#mc-list .mc-item:has-text("Source Cart") .mc-thumb[data-asin="BMOVE1"]').click();
+    await page.locator('#mc-move-modal [data-action="move-create"]').click();
+    await expect(page.locator("#mc-prompt-title")).toHaveText("Create destination cart");
+    await page.locator("#mc-prompt-input").fill("New UK Cart");
+    await page.locator("#mc-prompt-ok").click();
+
+    await expect(page.locator("#mc-move-modal")).toBeHidden();
+    await expect(page.locator('#mc-list .mc-item:has-text("Source Cart") .mc-item-count')).toContainText("1 item");
+    await expect(page.locator('#mc-list .mc-item:has-text("New UK Cart") .mc-item-count')).toContainText("1 item");
+
+    const log = await page.evaluate(() => window.__mcMessageLog);
+    const create = log.find((m) => m.type === "MC_CREATE_EMPTY_CART");
+    expect(create).toMatchObject({ name: "New UK Cart", host: "www.amazon.co.uk" });
+    const createdCart = await page.evaluate(() =>
+      window.__mcTestState["mc.carts.v1"].find((c) => c.name === "New UK Cart")
+    );
+    const move = log.find((m) => m.type === "MC_MOVE_ITEM_BETWEEN_CARTS");
+    expect(move).toMatchObject({ sourceId: "cart-src", targetId: createdCart.id, asin: "BMOVE1" });
+  });
+
+  test("moving the last item out deletes the now-empty source cart", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-lonely",
+          name: "Lonely Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BONLY1", title: "Only Item", quantity: 1, price: "", image: "", url: "" },
+          ],
+        },
+        {
+          id: "cart-dst2",
+          name: "Other Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [],
+        },
+      ],
+    });
+
+    const src = page.locator('#mc-list .mc-item:has-text("Lonely Cart")');
+    await src.locator('.mc-thumb[data-asin="BONLY1"]').click();
+    await page.locator('#mc-move-modal .mc-move-option[data-target-id="cart-dst2"]').click();
+
+    await expect(page.locator('#mc-list .mc-item:has-text("Lonely Cart")')).toHaveCount(0);
+    await expect(page.locator("#mc-list .mc-item")).toHaveCount(1);
+    await expect(page.locator('#mc-list .mc-item:has-text("Other Cart") .mc-item-count')).toContainText("1 item");
   });
 });
 
@@ -353,10 +579,9 @@ test.describe("popup — clear cart", () => {
   test("Clear cart prompts and emits MC_CLEAR_CURRENT", async ({ popup }) => {
     const page = await popup({ carts: [] });
 
-    await page.evaluate(() => {
-      window.confirm = () => true;
-    });
     await page.locator("#mc-clear").click();
+    await expect(page.locator("#mc-confirm-title")).toHaveText("Clear Amazon cart?");
+    await page.locator("#mc-confirm-ok").click();
 
     // Wait until the popup actually fires the message — the click flow is async.
     await expect

@@ -102,6 +102,10 @@ body {
   background: var(--mc-bg);
 }
 
+body.mc-move-modal-open {
+  min-height: 560px;
+}
+
 .mc-header {
   display: flex;
   align-items: center;
@@ -465,22 +469,132 @@ body {
 
 .mc-item-thumbs {
   display: flex;
-  gap: 4px;
+  gap: 12px;
   flex-wrap: wrap;
+  /* Room for the corner badges, which straddle each tile's edge. */
+  padding: 8px;
 }
 
-.mc-item-thumb {
-  width: 44px;
-  height: 44px;
+/* Each item is an interactive tile: click the picture to move it, the X
+   (upper-right, straddling the corner) to remove it, the quantity badge
+   (lower-left, straddling the corner) to change count. */
+.mc-thumb {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
   border-radius: 6px;
   background: var(--mc-bg);
   border: 1px solid var(--mc-line);
+  /* Visible so the corner badges can hang half-off the tile. The image
+     rounds its own corners (below) since the tile no longer clips. */
+  overflow: visible;
+}
+
+.mc-thumb[data-action="thumb-move"] {
+  cursor: pointer;
+}
+
+.mc-thumb[data-action="thumb-move"]:hover {
+  border-color: var(--mc-accent);
+}
+
+.mc-thumb[data-action="thumb-move"]:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 1px;
+}
+
+.mc-thumb-img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  display: block;
+  border-radius: 6px;
+}
+
+/* Title fallback shown only when the item has no usable image. */
+.mc-thumb-ph {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 3px;
+  font-size: 9px;
+  line-height: 1.15;
+  color: var(--mc-fg-muted);
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.mc-thumb-noimg .mc-thumb-ph {
+  display: flex;
+}
+
+.mc-thumb-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--mc-line-strong);
+  border-radius: 50%;
+  background: rgba(15, 17, 21, 0.72);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mc-thumb-remove:hover,
+.mc-thumb-remove:focus-visible {
+  background: var(--mc-danger);
+  border-color: var(--mc-danger);
+  outline: none;
+}
+
+.mc-thumb-qty {
+  position: absolute;
+  bottom: -8px;
+  left: -8px;
+  z-index: 2;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--mc-line-strong);
+  border-radius: 8px;
+  background: rgba(15, 17, 21, 0.78);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button.mc-thumb-qty {
+  cursor: pointer;
+}
+
+button.mc-thumb-qty:hover,
+button.mc-thumb-qty:focus-visible {
+  background: var(--mc-accent);
+  color: var(--mc-accent-ink);
+  border-color: var(--mc-accent-strong);
+  outline: none;
 }
 
 .mc-item-thumb-more {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
   border-radius: 6px;
   background: var(--mc-bg);
   border: 1px solid var(--mc-line);
@@ -490,6 +604,17 @@ body {
   font-size: 11px;
   font-weight: 600;
   color: var(--mc-fg-muted);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  padding: 2px;
+}
+
+.mc-item-thumb-more:hover,
+.mc-item-thumb-more:focus-visible {
+  border-color: var(--mc-accent);
+  color: var(--mc-fg);
+  outline: none;
 }
 
 .mc-item-actions {
@@ -503,54 +628,81 @@ body {
   min-width: 0;
 }
 
-/* ---- Inline edit panel -------------------------------------------------- */
+/* ---- Quantity popover (anchored to a tile's count badge) --------------- */
 
-.mc-item-edit {
-  border-top: 1px solid var(--mc-line);
-  padding-top: 8px;
-  margin-top: 2px;
-}
-
-.mc-edit-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.mc-qty-pop {
+  position: fixed;
+  z-index: 1000;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.mc-edit-row {
-  display: grid;
-  grid-template-columns: 36px 1fr auto auto;
   align-items: center;
   gap: 8px;
+  padding: 4px 6px;
   background: var(--mc-bg);
-  border: 1px solid var(--mc-line);
-  border-radius: var(--mc-radius-sm);
-  padding: 6px 8px;
+  border: 1px solid var(--mc-line-strong);
+  border-radius: 999px;
+  box-shadow: var(--mc-shadow);
 }
 
-.mc-edit-thumb {
-  width: 36px;
-  height: 36px;
+.mc-qty-pop-btn {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--mc-line-strong);
+  border-radius: 50%;
+  background: var(--mc-bg-soft);
+  color: var(--mc-fg);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mc-qty-pop-btn:hover,
+.mc-qty-pop-btn:focus-visible {
+  border-color: var(--mc-accent);
+  background: var(--mc-bg);
+  outline: none;
+}
+
+.mc-qty-pop-val {
+  min-width: 20px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mc-fg);
+}
+
+/* ---- Move-item modal --------------------------------------------------- */
+
+.mc-move-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 28px);
+}
+
+.mc-move-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mc-move-thumb {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
   border-radius: 4px;
   background: var(--mc-bg-sunk);
   border: 1px solid var(--mc-line);
   object-fit: contain;
 }
 
-.mc-edit-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mc-edit-title {
+.mc-move-item-name {
   font-size: 12px;
+  font-weight: 600;
   color: var(--mc-fg);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -560,78 +712,73 @@ body {
   word-break: break-word;
 }
 
-.mc-edit-asin {
-  font-size: 10px;
-  color: var(--mc-fg-muted);
-  font-variant-numeric: tabular-nums;
+.mc-move-create {
+  width: 100%;
+  margin: 0 0 8px;
 }
 
-.mc-edit-qty {
-  display: inline-flex;
-  align-items: stretch;
-  border: 1px solid var(--mc-line-strong);
-  border-radius: var(--mc-radius-sm);
-  overflow: hidden;
-  background: var(--mc-bg);
+.mc-move-list {
+  list-style: none;
+  margin: 0 0 10px;
+  /* Inner padding keeps each option's hover border + lift clear of the
+     scroll container's clip edge (overflow-y:auto also clips horizontally). */
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 184px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
-.mc-qty-btn {
+.mc-move-list.mc-move-list-scrollable {
+  min-height: 168px;
+}
+
+.mc-move-option {
   appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--mc-fg);
-  font-size: 14px;
-  line-height: 1;
-  width: 22px;
-  cursor: pointer;
-  padding: 0;
-}
-
-.mc-qty-btn:hover {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--mc-line);
   background: var(--mc-bg-soft);
-}
-
-.mc-qty-input {
-  width: 32px;
-  border: 0;
-  border-left: 1px solid var(--mc-line);
-  border-right: 1px solid var(--mc-line);
-  text-align: center;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  background: var(--mc-bg);
-  color: var(--mc-fg);
-  padding: 2px 0;
-  -moz-appearance: textfield;
-}
-
-.mc-qty-input::-webkit-outer-spin-button,
-.mc-qty-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.mc-edit-remove {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--mc-fg-muted);
-  font-size: 18px;
-  line-height: 1;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  border-radius: var(--mc-radius);
+  padding: 8px 10px;
   cursor: pointer;
-  padding: 0;
+  font-family: inherit;
+  color: var(--mc-fg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
-.mc-edit-remove:hover {
-  background: var(--mc-danger-soft);
-  color: var(--mc-danger);
+.mc-move-option:hover,
+.mc-move-option:focus-visible {
+  background: var(--mc-bg);
+  border-color: var(--mc-accent);
+  transform: translateY(-1px);
+  outline: none;
 }
 
-.mc-item-editing {
-  border-color: var(--mc-line-strong);
+.mc-move-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-move-option-meta {
+  font-size: 11px;
+  color: var(--mc-fg-muted);
+}
+
+.mc-move-empty {
+  font-size: 12px;
+  color: var(--mc-fg-muted);
+  padding: 6px 2px 10px;
 }
 
 /* ---- Combine mode ------------------------------------------------------- */
