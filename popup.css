@@ -705,7 +705,9 @@ button.mc-thumb-qty:focus-visible {
 .mc-move-list {
   list-style: none;
   margin: 0 0 10px;
-  padding: 0;
+  /* Inner padding keeps each option's hover border + lift clear of the
+     scroll container's clip edge (overflow-y:auto also clips horizontally). */
+  padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 6px;
