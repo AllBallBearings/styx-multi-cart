@@ -100,9 +100,9 @@ describe("normalizeAmazonHost", () => {
     expect(normalizeAmazonHost("smile.amazon.com")).toBe("smile.amazon.com");
   });
 
-  it("handles nullish input as empty string", () => {
-    expect(normalizeAmazonHost(null)).toBe("");
-    expect(normalizeAmazonHost(undefined)).toBe("");
+  it("defaults nullish input to the US storefront", () => {
+    expect(normalizeAmazonHost(null)).toBe("amazon.com");
+    expect(normalizeAmazonHost(undefined)).toBe("amazon.com");
   });
 });
 
@@ -113,6 +113,11 @@ describe("sameAmazonHost", () => {
 
   it("distinguishes different TLDs", () => {
     expect(sameAmazonHost("amazon.com", "amazon.co.uk")).toBe(false);
+  });
+
+  it("treats hostless legacy carts as US carts", () => {
+    expect(sameAmazonHost("", "www.amazon.com")).toBe(true);
+    expect(sameAmazonHost(null, "www.amazon.co.uk")).toBe(false);
   });
 });
 

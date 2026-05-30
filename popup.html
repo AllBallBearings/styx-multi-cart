@@ -566,7 +566,7 @@
       aria-labelledby="mc-move-title"
     >
       <div class="mc-modal-backdrop" data-action="move-cancel"></div>
-      <div class="mc-modal-card">
+      <div class="mc-modal-card mc-move-card">
         <h3 id="mc-move-title" class="mc-modal-title">Move item</h3>
         <div class="mc-move-item">
           <img
@@ -578,6 +578,13 @@
           <span class="mc-move-item-name"></span>
         </div>
         <p class="mc-modal-sub">Pick the cart to move it into.</p>
+        <button
+          class="mc-btn mc-btn-primary mc-move-create"
+          data-action="move-create"
+          type="button"
+        >
+          Create new cart
+        </button>
         <ul class="mc-move-list"></ul>
         <div class="mc-modal-actions">
           <button

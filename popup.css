@@ -102,6 +102,10 @@ body {
   background: var(--mc-bg);
 }
 
+body.mc-move-modal-open {
+  min-height: 560px;
+}
+
 .mc-header {
   display: flex;
   align-items: center;
@@ -673,6 +677,12 @@ button.mc-thumb-qty:focus-visible {
 
 /* ---- Move-item modal --------------------------------------------------- */
 
+.mc-move-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 28px);
+}
+
 .mc-move-item {
   display: flex;
   align-items: center;
@@ -702,6 +712,11 @@ button.mc-thumb-qty:focus-visible {
   word-break: break-word;
 }
 
+.mc-move-create {
+  width: 100%;
+  margin: 0 0 8px;
+}
+
 .mc-move-list {
   list-style: none;
   margin: 0 0 10px;
@@ -711,8 +726,15 @@ button.mc-thumb-qty:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 184px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.mc-move-list.mc-move-list-scrollable {
+  min-height: 168px;
 }
 
 .mc-move-option {

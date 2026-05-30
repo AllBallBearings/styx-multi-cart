@@ -226,12 +226,11 @@ const EXTPAY_PREMIUM_BUFFER_MS = 28 * 24 * 60 * 60 * 1000; // 28 days
 function extpayUserToEntitlementPatch(user, current, nowMs) {
   const safeCurrent = current && typeof current === "object" ? current : {};
 
-  // A premium grant that didn't come from ExtPay (promo codes, dev/testing
-  // grants) lives or dies by its own premiumUntil — ExtPay's paid flag governs
-  // only extensionpay-sourced premium and must never revoke a manual grant.
-  // Capture any still-valid such grant as a floor we have to honor.
-  const grantFloor =
-    safeCurrent.source !== "extensionpay" &&
+  // Any still-active entitlement is a floor we have to honor. For promo/dev
+  // grants, ExtPay can't see the grant. For extensionpay-sourced premium, this
+  // is the grace buffer from the last known-good paid sync.
+  const activePremiumFloor =
+    safeCurrent.tier === "premium" &&
     typeof safeCurrent.premiumUntil === "number" &&
     safeCurrent.premiumUntil > nowMs
       ? safeCurrent.premiumUntil
@@ -250,7 +249,7 @@ function extpayUserToEntitlementPatch(user, current, nowMs) {
     const subscriptionUntil =
       cancelAt && cancelAt > nowMs ? cancelAt : nowMs + EXTPAY_PREMIUM_BUFFER_MS;
 
-    const premiumUntil = Math.max(subscriptionUntil, grantFloor);
+    const premiumUntil = Math.max(subscriptionUntil, activePremiumFloor);
 
     return {
       tier: "premium",
@@ -261,9 +260,9 @@ function extpayUserToEntitlementPatch(user, current, nowMs) {
     };
   }
 
-  // Not paid via ExtPay — but keep a still-valid non-ExtPay grant alive
-  // (promo / dev). Only the check timestamp moves.
-  if (grantFloor > 0) {
+  // Not paid via ExtPay — but keep any still-valid premium window alive. Only
+  // the check timestamp moves; expiry still happens once premiumUntil passes.
+  if (activePremiumFloor > 0) {
     return { lastChecked: nowMs };
   }
 
@@ -816,7 +815,7 @@ function getUrlHost(url) {
 }
 
 function normalizeAmazonHost(host) {
-  return String(host || "")
+  return String(host || "www.amazon.com")
     .toLowerCase()
     .replace(/^www\./, "");
 }
@@ -3479,18 +3478,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // can then fill it via MC_ADD_ITEM_TO_SAVED_CART.
           const name = (msg.name || "").trim() || "Untitled cart";
 
-          // Default host to www.amazon.com but prefer the active tab's
-          // Amazon hostname if available, so cross-region merge guards
-          // line up with where the user is shopping right now.
+          // Default host to www.amazon.com. Callers that create a cart as
+          // part of a same-region workflow (for example, Move item -> Create
+          // new cart) may pass an explicit Amazon host; otherwise prefer the
+          // active tab's Amazon hostname.
           let host = "www.amazon.com";
-          try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab && tab.url) {
-              const tabUrl = new URL(tab.url);
-              if (/(^|\.)amazon\./i.test(tabUrl.hostname)) host = tabUrl.hostname;
+          const requestedHost = String(msg.host || "").trim().toLowerCase();
+          if (/(^|\.)amazon\./i.test(requestedHost)) {
+            host = requestedHost;
+          } else {
+            try {
+              const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+              if (tab && tab.url) {
+                const tabUrl = new URL(tab.url);
+                if (/(^|\.)amazon\./i.test(tabUrl.hostname)) host = tabUrl.hostname;
+              }
+            } catch (_e) {
+              // Tab query can fail in some contexts; the default host is fine.
             }
-          } catch (_e) {
-            // Tab query can fail in some contexts; the default host is fine.
           }
 
           const carts = await readCarts();

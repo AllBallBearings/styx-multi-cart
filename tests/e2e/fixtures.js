@@ -112,7 +112,7 @@ function buildInitScript(initial) {
               id: makeId(),
               name: String(message.name || "Untitled"),
               savedAt: new Date().toISOString(),
-              host: "www.amazon.com",
+              host: String(message.host || "www.amazon.com"),
               items: [],
             };
             store[STORAGE_KEY].push(cart);

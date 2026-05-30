@@ -31,6 +31,7 @@
   const $combineModal = document.getElementById("mc-combine-modal");
   const $moveModal = document.getElementById("mc-move-modal");
   const $moveList = $moveModal.querySelector(".mc-move-list");
+  const $moveCreate = $moveModal.querySelector('[data-action="move-create"]');
   const $moveThumb = $moveModal.querySelector(".mc-move-thumb");
   const $moveItemName = $moveModal.querySelector(".mc-move-item-name");
   const $qtyPop = document.getElementById("mc-qty-pop");
@@ -513,7 +514,7 @@
     node.querySelector(".mc-item-count").textContent =
       `${cart.items.length} ${itemWord} · ${totalQty} qty`;
 
-    const host = (cart.host || "").replace(/^www\./, "");
+    const host = (cart.host || "www.amazon.com").replace(/^www\./, "");
     node.querySelector(".mc-item-meta").textContent =
       `${host} · saved ${formatRelative(cart.savedAt)}`;
 
@@ -905,7 +906,7 @@
   }
 
   function hostsMatch(a, b) {
-    const norm = (h) => (h || "").toLowerCase().replace(/^www\./, "");
+    const norm = (h) => (h || "www.amazon.com").toLowerCase().replace(/^www\./, "");
     return norm(a) === norm(b);
   }
 
@@ -979,11 +980,12 @@
 
     // Build the cart list.
     $moveList.innerHTML = "";
+    $moveList.classList.toggle("mc-move-list-scrollable", candidates.length > 3);
     if (candidates.length === 0) {
       const empty = document.createElement("li");
       empty.className = "mc-move-empty";
       empty.textContent =
-        "No other carts to move into. Create another cart first.";
+        "No other carts to move into yet.";
       $moveList.appendChild(empty);
     } else {
       candidates.forEach((cart) => {
@@ -994,7 +996,7 @@
         btn.dataset.action = "move-go";
         btn.dataset.targetId = cart.id;
         const count = (cart.items || []).length;
-        const host = (cart.host || "").replace(/^www\./, "");
+        const host = (cart.host || "www.amazon.com").replace(/^www\./, "");
         const name = document.createElement("span");
         name.className = "mc-move-option-name";
         name.textContent = cart.name;
@@ -1009,6 +1011,7 @@
 
     $moveModal.dataset.sourceId = sourceId;
     $moveModal.dataset.asin = asin;
+    document.body.classList.add("mc-move-modal-open");
     $moveModal.hidden = false;
     $moveModal.removeAttribute("inert");
   }
@@ -1018,6 +1021,8 @@
     if (active && $moveModal.contains(active)) active.blur();
     $moveModal.setAttribute("inert", "");
     $moveModal.hidden = true;
+    document.body.classList.remove("mc-move-modal-open");
+    $moveList.classList.remove("mc-move-list-scrollable");
     delete $moveModal.dataset.sourceId;
     delete $moveModal.dataset.asin;
   }
@@ -1042,6 +1047,48 @@
     toast(`Moved "${res.itemTitle}" to "${where}".`);
     // Refresh so both the source and destination carts reflect the move.
     await refresh();
+  }
+
+  async function createMoveDestinationAndMove() {
+    const sourceId = $moveModal.dataset.sourceId;
+    const asin = $moveModal.dataset.asin;
+    const source = sourceId ? cartCache.get(sourceId) : null;
+    if (!sourceId || !asin || !source) {
+      toast("Could not create a destination for this item.", "error");
+      return;
+    }
+
+    // Let the prompt modal take focus cleanly while the move modal stays as
+    // the visual context behind it.
+    $moveModal.setAttribute("inert", "");
+    const name = await promptDialog({
+      title: "Create destination cart",
+      placeholder: "e.g. Birthday gifts",
+      okLabel: "Create",
+    });
+    if (!$moveModal.hidden) $moveModal.removeAttribute("inert");
+    if (name == null) return;
+
+    await withLoading($moveCreate, async () => {
+      const res = await send({
+        type: "MC_CREATE_EMPTY_CART",
+        name,
+        host: source.host || "www.amazon.com",
+      });
+      if (!res.ok) {
+        if (!handleEntitlementError(res)) {
+          toast(res.error || "Could not create cart.", "error");
+        }
+        return;
+      }
+      const targetId = res.cart && res.cart.id;
+      if (!targetId) {
+        toast("Created the cart, but could not move the item.", "error");
+        await refresh();
+        return;
+      }
+      await performMove(sourceId, targetId, asin);
+    });
   }
 
   // ---- Item tile actions -------------------------------------------------
@@ -1381,6 +1428,10 @@
     const action = btn.dataset.action;
     if (action === "move-cancel") {
       closeMoveModal();
+      return;
+    }
+    if (action === "move-create") {
+      createMoveDestinationAndMove();
       return;
     }
     if (action === "move-go") {
