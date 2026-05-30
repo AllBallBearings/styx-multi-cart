@@ -226,6 +226,17 @@ const EXTPAY_PREMIUM_BUFFER_MS = 28 * 24 * 60 * 60 * 1000; // 28 days
 function extpayUserToEntitlementPatch(user, current, nowMs) {
   const safeCurrent = current && typeof current === "object" ? current : {};
 
+  // A premium grant that didn't come from ExtPay (promo codes, dev/testing
+  // grants) lives or dies by its own premiumUntil — ExtPay's paid flag governs
+  // only extensionpay-sourced premium and must never revoke a manual grant.
+  // Capture any still-valid such grant as a floor we have to honor.
+  const grantFloor =
+    safeCurrent.source !== "extensionpay" &&
+    typeof safeCurrent.premiumUntil === "number" &&
+    safeCurrent.premiumUntil > nowMs
+      ? safeCurrent.premiumUntil
+      : 0;
+
   if (user && user.paid === true) {
     let cancelAt = null;
     if (user.subscriptionCancelAt) {
@@ -239,14 +250,7 @@ function extpayUserToEntitlementPatch(user, current, nowMs) {
     const subscriptionUntil =
       cancelAt && cancelAt > nowMs ? cancelAt : nowMs + EXTPAY_PREMIUM_BUFFER_MS;
 
-    const promoFloor =
-      safeCurrent.source === "promo" &&
-      typeof safeCurrent.premiumUntil === "number" &&
-      safeCurrent.premiumUntil > nowMs
-        ? safeCurrent.premiumUntil
-        : 0;
-
-    const premiumUntil = Math.max(subscriptionUntil, promoFloor);
+    const premiumUntil = Math.max(subscriptionUntil, grantFloor);
 
     return {
       tier: "premium",
@@ -257,11 +261,9 @@ function extpayUserToEntitlementPatch(user, current, nowMs) {
     };
   }
 
-  if (
-    safeCurrent.source === "promo" &&
-    typeof safeCurrent.premiumUntil === "number" &&
-    safeCurrent.premiumUntil > nowMs
-  ) {
+  // Not paid via ExtPay — but keep a still-valid non-ExtPay grant alive
+  // (promo / dev). Only the check timestamp moves.
+  if (grantFloor > 0) {
     return { lastChecked: nowMs };
   }
 
@@ -281,6 +283,10 @@ function extpayUserToEntitlementPatch(user, current, nowMs) {
  */
 async function syncEntitlementFromExtPay() {
   if (!extpay) return;
+  // ExtPay isn't wired up yet (placeholder ID). Calling getUser would hit a
+  // non-existent extension and report "unpaid", which must not downgrade a
+  // promo/dev grant. Skip entirely until a real EXTPAY_ID is set.
+  if (EXTPAY_ID === "REPLACE_ME") return;
   let user;
   try {
     user = await extpay.getUser();
@@ -2964,7 +2970,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false, error: "Dev mode is not enabled." });
             break;
           }
-          const next = await writeEntitlement(msg.entitlement || {});
+          // Stamp a source so the entitlement is recognizably non-ExtPay and
+          // survives ExtPay syncs (see extpayUserToEntitlementPatch).
+          const devEnt = Object.assign({}, msg.entitlement || {});
+          if (devEnt.tier === "premium" && devEnt.source == null) {
+            devEnt.source = "dev";
+          }
+          const next = await writeEntitlement(devEnt);
           sendResponse({ ok: true, entitlement: next });
           break;
         }
