@@ -415,12 +415,21 @@
 
     <template id="mc-edit-row-template">
       <li class="mc-edit-row">
-        <img
-          class="mc-edit-thumb"
-          alt=""
-          referrerpolicy="no-referrer"
-          loading="lazy"
-        />
+        <button
+          class="mc-edit-thumb-btn"
+          data-action="move-item"
+          type="button"
+          title="Move this item to another cart"
+          aria-label="Move this item to another cart"
+        >
+          <img
+            class="mc-edit-thumb"
+            alt=""
+            referrerpolicy="no-referrer"
+            loading="lazy"
+          />
+          <span class="mc-edit-thumb-hint" aria-hidden="true">⇄</span>
+        </button>
         <div class="mc-edit-info">
           <span class="mc-edit-title"></span>
           <span class="mc-edit-asin"></span>
@@ -579,6 +588,42 @@
           <button
             class="mc-btn mc-btn-ghost mc-btn-sm"
             data-action="modal-cancel"
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Move-item modal: pick a destination cart for a single item -->
+    <div
+      id="mc-move-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-move-title"
+    >
+      <div class="mc-modal-backdrop" data-action="move-cancel"></div>
+      <div class="mc-modal-card">
+        <h3 id="mc-move-title" class="mc-modal-title">Move item</h3>
+        <div class="mc-move-item">
+          <img
+            class="mc-move-thumb"
+            alt=""
+            referrerpolicy="no-referrer"
+            loading="lazy"
+          />
+          <span class="mc-move-item-name"></span>
+        </div>
+        <p class="mc-modal-sub">Pick the cart to move it into.</p>
+        <ul class="mc-move-list"></ul>
+        <div class="mc-modal-actions">
+          <button
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            data-action="move-cancel"
             type="button"
           >
             Cancel

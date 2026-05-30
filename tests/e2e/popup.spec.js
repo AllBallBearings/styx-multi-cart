@@ -291,6 +291,100 @@ test.describe("popup — managing existing carts", () => {
   });
 });
 
+test.describe("popup — moving items between carts", () => {
+  const twoCarts = () => ({
+    carts: [
+      {
+        id: "cart-src",
+        name: "Source Cart",
+        savedAt: new Date().toISOString(),
+        host: "www.amazon.com",
+        items: [
+          { asin: "BMOVE1", title: "Movable Item", quantity: 1, price: "", image: "icons/icon16.png", url: "" },
+          { asin: "BMOVE2", title: "Stays Put", quantity: 1, price: "", image: "icons/icon32.png", url: "" },
+        ],
+      },
+      {
+        id: "cart-dst",
+        name: "Dest Cart",
+        savedAt: new Date().toISOString(),
+        host: "www.amazon.com",
+        items: [],
+      },
+    ],
+  });
+
+  test("clicking an item thumbnail opens the move modal listing other carts", async ({ popup }) => {
+    const page = await popup(twoCarts());
+    const cart = page.locator('#mc-list .mc-item:has-text("Source Cart")');
+    await cart.locator('[data-action="edit"]').click();
+
+    await cart.locator('.mc-edit-row[data-asin="BMOVE1"] [data-action="move-item"]').click();
+
+    await expect(page.locator("#mc-move-modal")).toBeVisible();
+    await expect(page.locator("#mc-move-modal .mc-move-item-name")).toHaveText("Movable Item");
+    // Only the OTHER cart is offered as a destination.
+    const opts = page.locator("#mc-move-modal .mc-move-option");
+    await expect(opts).toHaveCount(1);
+    await expect(opts.first().locator(".mc-move-option-name")).toHaveText("Dest Cart");
+  });
+
+  test("picking a destination moves the item and updates both carts", async ({ popup }) => {
+    const page = await popup(twoCarts());
+    const src = page.locator('#mc-list .mc-item:has-text("Source Cart")');
+    const dst = page.locator('#mc-list .mc-item:has-text("Dest Cart")');
+
+    await src.locator('[data-action="edit"]').click();
+    await src.locator('.mc-edit-row[data-asin="BMOVE1"] [data-action="move-item"]').click();
+    await page.locator('#mc-move-modal .mc-move-option[data-target-id="cart-dst"]').click();
+
+    // Modal closes, the right message went out.
+    await expect(page.locator("#mc-move-modal")).toBeHidden();
+    const log = await page.evaluate(() => window.__mcMessageLog);
+    const move = log.find((m) => m.type === "MC_MOVE_ITEM_BETWEEN_CARTS");
+    expect(move).toMatchObject({ sourceId: "cart-src", targetId: "cart-dst", asin: "BMOVE1" });
+
+    // Source loses the item, destination gains it.
+    await expect(src.locator(".mc-item-count")).toContainText("1 item");
+    await expect(dst.locator(".mc-item-count")).toContainText("1 item");
+    // Source edit panel re-opens so the user keeps their place.
+    await expect(src.locator(".mc-item-edit")).toBeVisible();
+    await expect(src.locator('.mc-edit-row[data-asin="BMOVE1"]')).toHaveCount(0);
+  });
+
+  test("moving the last item out deletes the now-empty source cart", async ({ popup }) => {
+    const page = await popup({
+      carts: [
+        {
+          id: "cart-lonely",
+          name: "Lonely Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [
+            { asin: "BONLY1", title: "Only Item", quantity: 1, price: "", image: "", url: "" },
+          ],
+        },
+        {
+          id: "cart-dst2",
+          name: "Other Cart",
+          savedAt: new Date().toISOString(),
+          host: "www.amazon.com",
+          items: [],
+        },
+      ],
+    });
+
+    const src = page.locator('#mc-list .mc-item:has-text("Lonely Cart")');
+    await src.locator('[data-action="edit"]').click();
+    await src.locator('.mc-edit-row[data-asin="BONLY1"] [data-action="move-item"]').click();
+    await page.locator('#mc-move-modal .mc-move-option[data-target-id="cart-dst2"]').click();
+
+    await expect(page.locator('#mc-list .mc-item:has-text("Lonely Cart")')).toHaveCount(0);
+    await expect(page.locator("#mc-list .mc-item")).toHaveCount(1);
+    await expect(page.locator('#mc-list .mc-item:has-text("Other Cart") .mc-item-count')).toContainText("1 item");
+  });
+});
+
 test.describe("popup — settings toggles", () => {
   test("intercept toggle reflects stored setting and persists changes", async ({
     popup,

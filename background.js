@@ -3207,6 +3207,105 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
+        case "MC_MOVE_ITEM_BETWEEN_CARTS": {
+          // Move a single item (by ASIN) out of one saved cart and into
+          // another. Mirrors the combine merge rules: cross-region moves are
+          // refused and a duplicate ASIN in the target keeps the higher
+          // quantity. If the move empties the source cart, that cart is
+          // deleted (same as removing its last item).
+          const carts = await readCarts();
+          const source = carts.find((c) => c.id === msg.sourceId);
+          const target = carts.find((c) => c.id === msg.targetId);
+          if (!source || !target) {
+            sendResponse({ ok: false, error: "One of the carts could not be found." });
+            break;
+          }
+          if (source.id === target.id) {
+            sendResponse({ ok: false, error: "Pick a different cart." });
+            break;
+          }
+          if (!sameAmazonHost(source.host, target.host)) {
+            sendResponse({
+              ok: false,
+              error: `Can't move across regions — "${source.name}" is on ${source.host} but "${target.name}" is on ${target.host}.`,
+            });
+            break;
+          }
+
+          // Tier gate: both carts must be editable — the move writes to each.
+          {
+            const ent = await readEntitlement();
+            const srcGate = canEditCart(source.id, carts, ent);
+            const tgtGate = canEditCart(target.id, carts, ent);
+            if (!srcGate.allowed || !tgtGate.allowed) {
+              const locked = !srcGate.allowed ? source.name : target.name;
+              sendResponse({
+                ok: false,
+                code: "CART_LOCKED",
+                error: `Can't move — "${locked}" is read-only. Renew Premium or delete other carts to free up a slot.`,
+              });
+              break;
+            }
+          }
+
+          const moving = (source.items || []).find((it) => it && it.asin === msg.asin);
+          if (!moving) {
+            sendResponse({ ok: false, error: "Item not found in cart." });
+            break;
+          }
+
+          // Pull it out of the source.
+          source.items = (source.items || []).filter((it) => it.asin !== msg.asin);
+
+          // Land it in the target, merging by ASIN. Duplicates keep the
+          // higher quantity (same rule the combine UI advertises).
+          target.items = Array.isArray(target.items) ? target.items : [];
+          const existing = target.items.find((it) => it && it.asin === moving.asin);
+          let action;
+          if (existing) {
+            const moved = Number(moving.quantity) || 1;
+            const have = Number(existing.quantity) || 1;
+            existing.quantity = Math.max(1, Math.min(99, Math.max(moved, have)));
+            if (moving.variantLabel && !existing.variantLabel) {
+              existing.variantLabel = moving.variantLabel;
+            }
+            if (moving.image && !existing.image) existing.image = moving.image;
+            if (moving.title && (!existing.title || existing.title === "(untitled)")) {
+              existing.title = moving.title;
+            }
+            if (moving.price && !existing.price) existing.price = moving.price;
+            if (moving.url && !existing.url) existing.url = moving.url;
+            action = "merged";
+          } else {
+            target.items.unshift({ ...moving });
+            action = "added";
+          }
+          target.lastUsedAt = Date.now();
+
+          // If the source is now empty, drop it from the list entirely.
+          let sourceDeleted = false;
+          let nextCarts = carts;
+          if (source.items.length === 0) {
+            nextCarts = carts.filter((c) => c.id !== source.id);
+            sourceDeleted = true;
+          } else {
+            source.lastUsedAt = Date.now();
+          }
+
+          await writeCarts(nextCarts);
+          sendResponse({
+            ok: true,
+            action,
+            sourceDeleted,
+            sourceName: source.name,
+            targetName: target.name,
+            itemTitle: moving.title || moving.asin,
+            sourceRemaining: source.items.length,
+            targetCount: target.items.length,
+          });
+          break;
+        }
+
         case "MC_UPDATE_ITEM_QUANTITY": {
           const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
           const carts = await readCarts();

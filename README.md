@@ -15,6 +15,7 @@ A browser extension that for multiple Amazon shopping carts. Save your current c
 - **Save & clear** — combine the two: snapshot the current cart, then empty it (so you can start a new one without losing the old).
 - **Delete** — remove saved carts you no longer need.
 - **Rename** — rename a saved cart any time.
+- **Move items** — while editing a cart, click an item's picture to move that single item into another cart.
 
 Storage is local-only (`chrome.storage.local`), so saved carts never leave the device.
 

@@ -29,6 +29,10 @@
   const $combineContinue = document.getElementById("mc-combine-continue");
   const $combineCancel = document.getElementById("mc-combine-cancel");
   const $combineModal = document.getElementById("mc-combine-modal");
+  const $moveModal = document.getElementById("mc-move-modal");
+  const $moveList = $moveModal.querySelector(".mc-move-list");
+  const $moveThumb = $moveModal.querySelector(".mc-move-thumb");
+  const $moveItemName = $moveModal.querySelector(".mc-move-item-name");
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
   const $createNew = document.getElementById("mc-create-new");
   const $themeToggle = document.getElementById("mc-theme-toggle");
@@ -893,6 +897,122 @@
     await refresh();
   }
 
+  // ---- Move-item modal ---------------------------------------------------
+  //
+  // Clicking an item's thumbnail in the edit panel opens this modal, which
+  // lists every other cart the item can move into (same region, editable).
+  // Picking one hands the move off to the background and re-opens the source
+  // cart's edit panel so the user keeps their place.
+
+  function openMoveModal(li, asin) {
+    const sourceId = li.dataset.id;
+    const source = cartCache.get(sourceId);
+    if (!source) return;
+    const item = (source.items || []).find((it) => it.asin === asin);
+    if (!item) return;
+
+    // Candidate destinations: every other cart on the same Amazon host that
+    // isn't read-only. (The background re-checks all of this; this is just
+    // so we don't offer carts that would be rejected.)
+    const candidates = [];
+    cartCache.forEach((cart, id) => {
+      if (id === sourceId) return;
+      if (cart.access === "readonly") return;
+      if (!hostsMatch(cart.host, source.host)) return;
+      candidates.push(cart);
+    });
+    candidates.sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      })
+    );
+
+    // Populate the item header.
+    if (isUsableThumb(item.image)) {
+      $moveThumb.src = item.image;
+      $moveThumb.style.visibility = "";
+      $moveThumb.onerror = () => { $moveThumb.style.visibility = "hidden"; };
+    } else {
+      $moveThumb.removeAttribute("src");
+      $moveThumb.style.visibility = "hidden";
+    }
+    $moveItemName.textContent = item.title || item.asin || "(untitled)";
+
+    // Build the cart list.
+    $moveList.innerHTML = "";
+    if (candidates.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "mc-move-empty";
+      empty.textContent =
+        "No other carts to move into. Create another cart first.";
+      $moveList.appendChild(empty);
+    } else {
+      candidates.forEach((cart) => {
+        const li2 = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mc-move-option";
+        btn.dataset.action = "move-go";
+        btn.dataset.targetId = cart.id;
+        const count = (cart.items || []).length;
+        const host = (cart.host || "").replace(/^www\./, "");
+        const name = document.createElement("span");
+        name.className = "mc-move-option-name";
+        name.textContent = cart.name;
+        const meta = document.createElement("span");
+        meta.className = "mc-move-option-meta";
+        meta.textContent = `${count} item${count === 1 ? "" : "s"}${host ? ` · ${host}` : ""}`;
+        btn.append(name, meta);
+        li2.appendChild(btn);
+        $moveList.appendChild(li2);
+      });
+    }
+
+    $moveModal.dataset.sourceId = sourceId;
+    $moveModal.dataset.asin = asin;
+    $moveModal.hidden = false;
+    $moveModal.removeAttribute("inert");
+  }
+
+  function closeMoveModal() {
+    const active = document.activeElement;
+    if (active && $moveModal.contains(active)) active.blur();
+    $moveModal.setAttribute("inert", "");
+    $moveModal.hidden = true;
+    delete $moveModal.dataset.sourceId;
+    delete $moveModal.dataset.asin;
+  }
+
+  async function performMove(sourceId, targetId, asin) {
+    const target = cartCache.get(targetId);
+    const res = await send({
+      type: "MC_MOVE_ITEM_BETWEEN_CARTS",
+      sourceId,
+      targetId,
+      asin,
+    });
+    if (!res.ok) {
+      if (!handleEntitlementError(res)) {
+        toast(res.error || "Could not move item.", "error");
+      }
+      return;
+    }
+    closeMoveModal();
+    const where = (target && target.name) || res.targetName || "cart";
+    toast(`Moved "${res.itemTitle}" to "${where}".`);
+    // Refresh so both carts reflect the move, then re-open the source cart's
+    // edit panel (unless the move emptied — and therefore deleted — it).
+    await refresh();
+    if (res.sourceDeleted) return;
+    const li = $list.querySelector(`li.mc-item[data-id="${CSS.escape(sourceId)}"]`);
+    if (!li) return;
+    const cart = cartCache.get(sourceId);
+    if (!cart) return;
+    renderEditPanel(li, cart);
+    setEditOpen(li, true);
+  }
+
   // ---- Delegated handlers for the edit panel -----------------------------
 
   async function applyQuantity(li, asin, nextQty) {
@@ -981,6 +1101,8 @@
         applyQuantity(li, asin, action === "qty-inc" ? current + 1 : current - 1);
       } else if (action === "item-remove") {
         removeItem(li, asin);
+      } else if (action === "move-item") {
+        openMoveModal(li, asin);
       }
       return;
     }
@@ -1140,10 +1262,30 @@
     }
   });
 
+  $moveModal.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === "move-cancel") {
+      closeMoveModal();
+      return;
+    }
+    if (action === "move-go") {
+      const sourceId = $moveModal.dataset.sourceId;
+      const asin = $moveModal.dataset.asin;
+      const targetId = btn.dataset.targetId;
+      if (sourceId && targetId && asin) performMove(sourceId, targetId, asin);
+    }
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (!$paywallModal.hidden) {
       closePaywall();
+      return;
+    }
+    if (!$moveModal.hidden) {
+      closeMoveModal();
       return;
     }
     if (!$combineModal.hidden) {
