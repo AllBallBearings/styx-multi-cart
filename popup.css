@@ -465,12 +465,15 @@ body {
 
 .mc-item-thumbs {
   display: flex;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: wrap;
+  /* Room for the corner badges, which straddle each tile's edge. */
+  padding: 8px;
 }
 
 /* Each item is an interactive tile: click the picture to move it, the X
-   (top-left) to remove it, the quantity badge (bottom-left) to change count. */
+   (upper-right, straddling the corner) to remove it, the quantity badge
+   (lower-left, straddling the corner) to change count. */
 .mc-thumb {
   position: relative;
   width: 48px;
@@ -479,7 +482,9 @@ body {
   border-radius: 6px;
   background: var(--mc-bg);
   border: 1px solid var(--mc-line);
-  overflow: hidden;
+  /* Visible so the corner badges can hang half-off the tile. The image
+     rounds its own corners (below) since the tile no longer clips. */
+  overflow: visible;
 }
 
 .mc-thumb[data-action="thumb-move"] {
@@ -500,6 +505,7 @@ body {
   height: 100%;
   object-fit: contain;
   display: block;
+  border-radius: 6px;
 }
 
 /* Title fallback shown only when the item has no usable image. */
@@ -524,8 +530,9 @@ body {
 
 .mc-thumb-remove {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
   width: 16px;
   height: 16px;
   padding: 0;
@@ -550,8 +557,9 @@ body {
 
 .mc-thumb-qty {
   position: absolute;
-  bottom: 0;
-  left: 0;
+  bottom: -8px;
+  left: -8px;
+  z-index: 2;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
