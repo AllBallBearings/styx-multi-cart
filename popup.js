@@ -54,7 +54,6 @@
   const $paywallTitle = document.getElementById("mc-paywall-title");
   const $paywallSub = document.getElementById("mc-paywall-sub");
   const $paywallStub = document.getElementById("mc-paywall-stub");
-  const $paywallCta = document.getElementById("mc-paywall-cta");
 
   // Confirm-dialog refs (in-popup replacement for window.confirm).
   const $confirmModal = document.getElementById("mc-confirm-modal");
@@ -1549,11 +1548,14 @@
 
   function formatEntForDisplay(ent) {
     if (!ent) return "(none)";
-    const until = ent.premiumUntil
+    const lifetime = ent.tier === "premium" && ent.premiumUntil == null;
+    const until = lifetime
+      ? "lifetime"
+      : ent.premiumUntil
       ? new Date(ent.premiumUntil).toISOString().slice(0, 10)
       : "—";
     const now = Date.now();
-    const expired = ent.premiumUntil && ent.premiumUntil < now;
+    const expired = ent.premiumUntil != null && ent.premiumUntil < now;
     const status =
       ent.tier === "premium" && !expired
         ? "active"
@@ -1730,10 +1732,9 @@
       $paywallSub.textContent =
         "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.";
     }
-    // ExtensionPay is wired; the CTA opens the hosted Stripe checkout.
+    // ExtensionPay is wired; each plan button deep-links its own checkout.
     $paywallStub.hidden = true;
-    $paywallCta.disabled = false;
-    $paywallCta.textContent = "Upgrade — $4.99 / yr";
+    resetPaywallButtons();
 
     $paywallModal.hidden = false;
     $paywallModal.removeAttribute("inert");
@@ -1749,6 +1750,24 @@
     $paywallModal.hidden = true;
   }
 
+  // Both plan buttons share one paywall handler; the chosen plan is read from
+  // each button's data-plan ("annual" | "lifetime") and deep-links that plan's
+  // ExtPay checkout. Cache the button refs + their original label markup so we
+  // can show a per-button "Opening…" state and restore it on error.
+  const $paywallPlanBtns = Array.from(
+    $paywallModal.querySelectorAll(".mc-paywall-plan-btn"),
+  );
+  const paywallBtnOriginalHtml = new Map(
+    $paywallPlanBtns.map((b) => [b, b.innerHTML]),
+  );
+
+  function resetPaywallButtons() {
+    for (const b of $paywallPlanBtns) {
+      b.disabled = false;
+      b.innerHTML = paywallBtnOriginalHtml.get(b);
+    }
+  }
+
   $paywallModal.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
@@ -1756,21 +1775,23 @@
     if (action === "paywall-close") {
       closePaywall();
     } else if (action === "paywall-upgrade") {
-      // Open the ExtensionPay-hosted Stripe checkout in a new tab. The popup
-      // closes by Chrome anyway when focus moves; we also call closePaywall
-      // so reopening the popup later starts fresh. extpay.onPaid fires in
-      // background.js when the user completes checkout and refreshes the
-      // entitlement automatically.
-      $paywallCta.disabled = true;
-      $paywallCta.textContent = "Opening checkout…";
-      const res = await send({ type: "MC_OPEN_PAYMENT_PAGE" });
-      $paywallCta.disabled = false;
-      $paywallCta.textContent = "Upgrade — $4.99 / yr";
+      // Open the ExtensionPay-hosted Stripe checkout for the chosen plan in a
+      // new tab. The popup closes by Chrome anyway when focus moves; we also
+      // call closePaywall so reopening later starts fresh. extpay.onPaid fires
+      // in background.js when the user completes checkout and refreshes the
+      // entitlement automatically. Disable BOTH buttons during the call so a
+      // double-tap can't open two checkout tabs.
+      const plan = btn.dataset.plan || null;
+      for (const b of $paywallPlanBtns) b.disabled = true;
+      btn.textContent = "Opening checkout…";
+      const res = await send({ type: "MC_OPEN_PAYMENT_PAGE", plan });
       if (!res || !res.ok) {
+        resetPaywallButtons();
         toast((res && res.error) || "Couldn't open checkout.", "err");
         return;
       }
       closePaywall();
+      resetPaywallButtons();
     }
   });
 

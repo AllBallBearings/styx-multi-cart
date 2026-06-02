@@ -6,6 +6,10 @@ Assets uploaded to the Chrome Web Store listing form. **Not bundled into the ext
 
 | File | Chrome Web Store field | Size | Status |
 |------|------------------------|------|--------|
+| `product-logo.svg` | Product logo master | SVG, scalable | ✅ done |
+| `product-logo-512.png` | Stripe / website product logo | 512×512 PNG | ✅ done — regenerate via `node store-assets/_render_product_logo.js` |
+| `product-logo-1024.png` | High-resolution product logo | 1024×1024 PNG | ✅ done — regenerate via `node store-assets/_render_product_logo.js` |
+| `product-logo-2048.png` | Extra-large product logo | 2048×2048 PNG | ✅ done — regenerate via `node store-assets/_render_product_logo.js` |
 | `icon-128.png` | Store icon | 128×128 PNG | ✅ done (copied from `icons/icon128.png`) |
 | `promo-440x280.png` | Small promo tile | 440×280 PNG (no transparency) | ✅ done — regenerate via `python3 store-assets/_render_promo.py` |
 | `screenshots/01-popup.png` | Screenshot 1 | 1280×800 PNG | ⏳ TODO — popup with 2-3 saved carts |

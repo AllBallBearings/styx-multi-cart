@@ -758,7 +758,9 @@
 
   function isPremiumActive(ent, nowMs) {
     if (!ent || ent.tier !== "premium") return false;
-    if (!ent.premiumUntil) return false;
+    // null premiumUntil on a premium tier === lifetime (never expires).
+    // Mirrors isPremiumActive in lib/helpers.js + background.js.
+    if (ent.premiumUntil == null) return true;
     return nowMs < Number(ent.premiumUntil);
   }
 
@@ -1307,31 +1309,29 @@
         padding: 10px 12px; border-radius: 8px;
         background: #1f242b; border: 1px solid #2a3038;
       }
-      #${PICKER_ID} .styx-pk-upgrade-price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 4px; }
-      #${PICKER_ID} .styx-pk-upgrade-amount { font-size: 20px; font-weight: 700; color: #f3efe6; }
-      #${PICKER_ID} .styx-pk-upgrade-period { font-size: 12px; color: #8a93a0; }
       #${PICKER_ID} .styx-pk-upgrade-features {
-        margin: 6px 0 0; padding-left: 18px;
+        margin: 0; padding-left: 18px;
         font-size: 12px; color: #c2cbd6; line-height: 1.5;
       }
       #${PICKER_ID} .styx-pk-upgrade-features b { color: #ff9900; font-weight: 700; }
-      #${PICKER_ID} .styx-pk-upgrade-stub {
-        padding: 8px 10px; border-left: 3px solid #ff9900; border-radius: 4px;
-        background: rgba(255, 153, 0, 0.08);
-        font-size: 12px; color: #ffe6a8;
+      #${PICKER_ID} .styx-pk-upgrade-actions {
+        display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
       }
-      #${PICKER_ID} .styx-pk-upgrade-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
       #${PICKER_ID} .styx-pk-upgrade-cta {
-        appearance: none; padding: 10px 14px;
+        flex: 1 1 0;
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+        appearance: none; padding: 8px 12px;
         background: #ff9900; color: #1a1209;
         border: 1px solid #e88a00; border-radius: 8px;
         font-size: 13px; font-weight: 700; font-family: inherit;
-        cursor: pointer;
+        line-height: 1.2; cursor: pointer;
       }
+      #${PICKER_ID} .styx-pk-upgrade-cta-price { font-size: 11px; font-weight: 600; opacity: 0.85; }
       #${PICKER_ID} .styx-pk-upgrade-cta:disabled {
         opacity: 0.55; cursor: not-allowed;
       }
       #${PICKER_ID} .styx-pk-upgrade-back {
+        flex-basis: 100%;
         appearance: none; padding: 8px 12px;
         background: transparent; color: #c2cbd6;
         border: 1px solid #3a414b; border-radius: 8px;
@@ -1454,21 +1454,21 @@
           add to all your saved carts again — they're still here, untouched.
         </div>
         <div class="styx-pk-upgrade-plan">
-          <div class="styx-pk-upgrade-price">
-            <span class="styx-pk-upgrade-amount">$4.99</span>
-            <span class="styx-pk-upgrade-period">/ year</span>
-          </div>
           <ul class="styx-pk-upgrade-features">
             <li>Unlock up to <b>20 saved carts</b></li>
             <li>Edit, restore, rename, merge — full functionality</li>
             <li>Cancel anytime; carts stay readable</li>
           </ul>
         </div>
-        <div class="styx-pk-upgrade-stub">
-          <b>Coming soon.</b> Premium isn't live yet — checkout is being polished. Thanks for being early!
-        </div>
         <div class="styx-pk-upgrade-actions">
-          <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" disabled>Renew — $4.99 / yr</button>
+          <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="annual">
+            <span class="styx-pk-upgrade-cta-label">Annual</span>
+            <span class="styx-pk-upgrade-cta-price">$9.99 / yr</span>
+          </button>
+          <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="lifetime">
+            <span class="styx-pk-upgrade-cta-label">Lifetime</span>
+            <span class="styx-pk-upgrade-cta-price">$19.99 once</span>
+          </button>
           <button type="button" class="styx-pk-upgrade-back" data-styx-action="upgrade-back">← Back to carts</button>
         </div>
       </div>
@@ -1728,7 +1728,20 @@
         } else if (action.dataset.styxAction === "upgrade-back") {
           hidePickerUpgradeScreen(root);
         } else if (action.dataset.styxAction === "upgrade-go") {
-          // Phase 3: hook ExtensionPay.openPaymentPage() here.
+          // Deep-link the chosen plan's ExtPay checkout (background validates
+          // the nickname; unknown/absent falls back to the full picker). The
+          // background opens the checkout tab; we just fire and forget. Disable
+          // both plan buttons so a double-tap can't open two tabs.
+          const plan = action.dataset.styxPlan || null;
+          const goBtns = root.querySelectorAll('[data-styx-action="upgrade-go"]');
+          goBtns.forEach((b) => { b.disabled = true; });
+          action.textContent = "Opening checkout…";
+          sendRequest({ type: "MC_OPEN_PAYMENT_PAGE", plan }).then((res) => {
+            if (!res || !res.ok) {
+              goBtns.forEach((b) => { b.disabled = false; });
+              action.textContent = "Try again";
+            }
+          });
         } else if (action.dataset.styxAction === "create-new") {
           showPickerCreateScreen(root, item, qty);
         } else if (action.dataset.styxAction === "create-back") {
