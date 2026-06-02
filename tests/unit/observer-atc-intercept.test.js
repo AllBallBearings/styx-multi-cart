@@ -255,6 +255,51 @@ describe("observer.js ATC intercept", () => {
     });
   });
 
+  it("uses PDP image data when the add-to-cart button already exposes the page ASIN", async () => {
+    const { dom, messages } = loadObserver(`
+      <!doctype html>
+      <html>
+        <head><title>Main PDP item</title></head>
+        <body data-asin="B0PDPIMAGE">
+          <h1 id="productTitle">Main PDP item</h1>
+          <img
+            id="landingImage"
+            src="https://images-na.ssl-images-amazon.com/images/G/01/loadIndicators/loading._CB.gif"
+            data-a-dynamic-image='{"https://m.media-amazon.com/images/I/pdp-small.jpg":[100,100],"https://m.media-amazon.com/images/I/pdp-large.jpg":[800,800]}'
+          />
+          <input
+            id="add-to-cart-button"
+            type="submit"
+            name="submit.add-to-cart"
+            data-asin="B0PDPIMAGE"
+            aria-label="Add to cart"
+          />
+        </body>
+      </html>
+    `);
+
+    const btn = dom.window.document.getElementById("add-to-cart-button");
+    btn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const picker = dom.window.document.getElementById("__styx-picker");
+    expect(picker).toBeTruthy();
+
+    picker
+      .querySelector(".styx-pk-row")
+      .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await nextTick();
+
+    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
+    expect(addMessage).toMatchObject({
+      savedCartId: "cart-1",
+      item: {
+        asin: "B0PDPIMAGE",
+        title: "Main PDP item",
+        image: "https://m.media-amazon.com/images/I/pdp-large.jpg",
+      },
+    });
+  });
+
   it("intercepts customization iframe add-to-cart buttons using the iframe URL ASIN", async () => {
     const { dom, messages } = loadObserver(
       `
