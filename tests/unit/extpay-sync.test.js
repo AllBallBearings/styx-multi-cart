@@ -24,6 +24,25 @@ describe("extpayUserToEntitlementPatch", () => {
     expect(patch.lastChecked).toBe(NOW);
   });
 
+  it("paid + one-time plan → lifetime premium", () => {
+    const user = {
+      paid: true,
+      plan: {
+        unitAmountCents: 1999,
+        currency: "usd",
+        nickname: "lifetime",
+        interval: "once",
+        intervalCount: null,
+      },
+    };
+    const patch = extpayUserToEntitlementPatch(user, { tier: "free" }, NOW);
+    expect(patch.tier).toBe("premium");
+    expect(patch.source).toBe("extensionpay");
+    expect(patch.premiumUntil).toBeNull();
+    expect(patch.autoRenew).toBe(false);
+    expect(patch.lastChecked).toBe(NOW);
+  });
+
   it("paid + future subscriptionCancelAt (Date) → premium until cancel date, autoRenew false", () => {
     const cancelAt = new Date(NOW + 60 * DAY);
     const user = { paid: true, subscriptionCancelAt: cancelAt };

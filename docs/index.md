@@ -4,6 +4,8 @@ title: Styx Multi-Cart
 
 # Styx Multi-Cart
 
+<img src="assets/product-logo.svg" alt="Styx Multi-Cart logo" width="128" height="128">
+
 A browser extension for managing multiple Amazon shopping carts. Save your current cart, switch between named carts, and restore any of them with one click.
 
 - **Source code:** <https://github.com/AllBallBearings/styx-multi-cart>

@@ -18,11 +18,13 @@ Decisions captured for the free/premium model across Chrome Web Store (launch) a
 ## Pricing
 
 - **Free tier**: 2 extension-managed saved carts (= 3 total shopping contexts including Amazon's live cart)
-- **Premium**: **$4.99/year**, up to **20 saved carts**
+- **Premium**: up to **20 saved carts**, two ways to buy:
+  - **$9.99/year** — annual subscription
+  - **$19.99 one-time** — lifetime access
 
 ### Pricing rationale
 - Goal is reach + "no-brainer" conversion, not margin optimization.
-- $4.99/yr sits in the impulse-purchase zone; the conversion cliff between $4.99 and $9.99 is steeper than the revenue gain for an unproven utility extension.
+- The annual subscription funds ongoing maintenance (Amazon DOM changes break scrapers); the lifetime option captures subscription-averse buyers at ~2× the annual.
 - Cap of 20 chosen as plenty for realistic use; can be raised later if demand emerges. Performance-test at ~50 so the cap is a product decision, not a technical one.
 - Market "20 saved carts" cleanly; don't claim unlimited.
 
@@ -103,7 +105,7 @@ carts: [
 
 ### Storage location
 - **Local storage** (`chrome.storage.local`) for `cartsUsed` / cart data — simple, no auth for free users.
-- Acceptable that determined users could reset by reinstalling; at $4.99/yr the friction isn't worth gaming.
+- Acceptable that determined users could reset by reinstalling; at this price point the friction isn't worth gaming.
 - Entitlement verification: lazy + cached (re-verify with license server ~once/day), so the extension stays fast and works offline.
 
 ---
@@ -124,7 +126,7 @@ Every "new cart" and "edit cart" entry point calls these. Paywall UI, badge coun
 ## Paywall UX
 
 - Triggered on attempted 3rd saved cart creation.
-- Framing: *"You're using all your saved carts — unlock up to 20 for $4.99/yr"* (not "Limit reached").
+- Framing: *"You're using all your saved carts — unlock up to 20 for $9.99/yr or $19.99 once"* (not "Limit reached").
 - Acknowledges the user is getting value, doesn't feel like a wall.
 
 ---
@@ -137,7 +139,7 @@ Every "new cart" and "edit cart" entry point calls these. Paywall UI, badge coun
 - Stripe webhook → server updates `premiumUntil`; extension pulls on next daily check.
 
 ### Apple (future)
-- StoreKit auto-renewing subscription at same $4.99/yr.
+- StoreKit auto-renewing subscription at same $9.99/yr.
 - Wrapper app handles purchase; writes entitlement to shared App Group storage; extension reads it.
 
 ---

@@ -696,10 +696,6 @@
         </p>
 
         <div class="mc-paywall-plan">
-          <div class="mc-paywall-price">
-            <span class="mc-paywall-amount">$4.99</span>
-            <span class="mc-paywall-period">/ year</span>
-          </div>
           <ul class="mc-paywall-features">
             <li>Up to <strong>20 saved carts</strong> (vs. 2 free)</li>
             <li>Keep curated lists for gifts, restocks, occasions</li>
@@ -741,14 +737,26 @@
           ></p>
         </details>
 
-        <div class="mc-modal-actions">
+        <div class="mc-modal-actions mc-paywall-actions">
           <button
-            id="mc-paywall-cta"
-            class="mc-btn mc-btn-primary"
+            id="mc-paywall-cta-annual"
+            class="mc-btn mc-btn-primary mc-paywall-plan-btn"
             type="button"
             data-action="paywall-upgrade"
+            data-plan="annual"
           >
-            Upgrade — $4.99 / yr
+            <span class="mc-paywall-btn-label">Annual</span>
+            <span class="mc-paywall-btn-price">$9.99 / yr</span>
+          </button>
+          <button
+            id="mc-paywall-cta-lifetime"
+            class="mc-btn mc-btn-primary mc-paywall-plan-btn"
+            type="button"
+            data-action="paywall-upgrade"
+            data-plan="lifetime"
+          >
+            <span class="mc-paywall-btn-label">Lifetime</span>
+            <span class="mc-paywall-btn-price">$19.99 once</span>
           </button>
           <button
             class="mc-btn mc-btn-ghost"
