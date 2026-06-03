@@ -323,11 +323,41 @@
     return null;
   }
 
+  function getAriaLabelledByText(el) {
+    if (!el || !el.getAttribute) return "";
+    const ids = String(el.getAttribute("aria-labelledby") || "")
+      .split(/\s+/)
+      .filter(Boolean);
+    if (!ids.length) return "";
+    return ids
+      .map((id) => {
+        const label = document.getElementById(id);
+        return label ? (label.innerText || label.textContent || "") : "";
+      })
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function getControlText(el) {
+    if (!el) return "";
+    return (
+      el.getAttribute && el.getAttribute("aria-label") ||
+      getAriaLabelledByText(el) ||
+      el.getAttribute && el.getAttribute("title") ||
+      el.innerText ||
+      el.value ||
+      el.textContent ||
+      ""
+    );
+  }
+
   function getTitleFromAtcButton(btn) {
     if (!btn || !btn.getAttribute) return "";
     const raw = (
       btn.getAttribute("aria-label") ||
       btn.getAttribute("title") ||
+      getAriaLabelledByText(btn) ||
       btn.value ||
       btn.textContent ||
       ""
@@ -408,6 +438,29 @@
     return null;
   }
 
+  function isGenericTileTitle(title) {
+    return (
+      !title ||
+      title === "(untitled)" ||
+      /^(?:customers also bought|buy again|sponsored|add to cart|add to basket)$/i.test(
+        String(title).trim()
+      )
+    );
+  }
+
+  function readLikelyTitle(el) {
+    if (!el) return "";
+    const raw = (
+      el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label"))
+    ) || el.textContent || "";
+    const text = String(raw).replace(/\s+/g, " ").trim();
+    if (!text) return "";
+    if (/^(?:add|move)\s+to\s+(?:cart|basket)\b/i.test(text)) return "";
+    if (/^\$?\d+(?:[.,]\d{2})?$/.test(text)) return "";
+    if (/^\d+(?:\.\d+)?\s+out\s+of\s+5\s+stars/i.test(text)) return "";
+    return text.slice(0, 200);
+  }
+
   function buildItemFromTile(tile, asin) {
     if (!asin) {
       asin = tile.getAttribute("data-asin") || (
@@ -423,14 +476,27 @@
       tile.querySelector("h2 a span, h2 span, h2") ||
       tile.querySelector("[aria-label][role='link']") ||
       tile.querySelector("a.a-link-normal[title]") ||
-      tile.querySelector("a.sc-product-link");
-    let title = "";
-    if (titleEl) {
-      title = (titleEl.getAttribute("title") || titleEl.textContent || "").trim();
-    }
+      tile.querySelector("a.sc-product-link") ||
+      tile.querySelector("a[href*='/dp/'] .a-size-base-plus.a-color-base.a-text-normal") ||
+      tile.querySelector("a[href*='/gp/product/'] .a-size-base-plus.a-color-base.a-text-normal") ||
+      tile.querySelector("a[href*='/dp/'] .a-size-medium.a-color-base.a-text-normal") ||
+      tile.querySelector("a[href*='/gp/product/'] .a-size-medium.a-color-base.a-text-normal") ||
+      tile.querySelector("a[href*='/dp/'] .a-size-base.a-color-base.a-text-normal") ||
+      tile.querySelector("a[href*='/gp/product/'] .a-size-base.a-color-base.a-text-normal") ||
+      tile.querySelector("a[href*='/dp/'] .a-truncate-full") ||
+      tile.querySelector("a[href*='/gp/product/'] .a-truncate-full");
+    let title = readLikelyTitle(titleEl);
     if (!title) {
       const linkWithLabel = tile.querySelector("a[aria-label]");
-      if (linkWithLabel) title = linkWithLabel.getAttribute("aria-label") || "";
+      title = readLikelyTitle(linkWithLabel);
+    }
+    if (!title) {
+      const productLink = tile.querySelector(
+        asin
+          ? `a[href*='/dp/${asin}'], a[href*='/gp/product/${asin}']`
+          : "a[href*='/dp/'], a[href*='/gp/product/']"
+      );
+      title = readLikelyTitle(productLink);
     }
     title = (title || "(untitled)").slice(0, 200);
 
@@ -548,15 +614,8 @@
       if (tile) {
         const fromTile = buildItemFromTile(tile, asin);
         if (fromTile) {
-          if (
-            buttonTitle &&
-            (
-              !fromTile.title ||
-              fromTile.title === "(untitled)" ||
-              /^customers also bought$/i.test(fromTile.title)
-            )
-          ) {
-              fromTile.title = buttonTitle;
+          if (buttonTitle && isGenericTileTitle(fromTile.title)) {
+            fromTile.title = buttonTitle;
           }
           if (sameAsPageItem) {
             if (!fromTile.image && pageItem.image) fromTile.image = pageItem.image;
@@ -656,21 +715,22 @@
         } catch (_inner) { /* skip */ }
       }
     }
-    const candidate = target.closest("button, a, input, [role='button']");
+    const candidate = target.closest("button, a, input, [role='button'], .a-button-inner, .a-button");
     if (!candidate) return null;
-    const text = (
-      candidate.innerText ||
-      candidate.value ||
-      candidate.getAttribute("aria-label") ||
-      candidate.textContent ||
-      ""
-    ).toLowerCase();
+    const text = getControlText(candidate).toLowerCase();
     const looksAtc =
       text.includes("add to cart") ||
       text.includes("add to basket") ||
       text.includes("move to cart") ||
       text.includes("move to basket");
-    return looksAtc ? candidate : null;
+    if (!looksAtc) return null;
+    if (candidate.matches && candidate.matches(".a-button-inner, .a-button")) {
+      const input = candidate.querySelector(
+        "input.a-button-input, input[type='submit'], button, [role='button']"
+      );
+      if (input) return input;
+    }
+    return candidate;
   }
 
   function watchAtcClicks() {
@@ -698,6 +758,8 @@
   // Refreshed via chrome.storage.onChanged below.
   let _settingsCache = { interceptAtc: true, theme: null };
   let _cartsCache = [];
+  let _storageHydrated = false;
+  let _storageHydrationPromise = null;
 
   function sendRequest(message) {
     return new Promise((resolve) => {
@@ -720,27 +782,37 @@
   // the race where clicking ATC before MC_LIST_CARTS responds caused the
   // intercept to fall through with an empty carts cache.
   function hydrateCachesFromStorage() {
-    try {
-      chrome.storage.local.get(["mc.settings.v1", "mc.carts.v1"], (result) => {
-        if (chrome.runtime.lastError) {
-          dwarn("[Styx ATC] storage.get failed:", chrome.runtime.lastError.message);
-          return;
-        }
-        const settings = result["mc.settings.v1"];
-        if (settings && typeof settings === "object") {
-          _settingsCache = Object.assign({}, _settingsCache, settings);
-          applyPickerTheme(document.getElementById(PICKER_ID));
-        }
-        const carts = result["mc.carts.v1"];
-        if (Array.isArray(carts)) _cartsCache = carts;
-        dlog(
-          "[Styx ATC] caches hydrated:",
-          { interceptAtc: _settingsCache.interceptAtc, cartCount: _cartsCache.length }
-        );
-      });
-    } catch (e) {
-      dwarn("[Styx ATC] hydration error:", e);
-    }
+    if (_storageHydrationPromise) return _storageHydrationPromise;
+    _storageHydrationPromise = new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(["mc.settings.v1", "mc.carts.v1"], (result) => {
+          if (chrome.runtime.lastError) {
+            dwarn("[Styx ATC] storage.get failed:", chrome.runtime.lastError.message);
+            _storageHydrated = true;
+            resolve(false);
+            return;
+          }
+          const settings = result["mc.settings.v1"];
+          if (settings && typeof settings === "object") {
+            _settingsCache = Object.assign({}, _settingsCache, settings);
+            applyPickerTheme(document.getElementById(PICKER_ID));
+          }
+          const carts = result["mc.carts.v1"];
+          if (Array.isArray(carts)) _cartsCache = carts;
+          dlog(
+            "[Styx ATC] caches hydrated:",
+            { interceptAtc: _settingsCache.interceptAtc, cartCount: _cartsCache.length }
+          );
+          _storageHydrated = true;
+          resolve(true);
+        });
+      } catch (e) {
+        dwarn("[Styx ATC] hydration error:", e);
+        _storageHydrated = true;
+        resolve(false);
+      }
+    });
+    return _storageHydrationPromise;
   }
 
   function watchStorageForChanges() {
@@ -775,12 +847,7 @@
         if (!e.target || !e.target.closest) return;
         const candidate = e.target.closest("button, a, input, [role='button']");
         if (!candidate) return;
-        const text = (
-          candidate.innerText ||
-          candidate.value ||
-          candidate.getAttribute("aria-label") ||
-          ""
-        ).toLowerCase();
+        const text = getControlText(candidate).toLowerCase();
         const looksAtc =
           text.indexOf("add to cart") >= 0 ||
           text.indexOf("add to basket") >= 0 ||
@@ -806,7 +873,7 @@
   function installAtcIntercept() {
     document.addEventListener(
       "click",
-      (e) => {
+      async (e) => {
         const btn = findAtcButton(e.target);
         if (!btn) return;
 
@@ -840,12 +907,34 @@
           return;
         }
 
+        let heldClick = false;
+        if (!_storageHydrated) {
+          dlog("[Styx ATC] holding ATC click until storage hydration completes");
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          heldClick = true;
+          await hydrateCachesFromStorage();
+        }
+
+        function replayHeldClick() {
+          if (!heldClick || !btn || !btn.isConnected) return;
+          btn.dataset.styxBypass = "1";
+          try { btn.click(); } catch (_err) { /* noop */ }
+        }
+
+        if (_settingsCache.restoring) {
+          dlog("[Styx ATC] restore in progress after hydration — replaying click");
+          replayHeldClick();
+          return;
+        }
         if (!_settingsCache.interceptAtc) {
           dlog("[Styx ATC] intercept disabled in settings → falling through");
+          replayHeldClick();
           return;
         }
         if (!Array.isArray(_cartsCache) || !_cartsCache.length) {
           dlog("[Styx ATC] no saved carts → falling through");
+          replayHeldClick();
           return;
         }
 
@@ -871,12 +960,15 @@
             el = el.parentElement;
           }
           dlog("[Styx ATC] could not read ASIN → falling through. Ancestor chain:", chain);
+          replayHeldClick();
           return;
         }
 
         dlog("[Styx ATC] intercepting click; opening picker", item);
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        if (!heldClick) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
         openCartPicker(btn, item);
       },
       true
