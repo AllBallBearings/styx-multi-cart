@@ -73,7 +73,7 @@ const PREMIUM_CART_LIMIT = 20;
 
 const DEFAULT_ENTITLEMENT = Object.freeze({
   tier: "free",
-  premiumUntil: null,
+  premiumUntil: null, // epoch ms, or null for lifetime premium / free
   autoRenew: false,
   source: null,
   lastChecked: 0,
@@ -191,13 +191,11 @@ async function redeemPromoCode(rawCode) {
 }
 
 // ---- ExtensionPay integration --------------------------------------------
-// Replace EXTPAY_ID with the extension ID assigned at extensionpay.com after
-// registering this extension. See docs/internal/EXTENSIONPAY-SETUP.md.
-// While EXTPAY_ID === "REPLACE_ME", we still expose the upgrade path but
-// every checkout will redirect to ExtensionPay's 404 — fine for local dev,
-// not fine to ship. The build check below logs a console.error if the
-// placeholder is still present so a release build is hard to miss.
-const EXTPAY_ID = "REPLACE_ME";
+// Extension ID assigned at extensionpay.com after registering this extension.
+// See docs/internal/EXTENSIONPAY-SETUP.md. The guards below still check for the
+// old "REPLACE_ME" placeholder so that resetting it to a dev value can't
+// accidentally downgrade a paying user; with a real ID set they're inert.
+const EXTPAY_ID = "styx-multi-cart";
 const EXTPAY_SYNC_ALARM = "mc-extpay-sync";
 const EXTPAY_SYNC_PERIOD_MIN = 60 * 24; // daily
 
@@ -251,6 +249,16 @@ function extpayUserToEntitlementPatch(user, current, nowMs) {
       : 0;
 
   if (user && user.paid === true) {
+    if (user.plan && user.plan.interval === "once") {
+      return {
+        tier: "premium",
+        premiumUntil: null,
+        autoRenew: false,
+        source: "extensionpay",
+        lastChecked: nowMs,
+      };
+    }
+
     let cancelAt = null;
     if (user.subscriptionCancelAt) {
       cancelAt =
@@ -307,6 +315,11 @@ async function syncEntitlementFromExtPay() {
     dwarn("[Styx Multi-Cart] ExtPay getUser failed; leaving entitlement alone:", err);
     return;
   }
+  // DEBUG-only: dump the full raw user object so we can confirm exactly which
+  // fields ExtPay returns for each plan (esp. the lifetime/one-time plan, whose
+  // shape determines whether premiumUntil must be set to "never expires"). Safe
+  // to leave in — gated behind Developer mode, stripped in production builds.
+  dlog("[Styx Multi-Cart] ExtPay getUser() raw object:", JSON.stringify(user, null, 2));
   const current = await readEntitlement();
   const patch = extpayUserToEntitlementPatch(user, current, Date.now());
   await writeEntitlement(patch);
@@ -352,7 +365,7 @@ if (extpay) {
 
 function isPremiumActive(ent, nowMs = Date.now()) {
   if (!ent || ent.tier !== "premium") return false;
-  if (!ent.premiumUntil) return false;
+  if (ent.premiumUntil == null) return true;
   return nowMs < Number(ent.premiumUntil);
 }
 
@@ -3055,12 +3068,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // Open ExtensionPay-hosted Stripe checkout in a new tab.
           // The popup closes itself after the call (the modal lives there).
           // If the user actually pays, extpay.onPaid fires and we re-sync.
+          //
+          // Optional msg.plan deep-links a specific plan's checkout via
+          // openPaymentPage(nickname) → /choose-plan/<nickname>. We allowlist
+          // the known nicknames (set in the extensionpay.com dashboard) so a
+          // bad/renamed value can't build a broken URL — unknown/absent falls
+          // back to the no-arg call, which shows ExtPay's full plan picker.
           if (!extpay) {
             sendResponse({ ok: false, error: "Payment service not available." });
             break;
           }
+          const KNOWN_PLANS = ["annual", "lifetime"];
+          const plan = KNOWN_PLANS.includes(msg.plan) ? msg.plan : null;
           try {
-            extpay.openPaymentPage();
+            if (plan) {
+              extpay.openPaymentPage(plan);
+            } else {
+              extpay.openPaymentPage();
+            }
             sendResponse({ ok: true });
           } catch (err) {
             console.error("[Styx Multi-Cart] openPaymentPage failed:", err);

@@ -1512,22 +1512,35 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
   border-radius: var(--mc-radius-sm);
 }
 
-.mc-paywall-price {
+/* Two-plan paywall actions: Annual + Lifetime side by side, "Maybe later"
+   spanning underneath. Each plan button stacks a label over its price. */
+.mc-paywall-actions {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
-  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.mc-paywall-amount {
-  font-size: 22px;
+.mc-paywall-plan-btn {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  line-height: 1.2;
+}
+
+.mc-paywall-actions [data-action="paywall-close"] {
+  flex-basis: 100%;
+}
+
+.mc-paywall-btn-label {
   font-weight: 700;
-  color: var(--mc-fg);
 }
 
-.mc-paywall-period {
-  font-size: 13px;
-  color: var(--mc-fg-muted);
+.mc-paywall-btn-price {
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 .mc-paywall-features {

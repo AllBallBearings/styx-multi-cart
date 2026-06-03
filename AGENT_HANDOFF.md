@@ -233,6 +233,8 @@ pick up coherently.
 
 #### A2. Store listing assets
 
+#### https://developer.chrome.com/docs/webstore/images?csw=1
+
 - [ ] Icon already done (128×128 from `icons/_render.py`).
 - [ ] Small promo tile 440×280 (Chrome Web Store).
 - [ ] Large promo tile 920×680 (optional, helps featured placement).

@@ -50,8 +50,8 @@ describe("isPremiumActive", () => {
   it("returns false for premium whose premiumUntil has passed", () => {
     expect(isPremiumActive(lapsedPremium(), NOW)).toBe(false);
   });
-  it("returns false for premium with null premiumUntil (malformed)", () => {
-    expect(isPremiumActive({ tier: "premium", premiumUntil: null }, NOW)).toBe(false);
+  it("returns true for premium with null premiumUntil (lifetime)", () => {
+    expect(isPremiumActive({ tier: "premium", premiumUntil: null }, NOW)).toBe(true);
   });
   it("returns false for null/undefined entitlement", () => {
     expect(isPremiumActive(null, NOW)).toBe(false);
@@ -66,6 +66,7 @@ describe("cartLimitFor", () => {
   });
   it("uses premium limit when active", () => {
     expect(cartLimitFor(activePremium(), NOW)).toBe(PREMIUM_CART_LIMIT);
+    expect(cartLimitFor({ tier: "premium", premiumUntil: null }, NOW)).toBe(PREMIUM_CART_LIMIT);
   });
 });
 
