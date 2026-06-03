@@ -102,6 +102,20 @@ body {
   background: var(--mc-bg);
 }
 
+html[data-surface="panel"],
+html[data-surface="panel"] body {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 100vh;
+  max-height: none;
+  overflow-y: auto;
+}
+
+html[data-surface="panel"] body {
+  font-size: 12px;
+}
+
 body.mc-move-modal-open {
   min-height: 560px;
 }
@@ -117,6 +131,13 @@ body.mc-move-modal-open {
     var(--mc-bg-soft) 0%,
     var(--mc-bg) 100%
   );
+}
+
+html[data-surface="panel"] .mc-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 12px;
 }
 
 /* ---- Theme toggle -------------------------------------------------------- */
@@ -165,6 +186,7 @@ body.mc-move-modal-open {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .mc-logo {
@@ -179,6 +201,16 @@ body.mc-move-modal-open {
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+html[data-surface="panel"] .mc-brand-text {
+  min-width: 0;
+}
+
+html[data-surface="panel"] .mc-brand-text h1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mc-brand-title {
@@ -208,12 +240,20 @@ body.mc-move-modal-open {
   color: var(--mc-fg-muted);
 }
 
+html[data-surface="panel"] .mc-tag {
+  display: none;
+}
+
 /* ---- Save block --------------------------------------------------------- */
 
 .mc-save-block {
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--mc-line);
   background: var(--mc-bg);
+}
+
+html[data-surface="panel"] .mc-save-block {
+  padding: 12px;
 }
 
 .mc-label {
@@ -254,12 +294,15 @@ body.mc-move-modal-open {
   display: flex;
   gap: 8px;
   margin-top: 8px;
-  flex-wrap: wrap;
 }
 
 .mc-save-actions .mc-btn {
-  flex: 1 1 auto;
-  min-width: 92px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+html[data-surface="panel"] .mc-toggle {
+  padding: 8px;
 }
 
 /* ---- Settings toggle ---------------------------------------------------- */
@@ -378,6 +421,10 @@ body.mc-move-modal-open {
   background: var(--mc-bg);
 }
 
+html[data-surface="panel"] .mc-list-block {
+  padding: 12px;
+}
+
 .mc-list-header {
   display: flex;
   align-items: baseline;
@@ -421,6 +468,16 @@ body.mc-move-modal-open {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+html[data-surface="panel"] .mc-item {
+  padding: 9px 10px;
+}
+
+html[data-surface="panel"] .mc-item-name-row {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .mc-item-name-row {
@@ -473,6 +530,17 @@ body.mc-move-modal-open {
   flex-wrap: wrap;
   /* Room for the corner badges, which straddle each tile's edge. */
   padding: 8px;
+}
+
+html[data-surface="panel"] .mc-item-thumbs {
+  gap: 8px;
+  padding: 6px;
+}
+
+html[data-surface="panel"] .mc-thumb,
+html[data-surface="panel"] .mc-item-thumb-more {
+  width: 44px;
+  height: 44px;
 }
 
 /* Each item is an interactive tile: click the picture to move it, the X

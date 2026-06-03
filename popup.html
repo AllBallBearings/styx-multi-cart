@@ -159,18 +159,15 @@
           autocomplete="off"
           maxlength="60"
         />
-        <button id="mc-save" class="mc-btn mc-btn-primary" type="button">
-          Save
-        </button>
       </div>
       <div class="mc-save-actions">
         <button
-          id="mc-save-and-clear"
-          class="mc-btn mc-btn-ghost"
+          id="mc-save"
+          class="mc-btn mc-btn-primary"
           type="button"
-          title="Save the current cart, then empty it from Amazon"
+          title="Save the current Amazon cart"
         >
-          Save &amp; clear
+          Save Cart
         </button>
         <button
           id="mc-clear"
@@ -178,7 +175,7 @@
           type="button"
           title="Remove every item from your active Amazon cart"
         >
-          Clear cart
+          Clear Cart
         </button>
       </div>
       <label
@@ -773,6 +770,19 @@
       <div class="mc-modal-backdrop" data-action="settings-close"></div>
       <div class="mc-modal-card">
         <h3 id="mc-settings-title" class="mc-modal-title">Settings</h3>
+
+        <div class="mc-settings-section">
+          <h4 class="mc-settings-heading">Display</h4>
+          <label class="mc-toggle">
+            <input id="mc-dock-toggle" type="checkbox" />
+            <span class="mc-toggle-label">
+              Dock Styx Extension to browser Extensions
+              <span class="mc-toggle-sub">
+                Use the toolbar pop-out instead of the Amazon page side panel.
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div class="mc-settings-section">
           <h4 class="mc-settings-heading">Developer</h4>

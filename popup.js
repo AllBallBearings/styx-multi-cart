@@ -8,11 +8,14 @@
 (function () {
   "use strict";
 
+  if (new URLSearchParams(location.search).get("surface") === "panel") {
+    document.documentElement.dataset.surface = "panel";
+  }
+
   // ---- DOM refs ----------------------------------------------------------
 
   const $name = document.getElementById("mc-name");
   const $save = document.getElementById("mc-save");
-  const $saveAndClear = document.getElementById("mc-save-and-clear");
   const $clear = document.getElementById("mc-clear");
   const $list = document.getElementById("mc-list");
   const $count = document.getElementById("mc-list-count");
@@ -754,26 +757,6 @@
         await refresh();
       } else if (!handleEntitlementError(res)) {
         toast(res.error || "Could not save cart", "error");
-      }
-    });
-  });
-
-  $saveAndClear.addEventListener("click", async () => {
-    const name = ($name.value || "").trim() || defaultName();
-    const ok = await confirmDialog({
-      title: "Save & clear cart?",
-      message: `Save the current Amazon cart as "${name}" and then remove all items from it?`,
-      okLabel: "Save & clear",
-    });
-    if (!ok) return;
-    withLoading($saveAndClear, async () => {
-      const res = await send({ type: "MC_SAVE_AND_CLEAR", name });
-      if (res.ok) {
-        toast(`Saved ${res.saved} item${res.saved === 1 ? "" : "s"} — clearing cart in background.`);
-        $name.value = "";
-        await refresh();
-      } else if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not save & clear", "error");
       }
     });
   });
@@ -1679,8 +1662,15 @@
 
   // Keep display in sync if entitlement is mutated externally (e.g. SW console).
   if (chrome.storage && chrome.storage.onChanged) {
+    let cartsRefreshTimer = null;
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
+      if (changes["mc.carts.v1"]) {
+        clearTimeout(cartsRefreshTimer);
+        cartsRefreshTimer = setTimeout(() => {
+          refresh();
+        }, 50);
+      }
       if (changes[ENT_KEY] && $debugPanel && !$debugPanel.hidden) {
         refreshDebugEntDisplay();
       }
@@ -1837,13 +1827,33 @@
   const $settingsToggle = document.getElementById("mc-settings-toggle");
   const $settingsModal = document.getElementById("mc-settings-modal");
   const $devModeToggle = document.getElementById("mc-devmode-toggle");
+  const $dockToggle = document.getElementById("mc-dock-toggle");
   const $settingsVersion = document.getElementById("mc-settings-version");
+
+  async function readPopupSettings() {
+    const result = await chrome.storage.local.get("mc.settings.v1");
+    const settings = result["mc.settings.v1"];
+    return settings && typeof settings === "object" ? settings : {};
+  }
+
+  async function writePopupSettings(patch) {
+    const settings = Object.assign({}, await readPopupSettings(), patch || {});
+    await chrome.storage.local.set({ "mc.settings.v1": settings });
+    return settings;
+  }
+
+  async function loadDockSetting() {
+    if (!$dockToggle) return;
+    const settings = await readPopupSettings();
+    $dockToggle.checked = !!settings.dockToExtensionsBar;
+  }
 
   function openSettings() {
     if (!$settingsModal) return;
     // Reflect current state in case it was changed elsewhere (Ctrl+Alt+D,
     // tagline unlock, another popup instance).
     if ($devModeToggle) $devModeToggle.checked = !!devModeEnabled;
+    loadDockSetting().catch(() => {});
     // Populate version from manifest.
     if ($settingsVersion) {
       try {
@@ -1886,6 +1896,21 @@
       // The toast confirms the side-effect since the debug panel itself is
       // below the fold of a 600px popup and easy to miss appearing.
       toast(want ? "Developer mode on" : "Developer mode off", "ok");
+    });
+  }
+
+  if ($dockToggle) {
+    $dockToggle.addEventListener("change", async () => {
+      const dockToExtensionsBar = !!$dockToggle.checked;
+      try {
+        await writePopupSettings({ dockToExtensionsBar });
+        if (!dockToExtensionsBar) {
+          toast("Side panel enabled on Amazon pages", "ok");
+        }
+      } catch (_e) {
+        $dockToggle.checked = !dockToExtensionsBar;
+        toast("Could not save display setting", "error");
+      }
     });
   }
 

@@ -755,7 +755,12 @@
 
   // Cached so click handlers don't pay a runtime.sendMessage round-trip.
   // Refreshed via chrome.storage.onChanged below.
-  let _settingsCache = { interceptAtc: true, theme: null };
+  let _settingsCache = {
+    interceptAtc: true,
+    theme: null,
+    dockToExtensionsBar: false,
+    sidePanelCollapsed: false,
+  };
   let _cartsCache = [];
   // Entitlement mirror — see lib/helpers.js / background.js for the source of
   // truth. Constants duplicated for the same "service-worker can't import
@@ -837,6 +842,524 @@
     });
   }
 
+  // ---- Default right-side popup panel -------------------------------------
+
+  const SIDE_PANEL_ID = "__styx-side-panel";
+  const SIDE_PANEL_OFFSET_STYLE_ID = "__styx-side-panel-offset";
+  const AMAZON_CART_FLYOUT_SELECTOR = "#nav-flyout-ewc, #nav-flyout-cart";
+  let _amazonCartPanelHidden = false;
+  let _amazonCartObserver = null;
+  let _amazonCartEnhanceTimer = null;
+  let _amazonCartViewportListenersInstalled = false;
+
+  function canHostSidePanel() {
+    try {
+      if (window.top !== window) return false;
+      if (!chrome || !chrome.runtime || !chrome.runtime.getURL) return false;
+    } catch (_e) {
+      return false;
+    }
+    return true;
+  }
+
+  function writeSettingsPatch(patch) {
+    try {
+      chrome.storage.local.get("mc.settings.v1", (result) => {
+        if (chrome.runtime.lastError) return;
+        const current =
+          result["mc.settings.v1"] && typeof result["mc.settings.v1"] === "object"
+            ? result["mc.settings.v1"]
+            : {};
+        chrome.storage.local.set({
+          "mc.settings.v1": Object.assign({}, current, patch || {}),
+        });
+      });
+    } catch (_e) { /* best-effort UI preference write */ }
+  }
+
+  function setSidePanelCollapsed(collapsed) {
+    _settingsCache.sidePanelCollapsed = !!collapsed;
+    const host = document.getElementById(SIDE_PANEL_ID);
+    if (host) {
+      host.classList.toggle("is-collapsed", !!collapsed);
+      const btn = host.shadowRoot && host.shadowRoot.querySelector(".styx-side-tab");
+      if (btn) {
+        btn.setAttribute(
+          "aria-label",
+          collapsed ? "Show Styx side panel" : "Hide Styx side panel"
+        );
+        btn.title = collapsed ? "Show Styx" : "Hide Styx";
+      }
+    }
+    syncSidePanelPageOffset();
+    writeSettingsPatch({ sidePanelCollapsed: !!collapsed });
+  }
+
+  function reflectAmazonCartTab() {
+    const host = document.getElementById(SIDE_PANEL_ID);
+    if (!host) return;
+    host.classList.toggle("amazon-cart-hidden", _amazonCartPanelHidden);
+  }
+
+  function setAmazonCartPanelHidden(hidden) {
+    _amazonCartPanelHidden = !!hidden;
+    applyAmazonCartHiddenClass();
+    reflectAmazonCartTab();
+    syncSidePanelPageOffset();
+  }
+
+  function applyAmazonCartHiddenClass() {
+    if (!document.body) return;
+    const hasClass = document.body.classList.contains("styx-amazon-cart-panel-hidden");
+    if (_amazonCartPanelHidden !== hasClass) {
+      document.body.classList.toggle("styx-amazon-cart-panel-hidden", _amazonCartPanelHidden);
+    }
+  }
+
+  function findAmazonCartFlyouts() {
+    return Array.from(document.querySelectorAll(AMAZON_CART_FLYOUT_SELECTOR));
+  }
+
+  function decorateAmazonGoToCart(flyout) {
+    const candidates = flyout.querySelectorAll("a, button, span.a-button-text, input[type='submit']");
+    for (const el of candidates) {
+      const raw = (el.value || el.textContent || "").trim().replace(/\s+/g, " ");
+      if (!/^go to cart$/i.test(raw)) continue;
+      if (el.dataset && el.dataset.styxGoCartDecorated === "1") continue;
+      if (el.classList) el.classList.add("styx-amazon-cart-go");
+      if (el.tagName === "INPUT") {
+        el.value = "Go to Amazon Cart";
+      } else {
+        el.innerHTML = 'Go to <span class="styx-amazon-word">Amazon</span> Cart';
+      }
+      if (el.dataset) el.dataset.styxGoCartDecorated = "1";
+    }
+  }
+
+  function getAmazonCartEnhancementTarget(flyout) {
+    const selectors = ["#ewc-content", ".ewc-content", ".nav-flyout-content"];
+    for (const sel of selectors) {
+      const el = flyout.querySelector(sel);
+      if (el) return el;
+    }
+    return flyout;
+  }
+
+  function enhanceAmazonCartFlyout(flyout) {
+    if (!flyout) return;
+    decorateAmazonGoToCart(flyout);
+    const target = getAmazonCartEnhancementTarget(flyout);
+    if (!target.classList.contains("styx-amazon-cart-hide-host")) {
+      target.classList.add("styx-amazon-cart-hide-host");
+    }
+    for (const existing of flyout.querySelectorAll(".styx-amazon-cart-hide")) {
+      if (existing.parentElement !== target) existing.remove();
+    }
+    if (!target.querySelector(":scope > .styx-amazon-cart-hide")) {
+      const hide = document.createElement("button");
+      hide.type = "button";
+      hide.className = "styx-amazon-cart-hide";
+      hide.textContent = "Hide";
+      hide.title = "Hide Amazon Cart Panel";
+      hide.setAttribute("aria-label", "Hide Amazon Cart Panel");
+      hide.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setAmazonCartPanelHidden(true);
+      });
+      target.insertBefore(hide, target.firstChild);
+    }
+  }
+
+  function enhanceAmazonCartFlyouts() {
+    for (const flyout of findAmazonCartFlyouts()) enhanceAmazonCartFlyout(flyout);
+    applyAmazonCartHiddenClass();
+    reflectAmazonCartTab();
+    syncSidePanelPageOffset();
+  }
+
+  function showAmazonCartPanel() {
+    setAmazonCartPanelHidden(false);
+    enhanceAmazonCartFlyouts();
+  }
+
+  function installAmazonCartObserver() {
+    if (_amazonCartObserver || !canHostSidePanel()) return;
+    const scheduleEnhance = () => {
+      clearTimeout(_amazonCartEnhanceTimer);
+      _amazonCartEnhanceTimer = setTimeout(() => {
+        enhanceAmazonCartFlyouts();
+      }, 80);
+    };
+    _amazonCartObserver = new MutationObserver(() => {
+      scheduleEnhance();
+    });
+    _amazonCartObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style", "hidden"],
+    });
+    if (!_amazonCartViewportListenersInstalled) {
+      _amazonCartViewportListenersInstalled = true;
+      window.addEventListener("scroll", scheduleEnhance, { passive: true });
+      window.addEventListener("resize", scheduleEnhance, { passive: true });
+    }
+    enhanceAmazonCartFlyouts();
+  }
+
+  function reflectSidePanelCollapsed(host, collapsed) {
+    if (!host) return;
+    host.classList.toggle("is-collapsed", !!collapsed);
+    const btn = host.shadowRoot && host.shadowRoot.querySelector(".styx-side-tab");
+    if (!btn) return;
+    btn.setAttribute(
+      "aria-label",
+      collapsed ? "Show Styx side panel" : "Hide Styx side panel"
+    );
+    btn.title = collapsed ? "Show Styx" : "Hide Styx";
+  }
+
+  function removeSidePanel() {
+    const host = document.getElementById(SIDE_PANEL_ID);
+    if (host) host.remove();
+    removeSidePanelPageOffset();
+  }
+
+  function removeSidePanelPageOffset() {
+    const style = document.getElementById(SIDE_PANEL_OFFSET_STYLE_ID);
+    if (style) style.remove();
+  }
+
+  function syncSidePanelPageOffset() {
+    if (!canHostSidePanel() || _settingsCache.dockToExtensionsBar) {
+      removeSidePanelPageOffset();
+      return;
+    }
+    if (_settingsCache.sidePanelCollapsed) {
+      removeSidePanelPageOffset();
+      return;
+    }
+    let style = document.getElementById(SIDE_PANEL_OFFSET_STYLE_ID);
+    if (!style) {
+      style = document.createElement("style");
+      style.id = SIDE_PANEL_OFFSET_STYLE_ID;
+      (document.head || document.documentElement).appendChild(style);
+    }
+    const css =
+      "html {" +
+        "--styx-side-panel-space: clamp(220px, 20vw, 420px);" +
+        "--styx-total-panel-space: var(--styx-side-panel-space);" +
+        "--styx-page-available-width: calc(100vw - var(--styx-side-panel-space));" +
+      "}" +
+      "html, body { overflow-x: clip !important; }" +
+      "body {" +
+        "box-sizing: border-box !important;" +
+        "width: var(--styx-page-available-width) !important;" +
+        "max-width: var(--styx-page-available-width) !important;" +
+        "min-width: 0 !important;" +
+        "margin-right: var(--styx-total-panel-space) !important;" +
+        "overflow-x: clip !important;" +
+      "}" +
+      // Amazon's JS sets an explicit inline width on #nav-belt / #nav-main sized
+      // to window.innerWidth (which stays full-width because Styx is just a fixed
+      // overlay, not a real viewport shrink). That over-wide bar then gets its
+      // right side — the account/cart tools — chopped off by body's overflow-x
+      // clip, and Amazon re-applies the inline width on every scroll/resize.
+      // Overriding only these two containers to the available width (with
+      // !important, which beats Amazon's non-important inline width) reins the bar
+      // in; #nav-search is deliberately left alone so it flexes/shrinks naturally.
+      // Do NOT add overflow clipping here — that was what chopped the tools before.
+      "body #nav-belt, body #nav-main {" +
+        "box-sizing: border-box !important;" +
+        "width: var(--styx-page-available-width) !important;" +
+        "max-width: var(--styx-page-available-width) !important;" +
+        "min-width: 0 !important;" +
+      "}" +
+      "body #a-page, body #dp, body #dp-container, body #ppd, body #centerCol," +
+      "body #rightCol, body #rhf, body #sc-page, body #sc-active-cart," +
+      "body #sc-buy-box, body #search, body #search-results, body .s-main-slot," +
+      "body .s-result-list, body .s-desktop-width-max, body .s-desktop-content," +
+      "body #search .sg-row, body [data-component-type='s-search-result'] {" +
+        "box-sizing: border-box !important;" +
+        "width: min(100%, var(--styx-page-available-width)) !important;" +
+        "max-width: var(--styx-page-available-width) !important;" +
+        "min-width: 0 !important;" +
+      "}" +
+      "body #search .sg-col-20-of-24, body #search .sg-col-16-of-20," +
+      "body #search .sg-col-12-of-16, body #search .sg-col-8-of-12," +
+      "body #search .sg-col-4-of-8 {" +
+        "box-sizing: border-box !important;" +
+        "max-width: 100% !important;" +
+        "min-width: 0 !important;" +
+      "}" +
+      "body .a-popover, body .a-modal-scroller {" +
+        "max-width: var(--styx-page-available-width) !important;" +
+      "}" +
+      // The Amazon cart strip (#nav-flyout-ewc / #nav-flyout-cart) keeps its own
+      // native position + vertical placement + scroll behavior. We only nudge it
+      // left of Styx. Previously we forced position:fixed with a top recomputed
+      // from the live header on every scroll/resize, which shifted the strip up
+      // over the header and clipped it. Owning only the horizontal offset lets it
+      // behave like the right margin it is when Styx is not shown.
+      "body #nav-flyout-ewc, body #nav-flyout-cart {" +
+        "left: auto !important;" +
+        "right: var(--styx-side-panel-space) !important;" +
+        "box-sizing: border-box !important;" +
+        "max-width: min(360px, var(--styx-page-available-width)) !important;" +
+      "}" +
+      "body.styx-amazon-cart-panel-hidden #nav-flyout-ewc," +
+      "body.styx-amazon-cart-panel-hidden #nav-flyout-cart {" +
+        "display: none !important;" +
+      "}" +
+      "body #nav-flyout-ewc .styx-amazon-word," +
+      "body #nav-flyout-cart .styx-amazon-word {" +
+        "color: #ff9900 !important;" +
+        "font-weight: 800 !important;" +
+        "margin: 0 2px !important;" +
+      "}" +
+      "body #nav-flyout-ewc .styx-amazon-cart-go," +
+      "body #nav-flyout-cart .styx-amazon-cart-go {" +
+        "box-sizing: border-box !important;" +
+        "display: inline-flex !important;" +
+        "align-items: center !important;" +
+        "justify-content: center !important;" +
+        "gap: 0 !important;" +
+        "width: 100% !important;" +
+        "min-height: 28px !important;" +
+        "padding: 4px 10px !important;" +
+        "text-align: center !important;" +
+        "white-space: nowrap !important;" +
+        "font-size: 12px !important;" +
+        "line-height: 1.15 !important;" +
+      "}" +
+      "body #nav-flyout-ewc .styx-amazon-cart-hide-host," +
+      "body #nav-flyout-cart .styx-amazon-cart-hide-host {" +
+        "position: relative !important;" +
+      "}" +
+      "body #nav-flyout-ewc .styx-amazon-cart-hide," +
+      "body #nav-flyout-cart .styx-amazon-cart-hide {" +
+        "position: absolute !important;" +
+        "top: 6px !important;" +
+        "right: 6px !important;" +
+        "z-index: 2 !important;" +
+        "height: 22px !important;" +
+        "padding: 0 8px !important;" +
+        "border: 1px solid #d5d9d9 !important;" +
+        "border-radius: 11px !important;" +
+        "background: #fff !important;" +
+        "color: #37475a !important;" +
+        "font: 600 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif !important;" +
+        "cursor: pointer !important;" +
+        "box-shadow: 0 1px 3px rgba(15, 17, 21, 0.16) !important;" +
+      "}" +
+      "body #nav-flyout-ewc .styx-amazon-cart-hide:hover," +
+      "body #nav-flyout-cart .styx-amazon-cart-hide:hover {" +
+        "border-color: #ff9900 !important;" +
+        "color: #111827 !important;" +
+      "}";
+    if (style.textContent !== css) style.textContent = css;
+  }
+
+  function syncSidePanel() {
+    if (!canHostSidePanel()) return;
+    if (_settingsCache.dockToExtensionsBar) {
+      removeSidePanel();
+      return;
+    }
+    const collapsed = !!_settingsCache.sidePanelCollapsed;
+    let host = document.getElementById(SIDE_PANEL_ID);
+    if (host) {
+      reflectSidePanelCollapsed(host, collapsed);
+      syncSidePanelPageOffset();
+      return;
+    }
+
+    host = document.createElement("div");
+    host.id = SIDE_PANEL_ID;
+    host.className = collapsed ? "is-collapsed" : "";
+    const shadow = host.attachShadow({ mode: "open" });
+    const popupUrl = chrome.runtime.getURL("popup.html?surface=panel");
+    const iconUrl = chrome.runtime.getURL("icons/icon32.png");
+    shadow.innerHTML = `
+      <style>
+        :host {
+          --styx-panel-w: clamp(220px, 20vw, 420px);
+          position: fixed !important;
+          top: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
+          width: calc(var(--styx-panel-w) + 42px) !important;
+          height: 100vh !important;
+          z-index: 2147483600 !important;
+          pointer-events: none !important;
+          color-scheme: light dark;
+        }
+        :host(.is-collapsed) {
+          width: 46px !important;
+        }
+        .styx-side-shell {
+          position: absolute;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          width: var(--styx-panel-w);
+          background: #fff;
+          border-left: 1px solid rgba(15, 17, 21, 0.18);
+          box-shadow: -8px 0 28px rgba(15, 17, 21, 0.18);
+          pointer-events: auto;
+          transition: transform 180ms ease, opacity 140ms ease;
+        }
+        :host(.is-collapsed) .styx-side-shell {
+          opacity: 0;
+          pointer-events: none;
+          transform: translateX(100%);
+        }
+        .styx-side-frame {
+          display: block;
+          width: 100%;
+          height: 100%;
+          border: 0;
+          background: #fff;
+        }
+        .styx-side-tab {
+          position: absolute;
+          top: 33%;
+          left: 0;
+          width: 42px;
+          height: 56px;
+          transform: translateY(-50%);
+          border: 1px solid rgba(15, 17, 21, 0.2);
+          border-right: 0;
+          border-radius: 10px 0 0 10px;
+          background: #fff;
+          box-shadow: -3px 2px 14px rgba(15, 17, 21, 0.18);
+          cursor: pointer;
+          pointer-events: auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+        @keyframes styxTabGlow {
+          0%, 100% {
+            box-shadow: -3px 2px 14px rgba(15, 17, 21, 0.18),
+                        0 0 6px 1px rgba(255, 153, 0, 0.4);
+          }
+          50% {
+            box-shadow: -3px 2px 14px rgba(15, 17, 21, 0.18),
+                        0 0 0 4px rgba(255, 153, 0, 0.38),
+                        0 0 22px 6px rgba(255, 153, 0, 0.95);
+          }
+        }
+        :host(.is-collapsed) .styx-side-tab {
+          left: auto;
+          right: 0;
+          animation: styxTabGlow 2.6s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          :host(.is-collapsed) .styx-side-tab { animation: none; }
+        }
+        .styx-amazon-tab {
+          position: absolute;
+          top: calc(33% - 66px);
+          left: 0;
+          width: 42px;
+          height: 44px;
+          transform: translateY(-50%);
+          border: 1px solid rgba(15, 17, 21, 0.2);
+          border-right: 0;
+          border-radius: 10px 0 0 10px;
+          background: #fff;
+          box-shadow: -3px 2px 14px rgba(15, 17, 21, 0.18);
+          cursor: pointer;
+          pointer-events: auto;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          color: #131a22;
+        }
+        :host(.amazon-cart-hidden) .styx-amazon-tab {
+          display: flex;
+        }
+        :host(.is-collapsed) .styx-amazon-tab {
+          left: auto;
+          right: 0;
+        }
+        .styx-amazon-tab:hover,
+        .styx-amazon-tab:focus-visible {
+          outline: none;
+          border-color: #ff9900;
+          box-shadow: -3px 2px 14px rgba(15, 17, 21, 0.18), 0 0 0 2px rgba(255, 153, 0, 0.24);
+        }
+        .styx-side-tab:hover,
+        .styx-side-tab:focus-visible {
+          outline: none;
+          border-color: #ff9900;
+          box-shadow: -3px 2px 14px rgba(15, 17, 21, 0.18), 0 0 0 2px rgba(255, 153, 0, 0.24);
+        }
+        .styx-side-icon {
+          width: 28px;
+          height: 28px;
+          border-radius: 7px;
+          background: center / contain no-repeat url("${iconUrl}");
+        }
+        @media (prefers-color-scheme: dark) {
+          .styx-side-shell,
+          .styx-side-frame,
+          .styx-side-tab,
+          .styx-amazon-tab {
+            background: #161a1f;
+          }
+          .styx-side-shell {
+            border-left-color: rgba(255, 255, 255, 0.14);
+            box-shadow: -8px 0 28px rgba(0, 0, 0, 0.38);
+          }
+          .styx-side-tab,
+          .styx-amazon-tab {
+            border-color: rgba(255, 255, 255, 0.18);
+            box-shadow: -3px 2px 14px rgba(0, 0, 0, 0.34);
+            color: #f3efe6;
+          }
+        }
+      </style>
+      <button
+        type="button"
+        class="styx-amazon-tab"
+        aria-label="Show Amazon Cart Panel"
+        title="Show Amazon Cart Panel"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 6h2l1.3 8.2a2 2 0 0 0 2 1.7h6.6a2 2 0 0 0 1.9-1.4L20 9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="10" cy="20" r="1.5" fill="currentColor"/>
+          <circle cx="17" cy="20" r="1.5" fill="currentColor"/>
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="styx-side-tab"
+        aria-label="${collapsed ? "Show Styx side panel" : "Hide Styx side panel"}"
+        title="${collapsed ? "Show Styx" : "Hide Styx"}"
+      >
+        <span class="styx-side-icon" aria-hidden="true"></span>
+      </button>
+      <div class="styx-side-shell">
+        <iframe class="styx-side-frame" src="${popupUrl}" title="Styx Multi-Cart"></iframe>
+      </div>
+    `;
+    shadow.querySelector(".styx-side-tab").addEventListener("click", () => {
+      setSidePanelCollapsed(!host.classList.contains("is-collapsed"));
+    });
+    shadow.querySelector(".styx-amazon-tab").addEventListener("click", () => {
+      showAmazonCartPanel();
+    });
+    (document.body || document.documentElement).appendChild(host);
+    reflectAmazonCartTab();
+    syncSidePanelPageOffset();
+    installAmazonCartObserver();
+  }
+
   // Read directly from chrome.storage.local. The content script has access
   // to it without round-tripping through the service worker, which removes
   // the race where clicking ATC before MC_LIST_CARTS responds caused the
@@ -854,6 +1377,7 @@
           if (settings && typeof settings === "object") {
             _settingsCache = Object.assign({}, _settingsCache, settings);
             applyPickerTheme(document.getElementById(PICKER_ID));
+            syncSidePanel();
           }
           const carts = result["mc.carts.v1"];
           if (Array.isArray(carts)) _cartsCache = carts;
@@ -885,6 +1409,7 @@
         if (next && typeof next === "object") {
           _settingsCache = Object.assign({}, _settingsCache, next);
           applyPickerTheme(document.getElementById(PICKER_ID));
+          syncSidePanel();
         }
       }
       if (changes["mc.carts.v1"]) {
@@ -1930,5 +2455,8 @@
   // Eliminates the race where clicking ATC right after page load fell
   // through because MC_LIST_CARTS hadn't responded yet.
   hydrateCachesFromStorage();
+  // Hydration usually syncs the panel immediately. This fallback keeps the
+  // default side panel available even if the storage callback is delayed.
+  setTimeout(syncSidePanel, 150);
   if (onUpsell) watchUpsellClicks();
 })();

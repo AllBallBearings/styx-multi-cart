@@ -27,6 +27,9 @@ test.describe("popup — empty state", () => {
     const input = page.locator("#mc-name");
     await expect(input).toHaveValue("");
     await expect(input).toHaveAttribute("placeholder", /./);
+    await expect(page.locator("#mc-save")).toHaveText("Save Cart");
+    await expect(page.locator("#mc-clear")).toHaveText("Clear Cart");
+    await expect(page.locator("#mc-save-and-clear")).toHaveCount(0);
   });
 });
 
@@ -93,6 +96,44 @@ test.describe("popup — saving carts", () => {
     const create = log.find((m) => m.type === "MC_CREATE_EMPTY_CART");
     expect(create).toBeTruthy();
     expect(create.name).toBe("Empty Cart Test");
+  });
+
+  test("refreshes when carts change in storage while the popup is open", async ({
+    popup,
+  }) => {
+    const page = await popup({ carts: [] });
+
+    await expect(page.locator("#mc-list .mc-item")).toHaveCount(0);
+
+    await page.evaluate(async () => {
+      await chrome.storage.local.set({
+        "mc.carts.v1": [
+          {
+            id: "external-cart",
+            name: "External Add",
+            savedAt: new Date().toISOString(),
+            lastUsedAt: Date.now(),
+            host: "www.amazon.com",
+            items: [
+              {
+                asin: "BEXTERNAL1",
+                title: "Added from Amazon page",
+                quantity: 1,
+                price: "$12.00",
+                image: "",
+                url: "",
+              },
+            ],
+          },
+        ],
+      });
+    });
+
+    await expect(page.locator("#mc-list .mc-item")).toHaveCount(1);
+    await expect(page.locator("#mc-list .mc-item-name").first()).toHaveText(
+      "External Add"
+    );
+    await expect(page.locator("#mc-list-count")).toHaveText("1");
   });
 });
 
@@ -572,6 +613,24 @@ test.describe("popup — settings toggles", () => {
       () => window.__mcTestState["mc.settings.v1"].theme
     );
     expect(persisted).toBe(afterSecond);
+  });
+
+  test("dock toggle persists side panel preference", async ({ popup }) => {
+    const page = await popup({
+      carts: [],
+      settings: { dockToExtensionsBar: false },
+    });
+
+    await page.locator("#mc-settings-toggle").click();
+    const toggle = page.locator("#mc-dock-toggle");
+    await expect(toggle).not.toBeChecked();
+
+    await toggle.check();
+
+    const persisted = await page.evaluate(
+      () => window.__mcTestState["mc.settings.v1"].dockToExtensionsBar
+    );
+    expect(persisted).toBe(true);
   });
 });
 

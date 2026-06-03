@@ -83,6 +83,8 @@ const DEFAULT_ENTITLEMENT = Object.freeze({
 // merge with defaults so old stored shapes never block a launch.
 const DEFAULT_SETTINGS = {
   interceptAtc: true,
+  dockToExtensionsBar: false,
+  sidePanelCollapsed: false,
   // Ephemeral flag — set to true for the duration of a cart restore so the
   // observer.js ATC intercept stands down. Cleared in a finally block so a
   // crash or early return can never leave interception permanently disabled.
