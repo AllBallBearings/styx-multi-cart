@@ -8,11 +8,18 @@
 (function () {
   "use strict";
 
+  // The native Chrome side panel loads this page with ?surface=sidepanel so
+  // it can fill the panel's width/height instead of the fixed popup size.
+  // ("panel" is the legacy in-page-iframe value, kept for safety.)
+  const _surface = new URLSearchParams(location.search).get("surface");
+  if (_surface === "sidepanel" || _surface === "panel") {
+    document.documentElement.dataset.surface = _surface;
+  }
+
   // ---- DOM refs ----------------------------------------------------------
 
   const $name = document.getElementById("mc-name");
   const $save = document.getElementById("mc-save");
-  const $saveAndClear = document.getElementById("mc-save-and-clear");
   const $clear = document.getElementById("mc-clear");
   const $list = document.getElementById("mc-list");
   const $count = document.getElementById("mc-list-count");
@@ -753,26 +760,6 @@
         await refresh();
       } else if (!handleEntitlementError(res)) {
         toast(res.error || "Could not save cart", "error");
-      }
-    });
-  });
-
-  $saveAndClear.addEventListener("click", async () => {
-    const name = ($name.value || "").trim() || defaultName();
-    const ok = await confirmDialog({
-      title: "Save & clear cart?",
-      message: `Save the current Amazon cart as "${name}" and then remove all items from it?`,
-      okLabel: "Save & clear",
-    });
-    if (!ok) return;
-    withLoading($saveAndClear, async () => {
-      const res = await send({ type: "MC_SAVE_AND_CLEAR", name });
-      if (res.ok) {
-        toast(`Saved ${res.saved} item${res.saved === 1 ? "" : "s"} — clearing cart in background.`);
-        $name.value = "";
-        await refresh();
-      } else if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not save & clear", "error");
       }
     });
   });
@@ -1681,8 +1668,15 @@
 
   // Keep display in sync if entitlement is mutated externally (e.g. SW console).
   if (chrome.storage && chrome.storage.onChanged) {
+    let cartsRefreshTimer = null;
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
+      if (changes["mc.carts.v1"]) {
+        clearTimeout(cartsRefreshTimer);
+        cartsRefreshTimer = setTimeout(() => {
+          refresh();
+        }, 50);
+      }
       if (changes[ENT_KEY] && $debugPanel && !$debugPanel.hidden) {
         refreshDebugEntDisplay();
       }

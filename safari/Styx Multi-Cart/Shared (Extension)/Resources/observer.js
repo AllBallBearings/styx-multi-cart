@@ -541,6 +541,9 @@
     if (asin) {
       const quantity = getQuantityFromAtcButton(btn);
       const buttonTitle = getTitleFromAtcButton(btn);
+      const pageItem = buildItemFromProductPage();
+      const sameAsPageItem =
+        pageItem && pageItem.asin === String(asin).toUpperCase();
       const tile = findTileForAsin(asin, btn);
       if (tile) {
         const fromTile = buildItemFromTile(tile, asin);
@@ -553,10 +556,21 @@
               /^customers also bought$/i.test(fromTile.title)
             )
           ) {
-            fromTile.title = buttonTitle;
+              fromTile.title = buttonTitle;
+          }
+          if (sameAsPageItem) {
+            if (!fromTile.image && pageItem.image) fromTile.image = pageItem.image;
+            if (!fromTile.price && pageItem.price) fromTile.price = pageItem.price;
+            if (pageItem.variantLabel) fromTile.variantLabel = pageItem.variantLabel;
           }
           return Object.assign(fromTile, { quantity });
         }
+      }
+      if (sameAsPageItem) {
+        return Object.assign({}, pageItem, {
+          title: buttonTitle || pageItem.title,
+          quantity,
+        });
       }
       // Minimal fallback — we know the ASIN but couldn't enrich.
       return {
@@ -682,7 +696,7 @@
 
   // Cached so click handlers don't pay a runtime.sendMessage round-trip.
   // Refreshed via chrome.storage.onChanged below.
-  let _settingsCache = { interceptAtc: true };
+  let _settingsCache = { interceptAtc: true, theme: null };
   let _cartsCache = [];
 
   function sendRequest(message) {
@@ -715,6 +729,7 @@
         const settings = result["mc.settings.v1"];
         if (settings && typeof settings === "object") {
           _settingsCache = Object.assign({}, _settingsCache, settings);
+          applyPickerTheme(document.getElementById(PICKER_ID));
         }
         const carts = result["mc.carts.v1"];
         if (Array.isArray(carts)) _cartsCache = carts;
@@ -736,6 +751,7 @@
         const next = changes["mc.settings.v1"].newValue;
         if (next && typeof next === "object") {
           _settingsCache = Object.assign({}, _settingsCache, next);
+          applyPickerTheme(document.getElementById(PICKER_ID));
         }
       }
       if (changes["mc.carts.v1"]) {
@@ -995,6 +1011,20 @@
   const PICKER_ID = "__styx-picker";
   const PICKER_STYLE_ID = "__styx-picker-style";
 
+  function resolvePickerTheme() {
+    const theme = _settingsCache && _settingsCache.theme;
+    if (theme === "dark" || theme === "light") return theme;
+    return window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+
+  function applyPickerTheme(root) {
+    if (!root) return;
+    root.dataset.styxTheme = resolvePickerTheme();
+  }
+
   function isUsablePickerThumb(url) {
     return Boolean(
       url &&
@@ -1124,6 +1154,62 @@
         text-align: center; padding: 24px;
         animation: styxPkFade 140ms ease-out;
       }
+      #${PICKER_ID}[data-styx-theme="light"] {
+        color: #131a22;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-backdrop {
+        background: rgba(15, 17, 21, 0.35);
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-modal {
+        background: #ffffff;
+        border-color: #c9bfae;
+        box-shadow: 0 1px 2px rgba(15,17,21,0.08), 0 12px 32px rgba(15,17,21,0.18);
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-close {
+        color: #4a5360;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-close:hover {
+        background: rgba(15,17,21,0.06);
+        color: #131a22;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-header,
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-footer {
+        border-color: #e0d9cc;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-thumb,
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-thumb {
+        background: #f7f3ec;
+        border-color: #e0d9cc;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-title,
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-name {
+        color: #131a22;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-sub,
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-prompt,
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-count {
+        color: #7a8492;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row {
+        background: #f7f3ec;
+        border-color: #e0d9cc;
+        color: #131a22;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row:hover {
+        background: #ffffff;
+        border-color: #ff9900;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-escape {
+        color: #4a5360;
+        border-color: #c9bfae;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-escape:hover {
+        background: #f7f3ec;
+        color: #131a22;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-confirm {
+        background: rgba(255, 255, 255, 0.92);
+      }
     `;
     const style = document.createElement("style");
     style.id = PICKER_STYLE_ID;
@@ -1153,6 +1239,7 @@
     root.id = PICKER_ID;
     root.setAttribute("role", "dialog");
     root.setAttribute("aria-modal", "true");
+    applyPickerTheme(root);
 
     const qty = Math.max(1, Math.min(99, Number(item.quantity) || 1));
     const priceBit = item.price ? `${escapeHtml(item.price)} · ` : "";

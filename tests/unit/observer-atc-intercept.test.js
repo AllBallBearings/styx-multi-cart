@@ -12,17 +12,33 @@ function nextTick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function loadObserver(html, { url = "https://www.amazon.com/dp/B111111111" } = {}) {
+function loadObserver(
+  html,
+  {
+    url = "https://www.amazon.com/dp/B111111111",
+    settings = {},
+    prepareWindow,
+  } = {}
+) {
   const messages = [];
+  const storedSettings = Object.assign(
+    { interceptAtc: true },
+    settings
+  );
   const dom = new JSDOM(html, {
     url,
     runScripts: "outside-only",
     pretendToBeVisual: true,
   });
 
+  if (prepareWindow) prepareWindow(dom.window);
+
   dom.window.chrome = {
     runtime: {
       lastError: null,
+      getURL(path) {
+        return `chrome-extension://test-id/${path}`;
+      },
       sendMessage(message, callback) {
         messages.push(message);
         if (callback) callback({ ok: true });
@@ -32,7 +48,7 @@ function loadObserver(html, { url = "https://www.amazon.com/dp/B111111111" } = {
       local: {
         get(_keys, callback) {
           callback({
-            "mc.settings.v1": { interceptAtc: true },
+            "mc.settings.v1": storedSettings,
             "mc.carts.v1": [
               {
                 id: "cart-1",
@@ -44,6 +60,12 @@ function loadObserver(html, { url = "https://www.amazon.com/dp/B111111111" } = {
             ],
             "mc.entitlement.v1": { tier: "free", premiumUntil: null },
           });
+        },
+        set(obj, callback) {
+          if (obj && obj["mc.settings.v1"]) {
+            Object.assign(storedSettings, obj["mc.settings.v1"]);
+          }
+          if (callback) callback();
         },
       },
       onChanged: {
@@ -227,6 +249,51 @@ describe("observer.js ATC intercept", () => {
             id="add-to-cart-button"
             type="submit"
             name="submit.add-to-cart"
+            aria-label="Add to cart"
+          />
+        </body>
+      </html>
+    `);
+
+    const btn = dom.window.document.getElementById("add-to-cart-button");
+    btn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const picker = dom.window.document.getElementById("__styx-picker");
+    expect(picker).toBeTruthy();
+
+    picker
+      .querySelector(".styx-pk-row")
+      .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await nextTick();
+
+    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
+    expect(addMessage).toMatchObject({
+      savedCartId: "cart-1",
+      item: {
+        asin: "B0PDPIMAGE",
+        title: "Main PDP item",
+        image: "https://m.media-amazon.com/images/I/pdp-large.jpg",
+      },
+    });
+  });
+
+  it("uses PDP image data when the add-to-cart button already exposes the page ASIN", async () => {
+    const { dom, messages } = loadObserver(`
+      <!doctype html>
+      <html>
+        <head><title>Main PDP item</title></head>
+        <body data-asin="B0PDPIMAGE">
+          <h1 id="productTitle">Main PDP item</h1>
+          <img
+            id="landingImage"
+            src="https://images-na.ssl-images-amazon.com/images/G/01/loadIndicators/loading._CB.gif"
+            data-a-dynamic-image='{"https://m.media-amazon.com/images/I/pdp-small.jpg":[100,100],"https://m.media-amazon.com/images/I/pdp-large.jpg":[800,800]}'
+          />
+          <input
+            id="add-to-cart-button"
+            type="submit"
+            name="submit.add-to-cart"
+            data-asin="B0PDPIMAGE"
             aria-label="Add to cart"
           />
         </body>

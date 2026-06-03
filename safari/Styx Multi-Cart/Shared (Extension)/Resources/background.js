@@ -1140,10 +1140,15 @@ async function showRestoreUpsellNotice(tabId, item) {
  */
 async function showStatus(tabId, message, type = 'loading') {
   try {
+    let theme = null;
+    try {
+      const settings = await readSettings();
+      theme = settings.theme || null;
+    } catch (_settingsErr) { /* fall back to system theme in the page */ }
     await chrome.scripting.executeScript({
       target: { tabId },
       func: pageShowStatus,
-      args: [message, type],
+      args: [message, type, theme],
     });
   } catch (_e) {
     // Status overlay is decorative — never block operations on failure.
@@ -1375,7 +1380,7 @@ function pageHasRestoreUpsell() {
  *   done:    green with checkmark (auto-dismisses after 4 s)
  *   error:   red with warning     (auto-dismisses after 5 s)
  */
-function pageShowStatus(message, type) {
+function pageShowStatus(message, type, theme) {
   var ID = '__styx-status-toast';
   var toast = document.getElementById(ID);
   if (!toast) {
@@ -1414,8 +1419,18 @@ function pageShowStatus(message, type) {
     (document.head || document.body || document.documentElement).appendChild(s);
   }
 
+  var isDark =
+    theme === 'dark' ||
+    (theme !== 'light' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
   var accent = type === 'done' ? '#34d399' : type === 'error' ? '#ef4444' : '#ff9900';
   var glowRgb = type === 'done' ? '52,211,153' : type === 'error' ? '239,68,68' : '255,153,0';
+  var bg = isDark ? '#131a22' : '#ffffff';
+  var fg = isDark ? '#ffffff' : '#131a22';
+  var shadow = isDark
+    ? '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)'
+    : '0 0 0 1px ' + accent + ', 0 0 18px rgba(' + glowRgb + ',.22), 0 6px 24px rgba(15,17,21,.18)';
 
   var ts = toast.style;
   ts.position = 'fixed'; ts.top = '24px'; ts.left = '50%';
@@ -1424,10 +1439,10 @@ function pageShowStatus(message, type) {
   ts.display = 'flex'; ts.alignItems = 'center'; ts.gap = '14px';
   ts.padding = '16px 22px'; ts.borderRadius = '14px';
   ts.border = '1px solid ' + accent;
-  ts.background = '#131a22'; ts.color = '#ffffff';
+  ts.background = bg; ts.color = fg;
   ts.fontFamily = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
   ts.fontSize = '18px'; ts.fontWeight = '600'; ts.lineHeight = '1.35';
-  ts.boxShadow = '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)';
+  ts.boxShadow = shadow;
   ts.maxWidth = '720px'; ts.width = ''; ts.pointerEvents = 'none';
   ts.opacity = '1'; ts.transition = 'opacity .2s, box-shadow .25s, border-color .25s';
 
@@ -1439,7 +1454,7 @@ function pageShowStatus(message, type) {
   // on each cart's <g> and its wheels for the cycling animation.
   var logoSvg =
     '<svg width="36" height="36" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:block">' +
-      '<rect width="32" height="32" rx="7" fill="#131a22"/>' +
+      '<rect width="32" height="32" rx="7" fill="' + bg + '"/>' +
       // Top cart (apex)
       '<g class="__styx-cart-a">' +
         '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +

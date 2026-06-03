@@ -217,6 +217,20 @@ if (!extpay) {
   }
 }
 
+// ---- Native side panel --------------------------------------------------
+//
+// Styx's UI is a native Chrome side panel (manifest `side_panel`). Unlike
+// the old in-page iframe overlay, the browser genuinely shrinks the page
+// viewport, so Amazon's responsive layout stays intact. Clicking the
+// toolbar icon toggles the panel. Chrome forbids opening it without a user
+// gesture, so there is no auto-open on page load — once the user opens it,
+// Chrome keeps it open across tabs/navigation in that window.
+if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+}
+
 // EXTPAY_PREMIUM_BUFFER_MS + extpayUserToEntitlementPatch:
 // mirrored byte-for-byte from lib/extpay-sync.js (see file header).
 const EXTPAY_PREMIUM_BUFFER_MS = 28 * 24 * 60 * 60 * 1000; // 28 days
@@ -1436,7 +1450,7 @@ function pageHighlightBulkConfirm() {
  * user input — but we still set them via textContent so a defensive
  * mistake doesn't open an XSS hole.
  */
-function pagePromptChoice(title, message, choices) {
+function pagePromptChoice(title, message, choices, theme) {
   // choices: [{ label, value, style: 'primary'|'secondary'|'ghost' }]
   // Resolves with the chosen `value`, or "dismissed" if user clicks the backdrop.
   return new Promise((resolve) => {
@@ -1444,18 +1458,45 @@ function pagePromptChoice(title, message, choices) {
     const existing = document.getElementById(ID);
     if (existing) existing.remove();
 
+    const isDark =
+      theme === "dark" ||
+      (theme !== "light" &&
+        window.matchMedia &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const palette = isDark
+      ? {
+          backdrop: "rgba(0,0,0,.55)",
+          bg: "#131a22",
+          fg: "#ffffff",
+          sub: "rgba(255,255,255,.92)",
+          line: "#ff9900",
+          shadow: "0 0 0 1px #ff9900,0 6px 32px rgba(0,0,0,.6)",
+          ghostLine: "#4b5563",
+          ghostFg: "#ffffff",
+        }
+      : {
+          backdrop: "rgba(15,17,21,.35)",
+          bg: "#ffffff",
+          fg: "#131a22",
+          sub: "#4a5360",
+          line: "#ff9900",
+          shadow: "0 1px 2px rgba(15,17,21,.08),0 12px 32px rgba(15,17,21,.18)",
+          ghostLine: "#c9bfae",
+          ghostFg: "#4a5360",
+        };
+
     const overlay = document.createElement("div");
     overlay.id = ID;
     overlay.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,.55);" +
+      "position:fixed;inset:0;background:" + palette.backdrop + ";" +
       "z-index:2147483646;display:flex;align-items:center;justify-content:center;" +
       "font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif;";
 
     const modal = document.createElement("div");
     modal.style.cssText =
-      "background:#131a22;color:#fff;border:1px solid #ff9900;" +
+      "background:" + palette.bg + ";color:" + palette.fg + ";border:1px solid " + palette.line + ";" +
       "border-radius:14px;padding:22px 26px;max-width:480px;width:90%;" +
-      "box-shadow:0 0 0 1px #ff9900,0 6px 32px rgba(0,0,0,.6);";
+      "box-shadow:" + palette.shadow + ";";
 
     const h = document.createElement("div");
     h.style.cssText = "font-size:18px;font-weight:700;margin-bottom:10px;";
@@ -1463,7 +1504,7 @@ function pagePromptChoice(title, message, choices) {
     modal.appendChild(h);
 
     const p = document.createElement("div");
-    p.style.cssText = "font-size:15px;line-height:1.45;opacity:.92;margin-bottom:22px;white-space:pre-wrap;";
+    p.style.cssText = "font-size:15px;line-height:1.45;color:" + palette.sub + ";margin-bottom:22px;white-space:pre-wrap;";
     p.textContent = message;
     modal.appendChild(p);
 
@@ -1480,8 +1521,8 @@ function pagePromptChoice(title, message, choices) {
                "background:transparent;color:#ff9900;cursor:pointer;font-size:14px;font-weight:600;";
       }
       // ghost
-      return "padding:9px 16px;border-radius:8px;border:1px solid #4b5563;" +
-             "background:transparent;color:#fff;cursor:pointer;font-size:14px;";
+      return "padding:9px 16px;border-radius:8px;border:1px solid " + palette.ghostLine + ";" +
+             "background:transparent;color:" + palette.ghostFg + ";cursor:pointer;font-size:14px;";
     };
 
     const cleanup = (answer) => { try { overlay.remove(); } catch (_e) {} resolve(answer); };
@@ -1711,10 +1752,15 @@ async function restoreCartBulk(savedCart) {
 
     let userChoice = "cancel";
     try {
+      let promptTheme = null;
+      try {
+        const promptSettings = await readSettings();
+        promptTheme = promptSettings.theme || null;
+      } catch (_settingsErr) { /* fall back to system theme in the page */ }
       const promptRes = await chrome.scripting.executeScript({
         target: { tabId: helperTab.id },
         func: pagePromptChoice,
-        args: ["Bulk add incomplete", summary, choices],
+        args: ["Bulk add incomplete", summary, choices, promptTheme],
       });
       userChoice = (promptRes && promptRes[0] && promptRes[0].result) || "cancel";
     } catch (_e) {
@@ -2240,10 +2286,15 @@ async function showRestoreUpsellNotice(tabId, item) {
  */
 async function showStatus(tabId, message, type = 'loading') {
   try {
+    let theme = null;
+    try {
+      const settings = await readSettings();
+      theme = settings.theme || null;
+    } catch (_settingsErr) { /* fall back to system theme in the page */ }
     await chrome.scripting.executeScript({
       target: { tabId },
       func: pageShowStatus,
-      args: [message, type],
+      args: [message, type, theme],
     });
   } catch (_e) {
     // Status overlay is decorative — never block operations on failure.
@@ -2475,7 +2526,7 @@ function pageHasRestoreUpsell() {
  *   done:    green with checkmark (auto-dismisses after 4 s)
  *   error:   red with warning     (auto-dismisses after 5 s)
  */
-function pageShowStatus(message, type) {
+function pageShowStatus(message, type, theme) {
   var ID = '__styx-status-toast';
   var toast = document.getElementById(ID);
   if (!toast) {
@@ -2514,8 +2565,18 @@ function pageShowStatus(message, type) {
     (document.head || document.body || document.documentElement).appendChild(s);
   }
 
+  var isDark =
+    theme === 'dark' ||
+    (theme !== 'light' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches);
   var accent = type === 'done' ? '#34d399' : type === 'error' ? '#ef4444' : '#ff9900';
   var glowRgb = type === 'done' ? '52,211,153' : type === 'error' ? '239,68,68' : '255,153,0';
+  var bg = isDark ? '#131a22' : '#ffffff';
+  var fg = isDark ? '#ffffff' : '#131a22';
+  var shadow = isDark
+    ? '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)'
+    : '0 0 0 1px ' + accent + ', 0 0 18px rgba(' + glowRgb + ',.22), 0 6px 24px rgba(15,17,21,.18)';
 
   var ts = toast.style;
   ts.position = 'fixed'; ts.top = '24px'; ts.left = '50%';
@@ -2524,10 +2585,10 @@ function pageShowStatus(message, type) {
   ts.display = 'flex'; ts.alignItems = 'center'; ts.gap = '14px';
   ts.padding = '16px 22px'; ts.borderRadius = '14px';
   ts.border = '1px solid ' + accent;
-  ts.background = '#131a22'; ts.color = '#ffffff';
+  ts.background = bg; ts.color = fg;
   ts.fontFamily = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
   ts.fontSize = '18px'; ts.fontWeight = '600'; ts.lineHeight = '1.35';
-  ts.boxShadow = '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)';
+  ts.boxShadow = shadow;
   ts.maxWidth = '720px'; ts.width = ''; ts.pointerEvents = 'none';
   ts.opacity = '1'; ts.transition = 'opacity .2s, box-shadow .25s, border-color .25s';
 
@@ -2539,7 +2600,7 @@ function pageShowStatus(message, type) {
   // on each cart's <g> and its wheels for the cycling animation.
   var logoSvg =
     '<svg width="36" height="36" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="display:block">' +
-      '<rect width="32" height="32" rx="7" fill="#131a22"/>' +
+      '<rect width="32" height="32" rx="7" fill="' + bg + '"/>' +
       // Top cart (apex)
       '<g class="__styx-cart-a">' +
         '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +

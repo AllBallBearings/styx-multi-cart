@@ -51,7 +51,10 @@ function buildInitScript(initial) {
       const store = {
         [STORAGE_KEY]: Array.isArray(seed.carts) ? seed.carts : [],
         [SETTINGS_KEY]: Object.assign(
-          { interceptAtc: true, restoring: false },
+          {
+            interceptAtc: true,
+            restoring: false,
+          },
           seed.settings || {}
         ),
       };
@@ -59,6 +62,7 @@ function buildInitScript(initial) {
       // Expose for test-side assertions / mutations via Page.evaluate.
       window.__mcTestState = store;
       window.__mcMessageLog = [];
+      const storageListeners = [];
 
       function makeId() {
         return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
@@ -252,8 +256,26 @@ function buildInitScript(initial) {
         return Promise.resolve(out);
       };
       chrome.storage.local.set = function (obj) {
-        for (const [k, v] of Object.entries(obj)) store[k] = v;
+        const changes = {};
+        for (const [k, v] of Object.entries(obj)) {
+          changes[k] = { oldValue: store[k], newValue: v };
+          store[k] = v;
+        }
+        if (Object.keys(changes).length) {
+          setTimeout(() => {
+            for (const listener of storageListeners) {
+              try { listener(changes, "local"); } catch (_e) {}
+            }
+          }, 0);
+        }
         return Promise.resolve();
+      };
+      chrome.storage.onChanged.addListener = function (listener) {
+        storageListeners.push(listener);
+      };
+      chrome.storage.onChanged.removeListener = function (listener) {
+        const idx = storageListeners.indexOf(listener);
+        if (idx >= 0) storageListeners.splice(idx, 1);
       };
     })();
   `;
