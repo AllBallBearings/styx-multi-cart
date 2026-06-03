@@ -12,11 +12,16 @@ function nextTick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function loadObserver(
   html,
   {
     url = "https://www.amazon.com/dp/B111111111",
     settings = {},
+    storageDelayMs = 0,
     prepareWindow,
   } = {}
 ) {
@@ -47,7 +52,7 @@ function loadObserver(
     storage: {
       local: {
         get(_keys, callback) {
-          callback({
+          const payload = {
             "mc.settings.v1": storedSettings,
             "mc.carts.v1": [
               {
@@ -59,7 +64,12 @@ function loadObserver(
               },
             ],
             "mc.entitlement.v1": { tier: "free", premiumUntil: null },
-          });
+          };
+          if (storageDelayMs > 0) {
+            setTimeout(() => callback(payload), storageDelayMs);
+          } else {
+            callback(payload);
+          }
         },
         set(obj, callback) {
           if (obj && obj["mc.settings.v1"]) {
@@ -79,6 +89,140 @@ function loadObserver(
 }
 
 describe("observer.js ATC intercept", () => {
+  it("holds submit.addToCart clicks until saved carts hydrate", async () => {
+    const { dom } = loadObserver(
+      `
+        <!doctype html>
+        <html>
+          <head><title>Buy Again</title></head>
+          <body>
+            <div data-asin="B0NBMOUNT1" class="a-section">
+              <input
+                type="submit"
+                name="submit.addToCart"
+                aria-label="Add to cart, NB Smoovex Single Computer Monitor Mount, Monitor Stand fits up to 32 Inch, Mechanical Spring Monitor Arm, VESA 75/100 mm, Model-A5(Black)"
+                class="a-button-input"
+              />
+            </div>
+          </body>
+        </html>
+      `,
+      {
+        url: "https://www.amazon.com/gp/buyagain",
+        storageDelayMs: 20,
+      }
+    );
+
+    const btn = dom.window.document.querySelector("input[name='submit.addToCart']");
+    let nativeClickCount = 0;
+    btn.addEventListener("click", () => {
+      nativeClickCount += 1;
+    });
+
+    btn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    expect(nativeClickCount).toBe(0);
+    await delay(30);
+
+    const picker = dom.window.document.getElementById("__styx-picker");
+    expect(picker).toBeTruthy();
+    expect(picker.querySelector(".styx-pk-title").textContent).toContain("NB Smoovex");
+    expect(nativeClickCount).toBe(0);
+  });
+
+  it("uses Buy Again product-link text when the button label is generic", async () => {
+    const { dom, messages } = loadObserver(
+      `
+        <!doctype html>
+        <html>
+          <head><title>Buy Again</title></head>
+          <body>
+            <div data-asin="B0NBMOUNT1" class="a-section">
+              <a class="a-link-normal" href="/dp/B0NBMOUNT1">
+                <span class="a-size-base-plus a-color-base a-text-normal">
+                  NB Smoovex Single Computer Monitor Mount, Monitor Stand fits up to 32 Inch
+                </span>
+              </a>
+              <input
+                type="submit"
+                name="submit.addToCart"
+                aria-label="Add to cart"
+                class="a-button-input"
+              />
+            </div>
+          </body>
+        </html>
+      `,
+      { url: "https://www.amazon.com/gp/buyagain" }
+    );
+
+    const btn = dom.window.document.querySelector("input[name='submit.addToCart']");
+    btn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const picker = dom.window.document.getElementById("__styx-picker");
+    expect(picker).toBeTruthy();
+    expect(picker.querySelector(".styx-pk-title").textContent).toContain("NB Smoovex");
+
+    picker
+      .querySelector(".styx-pk-row")
+      .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await nextTick();
+
+    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
+    expect(addMessage).toMatchObject({
+      savedCartId: "cart-1",
+      item: {
+        asin: "B0NBMOUNT1",
+        title: "NB Smoovex Single Computer Monitor Mount, Monitor Stand fits up to 32 Inch",
+      },
+    });
+  });
+
+  it("intercepts icon buttons whose submit input is labelled by sibling text", async () => {
+    const { dom, messages } = loadObserver(
+      `
+        <!doctype html>
+        <html>
+          <head><title>Amazon widget</title></head>
+          <body>
+            <span class="a-button-inner">
+              <i class="a-icon a-icon-cart"></i>
+              <input
+                type="submit"
+                data-asin="B0G6KRDS4N"
+                data-offerlistingid="L%2BCwruu7%2B0Gbj7ZeSB48FRpjcUaoIduD"
+                class="a-button-input"
+                aria-labelledby="a-autoid-1-announce"
+              />
+              <span class="a-button-text" aria-hidden="true" id="a-autoid-1-announce">Add to Cart</span>
+            </span>
+          </body>
+        </html>
+      `,
+      { url: "https://www.amazon.com/gp/buyagain" }
+    );
+
+    const visibleText = dom.window.document.getElementById("a-autoid-1-announce");
+    visibleText.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const picker = dom.window.document.getElementById("__styx-picker");
+    expect(picker).toBeTruthy();
+
+    picker
+      .querySelector(".styx-pk-row")
+      .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await nextTick();
+
+    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
+    expect(addMessage).toMatchObject({
+      savedCartId: "cart-1",
+      item: {
+        asin: "B0G6KRDS4N",
+        quantity: 1,
+      },
+    });
+  });
+
   it("uses data-asins from related-product submit inputs instead of the PDP ASIN", async () => {
     const { dom, messages } = loadObserver(`
       <!doctype html>
