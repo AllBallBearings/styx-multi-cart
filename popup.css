@@ -103,7 +103,9 @@ body {
 }
 
 html[data-surface="panel"],
-html[data-surface="panel"] body {
+html[data-surface="panel"] body,
+html[data-surface="sidepanel"],
+html[data-surface="sidepanel"] body {
   width: 100%;
   min-width: 0;
   height: 100%;
@@ -112,7 +114,8 @@ html[data-surface="panel"] body {
   overflow-y: auto;
 }
 
-html[data-surface="panel"] body {
+html[data-surface="panel"] body,
+html[data-surface="sidepanel"] body {
   font-size: 12px;
 }
 

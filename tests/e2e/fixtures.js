@@ -53,8 +53,6 @@ function buildInitScript(initial) {
         [SETTINGS_KEY]: Object.assign(
           {
             interceptAtc: true,
-            dockToExtensionsBar: false,
-            sidePanelCollapsed: false,
             restoring: false,
           },
           seed.settings || {}

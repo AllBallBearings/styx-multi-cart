@@ -83,8 +83,6 @@ const DEFAULT_ENTITLEMENT = Object.freeze({
 // merge with defaults so old stored shapes never block a launch.
 const DEFAULT_SETTINGS = {
   interceptAtc: true,
-  dockToExtensionsBar: false,
-  sidePanelCollapsed: false,
   // Ephemeral flag — set to true for the duration of a cart restore so the
   // observer.js ATC intercept stands down. Cleared in a finally block so a
   // crash or early return can never leave interception permanently disabled.
@@ -219,6 +217,20 @@ if (!extpay) {
         "publishing. See docs/internal/EXTENSIONPAY-SETUP.md.",
     );
   }
+}
+
+// ---- Native side panel --------------------------------------------------
+//
+// Styx's UI is a native Chrome side panel (manifest `side_panel`). Unlike
+// the old in-page iframe overlay, the browser genuinely shrinks the page
+// viewport, so Amazon's responsive layout stays intact. Clicking the
+// toolbar icon toggles the panel. Chrome forbids opening it without a user
+// gesture, so there is no auto-open on page load — once the user opens it,
+// Chrome keeps it open across tabs/navigation in that window.
+if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
 }
 
 // EXTPAY_PREMIUM_BUFFER_MS + extpayUserToEntitlementPatch:

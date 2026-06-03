@@ -8,8 +8,12 @@
 (function () {
   "use strict";
 
-  if (new URLSearchParams(location.search).get("surface") === "panel") {
-    document.documentElement.dataset.surface = "panel";
+  // The native Chrome side panel loads this page with ?surface=sidepanel so
+  // it can fill the panel's width/height instead of the fixed popup size.
+  // ("panel" is the legacy in-page-iframe value, kept for safety.)
+  const _surface = new URLSearchParams(location.search).get("surface");
+  if (_surface === "sidepanel" || _surface === "panel") {
+    document.documentElement.dataset.surface = _surface;
   }
 
   // ---- DOM refs ----------------------------------------------------------
@@ -1827,33 +1831,13 @@
   const $settingsToggle = document.getElementById("mc-settings-toggle");
   const $settingsModal = document.getElementById("mc-settings-modal");
   const $devModeToggle = document.getElementById("mc-devmode-toggle");
-  const $dockToggle = document.getElementById("mc-dock-toggle");
   const $settingsVersion = document.getElementById("mc-settings-version");
-
-  async function readPopupSettings() {
-    const result = await chrome.storage.local.get("mc.settings.v1");
-    const settings = result["mc.settings.v1"];
-    return settings && typeof settings === "object" ? settings : {};
-  }
-
-  async function writePopupSettings(patch) {
-    const settings = Object.assign({}, await readPopupSettings(), patch || {});
-    await chrome.storage.local.set({ "mc.settings.v1": settings });
-    return settings;
-  }
-
-  async function loadDockSetting() {
-    if (!$dockToggle) return;
-    const settings = await readPopupSettings();
-    $dockToggle.checked = !!settings.dockToExtensionsBar;
-  }
 
   function openSettings() {
     if (!$settingsModal) return;
     // Reflect current state in case it was changed elsewhere (Ctrl+Alt+D,
     // tagline unlock, another popup instance).
     if ($devModeToggle) $devModeToggle.checked = !!devModeEnabled;
-    loadDockSetting().catch(() => {});
     // Populate version from manifest.
     if ($settingsVersion) {
       try {
@@ -1896,21 +1880,6 @@
       // The toast confirms the side-effect since the debug panel itself is
       // below the fold of a 600px popup and easy to miss appearing.
       toast(want ? "Developer mode on" : "Developer mode off", "ok");
-    });
-  }
-
-  if ($dockToggle) {
-    $dockToggle.addEventListener("change", async () => {
-      const dockToExtensionsBar = !!$dockToggle.checked;
-      try {
-        await writePopupSettings({ dockToExtensionsBar });
-        if (!dockToExtensionsBar) {
-          toast("Side panel enabled on Amazon pages", "ok");
-        }
-      } catch (_e) {
-        $dockToggle.checked = !dockToExtensionsBar;
-        toast("Could not save display setting", "error");
-      }
     });
   }
 

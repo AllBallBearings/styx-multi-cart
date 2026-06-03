@@ -614,24 +614,6 @@ test.describe("popup — settings toggles", () => {
     );
     expect(persisted).toBe(afterSecond);
   });
-
-  test("dock toggle persists side panel preference", async ({ popup }) => {
-    const page = await popup({
-      carts: [],
-      settings: { dockToExtensionsBar: false },
-    });
-
-    await page.locator("#mc-settings-toggle").click();
-    const toggle = page.locator("#mc-dock-toggle");
-    await expect(toggle).not.toBeChecked();
-
-    await toggle.check();
-
-    const persisted = await page.evaluate(
-      () => window.__mcTestState["mc.settings.v1"].dockToExtensionsBar
-    );
-    expect(persisted).toBe(true);
-  });
 });
 
 test.describe("popup — clear cart", () => {
