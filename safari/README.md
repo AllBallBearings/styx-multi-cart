@@ -11,7 +11,13 @@ xcrun safari-web-extension-converter \
   /path/to/staged/extension/sources
 ```
 
-**Note**: the converter was run against a staged copy of the extension at `/tmp/styx-ext-src` (which excluded `safari/`, `docs/`, etc.) so it would not recursively copy this directory into itself. To regenerate after changing extension source, restage the sources and re-run with `--force`.
+**Note**: the converter was run against a staged copy of the extension at `/tmp/styx-ext-src` (which excluded `safari/`, `docs/`, etc.) so it would not recursively copy this directory into itself. To regenerate the whole Xcode project, restage the sources and re-run with `--force`.
+
+For normal web-extension source changes, do not re-run the converter. Build the bundled classic worker and sync the checked-in Safari resource copy:
+
+```bash
+npm run sync:safari
+```
 
 ## What's here
 

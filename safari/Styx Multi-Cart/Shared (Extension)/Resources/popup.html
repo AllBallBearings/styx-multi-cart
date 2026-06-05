@@ -99,19 +99,53 @@
           />
         </svg>
         <div class="mc-brand-text">
-          <h1>Styx Multi-Cart</h1>
+          <div class="mc-brand-title">
+            <h1>Styx Multi-Cart</h1>
+            <span
+              id="mc-header-premium-badge"
+              class="mc-header-premium-badge"
+              hidden
+              title="You have Premium"
+              >Premium</span
+            >
+          </div>
           <p class="mc-tag">Cart Management to Hell and back</p>
         </div>
       </div>
-      <button
-        id="mc-theme-toggle"
-        class="mc-theme-toggle"
-        type="button"
-        aria-label="Toggle light/dark mode"
-        title="Toggle light/dark mode"
-      >
-        <!-- icon injected by popup.js -->
-      </button>
+      <div class="mc-header-actions">
+        <button
+          id="mc-settings-toggle"
+          class="mc-icon-btn"
+          type="button"
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <!-- gear icon -->
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            ></path>
+          </svg>
+        </button>
+        <button
+          id="mc-theme-toggle"
+          class="mc-icon-btn mc-theme-toggle"
+          type="button"
+          aria-label="Toggle light/dark mode"
+          title="Toggle light/dark mode"
+        >
+          <!-- icon injected by popup.js -->
+        </button>
+      </div>
     </header>
 
     <section class="mc-save-block">
@@ -125,18 +159,15 @@
           autocomplete="off"
           maxlength="60"
         />
-        <button id="mc-save" class="mc-btn mc-btn-primary" type="button">
-          Save
-        </button>
       </div>
       <div class="mc-save-actions">
         <button
-          id="mc-save-and-clear"
-          class="mc-btn mc-btn-ghost"
+          id="mc-save"
+          class="mc-btn mc-btn-primary"
           type="button"
-          title="Save the current cart, then empty it from Amazon"
+          title="Save the current Amazon cart"
         >
-          Save &amp; clear
+          Save Cart
         </button>
         <button
           id="mc-clear"
@@ -144,7 +175,7 @@
           type="button"
           title="Remove every item from your active Amazon cart"
         >
-          Clear cart
+          Clear Cart
         </button>
       </div>
       <label
@@ -162,6 +193,60 @@
     </section>
 
     <section class="mc-list-block">
+      <div id="mc-tier-strip" class="mc-tier-strip" hidden>
+        <span id="mc-tier-badge" class="mc-tier-badge" data-tier="free"
+          >Free</span
+        >
+        <span id="mc-tier-usage" class="mc-tier-usage">0 / 2 saved carts</span>
+        <button
+          id="mc-tier-upgrade"
+          class="mc-btn mc-btn-primary mc-btn-sm mc-tier-upgrade"
+          type="button"
+          hidden
+        >
+          Upgrade
+        </button>
+        <button
+          class="mc-dismiss"
+          type="button"
+          data-action="dismiss-tier-strip"
+          title="Hide this"
+          aria-label="Hide tier indicator"
+        >
+          ×
+        </button>
+      </div>
+
+      <div
+        id="mc-lapsed-banner"
+        class="mc-banner mc-banner-warn"
+        hidden
+        role="status"
+      >
+        <span class="mc-banner-icon" aria-hidden="true">🔒</span>
+        <span class="mc-banner-body">
+          <strong id="mc-lapsed-count">0</strong>
+          <span id="mc-lapsed-suffix"> carts are read-only</span>
+          — Renew Premium to edit them again.
+        </span>
+        <button
+          id="mc-lapsed-renew"
+          class="mc-btn mc-btn-primary mc-btn-sm"
+          type="button"
+        >
+          Renew
+        </button>
+        <button
+          class="mc-dismiss"
+          type="button"
+          data-action="dismiss-lapsed-banner"
+          title="Hide this"
+          aria-label="Hide lapsed banner"
+        >
+          ×
+        </button>
+      </div>
+
       <div class="mc-list-header">
         <h2>Saved carts</h2>
         <span id="mc-list-count" class="mc-count">0</span>
@@ -220,14 +305,63 @@
     <details id="mc-debug" class="mc-debug" hidden>
       <summary class="mc-debug-toggle">Debug</summary>
       <div class="mc-debug-body">
-        <button
-          id="mc-diagnose"
-          class="mc-btn mc-btn-ghost mc-btn-sm"
-          type="button"
-        >
-          Run cart diagnostics
-        </button>
-        <pre id="mc-debug-output" class="mc-debug-output"></pre>
+        <div class="mc-debug-section">
+          <div class="mc-debug-section-title">Entitlement</div>
+          <div id="mc-debug-ent-state" class="mc-debug-state">loading…</div>
+          <div class="mc-debug-btn-row">
+            <button
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="button"
+              data-debug-ent="premium"
+            >
+              Premium · 1y
+            </button>
+            <button
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="button"
+              data-debug-ent="premium-warn"
+            >
+              Premium · 5d
+            </button>
+            <button
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="button"
+              data-debug-ent="lapsed"
+            >
+              Lapsed
+            </button>
+            <button
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="button"
+              data-debug-ent="free"
+            >
+              Free
+            </button>
+            <button
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="button"
+              data-debug-ent="reset-dismiss"
+            >
+              Reset dismissed
+            </button>
+          </div>
+          <div class="mc-debug-hint">
+            Ctrl+Shift+D toggles this panel. Changes write directly to
+            <code>chrome.storage.local</code> and reload the popup state.
+          </div>
+        </div>
+
+        <div class="mc-debug-section">
+          <div class="mc-debug-section-title">Cart diagnostics</div>
+          <button
+            id="mc-diagnose"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+          >
+            Run cart diagnostics
+          </button>
+          <pre id="mc-debug-output" class="mc-debug-output"></pre>
+        </div>
       </div>
     </details>
 
@@ -255,14 +389,6 @@
             Switch to This Cart
           </button>
           <button
-            class="mc-btn mc-btn-ghost mc-btn-sm"
-            data-action="edit"
-            aria-expanded="false"
-            title="Remove or Multiply Items"
-          >
-            Edit
-          </button>
-          <button
             class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
             data-action="delete"
             title="Delete entire cart"
@@ -270,59 +396,35 @@
             Delete
           </button>
         </div>
-        <div class="mc-item-edit" hidden>
-          <ul class="mc-edit-list"></ul>
-        </div>
       </li>
     </template>
 
-    <template id="mc-edit-row-template">
-      <li class="mc-edit-row">
-        <img
-          class="mc-edit-thumb"
-          alt=""
-          referrerpolicy="no-referrer"
-          loading="lazy"
-        />
-        <div class="mc-edit-info">
-          <span class="mc-edit-title"></span>
-          <span class="mc-edit-asin"></span>
-        </div>
-        <div class="mc-edit-qty">
-          <button
-            class="mc-qty-btn"
-            data-action="qty-dec"
-            type="button"
-            aria-label="Decrease quantity"
-          >
-            −
-          </button>
-          <input
-            class="mc-qty-input"
-            type="number"
-            min="1"
-            max="99"
-            inputmode="numeric"
-          />
-          <button
-            class="mc-qty-btn"
-            data-action="qty-inc"
-            type="button"
-            aria-label="Increase quantity"
-          >
-            +
-          </button>
-        </div>
-        <button
-          class="mc-edit-remove"
-          data-action="item-remove"
-          type="button"
-          aria-label="Remove item"
-        >
-          ×
-        </button>
-      </li>
-    </template>
+    <!-- Quantity popover: anchored to a tile's count badge on click -->
+    <div
+      id="mc-qty-pop"
+      class="mc-qty-pop"
+      hidden
+      role="dialog"
+      aria-label="Change item quantity"
+    >
+      <button
+        class="mc-qty-pop-btn"
+        data-action="qty-pop-dec"
+        type="button"
+        aria-label="Decrease quantity"
+      >
+        −
+      </button>
+      <span class="mc-qty-pop-val" aria-live="polite">1</span>
+      <button
+        class="mc-qty-pop-btn"
+        data-action="qty-pop-inc"
+        type="button"
+        aria-label="Increase quantity"
+      >
+        +
+      </button>
+    </div>
 
     <!-- Combine modal: pick a merge direction -->
     <div
@@ -445,6 +547,268 @@
             type="button"
           >
             Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Move-item modal: pick a destination cart for a single item -->
+    <div
+      id="mc-move-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-move-title"
+    >
+      <div class="mc-modal-backdrop" data-action="move-cancel"></div>
+      <div class="mc-modal-card mc-move-card">
+        <h3 id="mc-move-title" class="mc-modal-title">Move item</h3>
+        <div class="mc-move-item">
+          <img
+            class="mc-move-thumb"
+            alt=""
+            referrerpolicy="no-referrer"
+            loading="lazy"
+          />
+          <span class="mc-move-item-name"></span>
+        </div>
+        <p class="mc-modal-sub">Pick the cart to move it into.</p>
+        <button
+          class="mc-btn mc-btn-primary mc-move-create"
+          data-action="move-create"
+          type="button"
+        >
+          Create new cart
+        </button>
+        <ul class="mc-move-list"></ul>
+        <div class="mc-modal-actions">
+          <button
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            data-action="move-cancel"
+            type="button"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic confirm modal: replaces native confirm() for in-popup yes/no -->
+    <div
+      id="mc-confirm-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-confirm-title"
+    >
+      <div class="mc-modal-backdrop" data-action="confirm-cancel"></div>
+      <div class="mc-modal-card mc-confirm-card">
+        <h3 id="mc-confirm-title" class="mc-modal-title">Are you sure?</h3>
+        <p id="mc-confirm-body" class="mc-modal-sub"></p>
+        <div class="mc-modal-actions">
+          <button
+            id="mc-confirm-ok"
+            class="mc-btn mc-btn-primary"
+            type="button"
+            data-action="confirm-ok"
+          >
+            OK
+          </button>
+          <button
+            id="mc-confirm-cancel"
+            class="mc-btn mc-btn-ghost"
+            type="button"
+            data-action="confirm-cancel"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic prompt modal: replaces native prompt() for in-popup text input -->
+    <div
+      id="mc-prompt-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-prompt-title"
+    >
+      <div class="mc-modal-backdrop" data-action="prompt-cancel"></div>
+      <div class="mc-modal-card mc-prompt-card">
+        <h3 id="mc-prompt-title" class="mc-modal-title">Enter a value</h3>
+        <p id="mc-prompt-body" class="mc-modal-sub" hidden></p>
+        <form id="mc-prompt-form" class="mc-prompt-form" autocomplete="off">
+          <input
+            id="mc-prompt-input"
+            class="mc-input"
+            type="text"
+            maxlength="60"
+            autocomplete="off"
+          />
+          <div class="mc-modal-actions">
+            <button
+              id="mc-prompt-ok"
+              class="mc-btn mc-btn-primary"
+              type="submit"
+              data-action="prompt-ok"
+            >
+              OK
+            </button>
+            <button
+              id="mc-prompt-cancel"
+              class="mc-btn mc-btn-ghost"
+              type="button"
+              data-action="prompt-cancel"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Paywall modal: shown on free-limit hit or Upgrade click -->
+    <div
+      id="mc-paywall-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-paywall-title"
+    >
+      <div class="mc-modal-backdrop" data-action="paywall-close"></div>
+      <div class="mc-modal-card mc-paywall-card">
+        <h3 id="mc-paywall-title" class="mc-modal-title">Upgrade to Premium</h3>
+        <p id="mc-paywall-sub" class="mc-modal-sub">
+          You're using all your free saved carts. Premium unlocks more space for
+          how you actually shop.
+        </p>
+
+        <div class="mc-paywall-plan">
+          <ul class="mc-paywall-features">
+            <li>Up to <strong>20 saved carts</strong> (vs. 2 free)</li>
+            <li>Keep curated lists for gifts, restocks, occasions</li>
+            <li>Cancel anytime — your saved carts stay visible</li>
+          </ul>
+        </div>
+
+        <div class="mc-paywall-coming-soon" id="mc-paywall-stub" hidden>
+          <strong>Coming soon.</strong> Premium isn't live yet — we're polishing
+          the checkout flow. Thanks for being early!
+        </div>
+
+        <details class="mc-paywall-promo" id="mc-paywall-promo">
+          <summary>Have a code?</summary>
+          <form id="mc-promo-form" class="mc-promo-form" autocomplete="off">
+            <label class="mc-sr-only" for="mc-promo-input">Promo code</label>
+            <input
+              id="mc-promo-input"
+              class="mc-input"
+              type="text"
+              placeholder="Enter code"
+              spellcheck="false"
+              autocapitalize="characters"
+              maxlength="32"
+            />
+            <button
+              id="mc-promo-submit"
+              class="mc-btn mc-btn-ghost mc-btn-sm"
+              type="submit"
+            >
+              Redeem
+            </button>
+          </form>
+          <p
+            id="mc-promo-msg"
+            class="mc-promo-msg"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </details>
+
+        <div class="mc-modal-actions mc-paywall-actions">
+          <button
+            id="mc-paywall-cta-annual"
+            class="mc-btn mc-btn-primary mc-paywall-plan-btn"
+            type="button"
+            data-action="paywall-upgrade"
+            data-plan="annual"
+          >
+            <span class="mc-paywall-btn-label">Annual</span>
+            <span class="mc-paywall-btn-price">$9.99 / yr</span>
+          </button>
+          <button
+            id="mc-paywall-cta-lifetime"
+            class="mc-btn mc-btn-primary mc-paywall-plan-btn"
+            type="button"
+            data-action="paywall-upgrade"
+            data-plan="lifetime"
+          >
+            <span class="mc-paywall-btn-label">Lifetime</span>
+            <span class="mc-paywall-btn-price">$19.99 once</span>
+          </button>
+          <button
+            class="mc-btn mc-btn-ghost"
+            type="button"
+            data-action="paywall-close"
+          >
+            Maybe later
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="mc-settings-modal"
+      class="mc-modal"
+      hidden
+      inert
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mc-settings-title"
+    >
+      <div class="mc-modal-backdrop" data-action="settings-close"></div>
+      <div class="mc-modal-card">
+        <h3 id="mc-settings-title" class="mc-modal-title">Settings</h3>
+
+        <div
+          id="mc-settings-dev-section"
+          class="mc-settings-section"
+          hidden
+        >
+          <h4 class="mc-settings-heading">Developer</h4>
+          <label class="mc-toggle">
+            <input id="mc-devmode-toggle" type="checkbox" />
+            <span class="mc-toggle-label">
+              Developer mode
+              <span class="mc-toggle-sub">
+                Shows the debug panel at the bottom of the popup and enables
+                verbose logs in the service worker console. Safe to leave off.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div class="mc-settings-footer">
+          <span
+            id="mc-settings-version"
+            class="mc-settings-version"
+            aria-label="Version"
+          ></span>
+          <button
+            class="mc-btn mc-btn-ghost"
+            type="button"
+            data-action="settings-close"
+          >
+            Done
           </button>
         </div>
       </div>

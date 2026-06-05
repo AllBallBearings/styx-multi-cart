@@ -501,7 +501,7 @@
     return (
       !title ||
       title === "(untitled)" ||
-      /^(?:customers also bought|buy again|sponsored|add to cart|add to basket)$/i.test(
+      /^(?:customers also bought|buy again|sponsored|add to cart|add to basket|previous(?:,\s*disabled)?|next(?:,\s*disabled)?)$/i.test(
         String(title).trim()
       )
     );
@@ -514,6 +514,7 @@
     ) || el.textContent || "";
     const text = String(raw).replace(/\s+/g, " ").trim();
     if (!text) return "";
+    if (isGenericTileTitle(text)) return "";
     if (/^(?:add|move)\s+to\s+(?:cart|basket)\b/i.test(text)) return "";
     if (/^\$?\d+(?:[.,]\d{2})?$/.test(text)) return "";
     if (/^\d+(?:\.\d+)?\s+out\s+of\s+5\s+stars/i.test(text)) return "";
@@ -529,12 +530,17 @@
     }
     if (!asin) return null;
 
-    // Title: prefer the h2 (search), then aria-labelled link, then any link
+    // Title: prefer product-specific links/headings. Generic carousel controls
+    // such as "Previous, Disabled" often have aria labels nearby and should
+    // never win over the product name.
+    const productLink = tile.querySelector(
+      asin
+        ? `a[href*='/dp/${asin}'], a[href*='/gp/product/${asin}']`
+        : "a[href*='/dp/'], a[href*='/gp/product/']"
+    );
     const titleEl =
       tile.querySelector(".sc-product-title") ||
       tile.querySelector("h2 a span, h2 span, h2") ||
-      tile.querySelector("[aria-label][role='link']") ||
-      tile.querySelector("a.a-link-normal[title]") ||
       tile.querySelector("a.sc-product-link") ||
       tile.querySelector("a[href*='/dp/'] .a-size-base-plus.a-color-base.a-text-normal") ||
       tile.querySelector("a[href*='/gp/product/'] .a-size-base-plus.a-color-base.a-text-normal") ||
@@ -543,18 +549,16 @@
       tile.querySelector("a[href*='/dp/'] .a-size-base.a-color-base.a-text-normal") ||
       tile.querySelector("a[href*='/gp/product/'] .a-size-base.a-color-base.a-text-normal") ||
       tile.querySelector("a[href*='/dp/'] .a-truncate-full") ||
-      tile.querySelector("a[href*='/gp/product/'] .a-truncate-full");
+      tile.querySelector("a[href*='/gp/product/'] .a-truncate-full") ||
+      productLink ||
+      tile.querySelector("a.a-link-normal[title]") ||
+      tile.querySelector("[aria-label][role='link']");
     let title = readLikelyTitle(titleEl);
     if (!title) {
       const linkWithLabel = tile.querySelector("a[aria-label]");
       title = readLikelyTitle(linkWithLabel);
     }
     if (!title) {
-      const productLink = tile.querySelector(
-        asin
-          ? `a[href*='/dp/${asin}'], a[href*='/gp/product/${asin}']`
-          : "a[href*='/dp/'], a[href*='/gp/product/']"
-      );
       title = readLikelyTitle(productLink);
     }
     title = (title || "(untitled)").slice(0, 200);
@@ -685,8 +689,11 @@
         }
       }
       if (sameAsPageItem) {
+        const title = isGenericTileTitle(pageItem.title) && buttonTitle
+          ? buttonTitle
+          : pageItem.title;
         return Object.assign({}, pageItem, {
-          title: buttonTitle || pageItem.title,
+          title,
           quantity,
         });
       }
@@ -1352,7 +1359,7 @@
         color: #8a93a0; font-weight: 700;
       }
       #${PICKER_ID} .styx-pk-list {
-        list-style: none; margin: 0; padding: 0 10px 10px;
+        list-style: none; margin: 0; padding: 3px 10px 10px;
         overflow-y: auto; flex: 1;
         display: flex; flex-direction: column; gap: 6px;
       }
@@ -1919,7 +1926,7 @@
         <div class="styx-pk-header">
           ${thumbHtml}
           <div class="styx-pk-meta">
-            <div class="styx-pk-title">${escapeHtml(item.title || "(untitled)")}</div>
+            <div class="styx-pk-title" title="${escapeHtml(item.title || "(untitled)")}" aria-label="${escapeHtml(item.title || "(untitled)")}">${escapeHtml(item.title || "(untitled)")}</div>
             <div class="styx-pk-sub">${priceBit}Qty <b>${qty}</b></div>
           </div>
         </div>

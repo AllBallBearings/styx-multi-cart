@@ -14,6 +14,8 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+npm run build
+
 VERSION=$(python3 -c 'import json,sys; print(json.load(open("manifest.json"))["version"])')
 
 if [[ -z "$VERSION" ]]; then

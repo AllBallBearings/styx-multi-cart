@@ -5,13 +5,16 @@
   "type": "module",
   "description": "Chrome MV3 extension to save, switch, and restore multiple Amazon shopping carts.",
   "scripts": {
+    "build": "node scripts/build-extension.mjs",
+    "sync:safari": "bash scripts/sync-safari-resources.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:all": "npm run build && npm run test && npm run test:e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
+    "esbuild": "^0.21.5",
     "jsdom": "^25.0.1",
     "sinon-chrome": "^3.0.1",
     "vitest": "^2.1.9"

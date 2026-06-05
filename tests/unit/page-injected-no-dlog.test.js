@@ -28,7 +28,7 @@ const LINES = SRC.split("\n");
  */
 function findPageFunctions(src) {
   const out = [];
-  const re = /^function (page[A-Za-z0-9_]+)\s*\(/gm;
+  const re = /^\s*function (page[A-Za-z0-9_]+)\s*\(/gm;
   let m;
   while ((m = re.exec(src)) !== null) {
     const name = m[1];
