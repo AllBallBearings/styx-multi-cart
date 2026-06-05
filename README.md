@@ -72,7 +72,8 @@ You'll need to be signed in to Amazon for restore to work — the extension neve
 | File                                    | What it does                                                        |
 | --------------------------------------- | ------------------------------------------------------------------- |
 | `manifest.json`                         | Extension metadata, permissions, content-script targets             |
-| `background.js`                         | Service worker — owns storage, builds restore URLs, routes messages |
+| `src/background/index.js`               | Canonical service-worker source                                     |
+| `background.js`                         | Generated bundled classic service worker loaded by the manifest     |
 | `content.js`                            | Runs on Amazon cart pages — scrapes items and clears the cart       |
 | `popup.html` / `popup.css` / `popup.js` | The toolbar popup UI                                                |
 | `generate_icons.html`                   | Optional one-time helper to generate toolbar icon PNGs              |

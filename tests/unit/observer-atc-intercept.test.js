@@ -377,6 +377,58 @@ describe("observer.js ATC intercept", () => {
     });
   });
 
+  it("does not use carousel previous/next controls as the picker product title", async () => {
+    const { dom, messages } = loadObserver(`
+      <!doctype html>
+      <html>
+        <head><title>Main PDP item</title></head>
+        <body data-asin="B111111111">
+          <h1 id="productTitle">Main PDP item</h1>
+          <div class="a-carousel-card">
+            <a role="link" aria-label="Previous, Disabled"></a>
+            <a class="a-link-normal" href="/dp/B0DRESS123">
+              <span class="a-truncate-full">Women's Red Pleated Dress with Tie Waist</span>
+              <img
+                class="s-image"
+                src="https://m.media-amazon.com/images/I/dress.jpg"
+              />
+            </a>
+            <input
+              type="submit"
+              name="submit.addToCart"
+              data-asins='["B0DRESS123"]'
+              aria-label="Add to cart"
+              class="a-button-input"
+            />
+          </div>
+        </body>
+      </html>
+    `);
+
+    const btn = dom.window.document.querySelector("input[name='submit.addToCart']");
+    btn.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+
+    const picker = dom.window.document.getElementById("__styx-picker");
+    expect(picker).toBeTruthy();
+    const title = picker.querySelector(".styx-pk-title");
+    expect(title.textContent).toBe("Women's Red Pleated Dress with Tie Waist");
+    expect(title.getAttribute("title")).toBe("Women's Red Pleated Dress with Tie Waist");
+
+    picker
+      .querySelector(".styx-pk-row")
+      .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await nextTick();
+
+    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
+    expect(addMessage).toMatchObject({
+      savedCartId: "cart-1",
+      item: {
+        asin: "B0DRESS123",
+        title: "Women's Red Pleated Dress with Tie Waist",
+      },
+    });
+  });
+
   it("captures lazy-loaded PDP images from dynamic image metadata", async () => {
     const { dom, messages } = loadObserver(`
       <!doctype html>

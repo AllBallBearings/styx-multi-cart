@@ -1294,7 +1294,7 @@
         li.querySelector(".mc-item-name").textContent.trim() || "this";
       const ok = await confirmDialog({
         title: "Switch to this cart?",
-        message: `This will replace your current Amazon cart with "${cartName}".`,
+        message: `This will replace your current Amazon cart with the contents of "${cartName}".`,
         okLabel: "Switch",
       });
       if (!ok) return;
@@ -1843,22 +1843,29 @@
   $lapsedRenew.addEventListener("click", () => openPaywall("renew"));
 
   // ---- Settings modal ------------------------------------------------------
-  // Gear icon in the header opens this. Currently holds one switch:
-  // Developer mode → toggles mc.dev.v1, which controls (a) the debug panel
-  // at the bottom of the popup, (b) verbose logs from the service worker
-  // (background.js reads the same flag at runtime), and (c) the Ctrl+Alt+D
-  // shortcut affordance. setDebugPanelVisible() handles all the storage
-  // side-effects for us.
+  // Gear icon in the header opens this. Developer mode is intentionally hidden
+  // from normal users; typing the unlock code while Settings is open reveals
+  // the switch. setDebugPanelVisible() handles the storage side-effects.
   const $settingsToggle = document.getElementById("mc-settings-toggle");
   const $settingsModal = document.getElementById("mc-settings-modal");
+  const $settingsDevSection = document.getElementById("mc-settings-dev-section");
   const $devModeToggle = document.getElementById("mc-devmode-toggle");
   const $settingsVersion = document.getElementById("mc-settings-version");
+  const DEV_UNLOCK_CODE = "STYXDEV";
+  let settingsUnlockBuffer = "";
+
+  function setSettingsDevSectionVisible(visible) {
+    if (!$settingsDevSection) return;
+    $settingsDevSection.hidden = !visible;
+  }
 
   function openSettings() {
     if (!$settingsModal) return;
     // Reflect current state in case it was changed elsewhere (Ctrl+Alt+D,
     // tagline unlock, another popup instance).
     if ($devModeToggle) $devModeToggle.checked = !!devModeEnabled;
+    setSettingsDevSectionVisible(devModeEnabled);
+    settingsUnlockBuffer = "";
     // Populate version from manifest.
     if ($settingsVersion) {
       try {
@@ -1880,6 +1887,8 @@
     if (active && $settingsModal.contains(active)) active.blur();
     $settingsModal.setAttribute("inert", "");
     $settingsModal.hidden = true;
+    if (!devModeEnabled) setSettingsDevSectionVisible(false);
+    settingsUnlockBuffer = "";
   }
 
   if ($settingsToggle) {
@@ -1898,6 +1907,7 @@
     $devModeToggle.addEventListener("change", async () => {
       const want = !!$devModeToggle.checked;
       await setDebugPanelVisible(want);
+      setSettingsDevSectionVisible(want);
       // The toast confirms the side-effect since the debug panel itself is
       // below the fold of a 600px popup and easy to miss appearing.
       toast(want ? "Developer mode on" : "Developer mode off", "ok");
@@ -1905,9 +1915,24 @@
   }
 
   // Close on Escape, matching the rest of the modal patterns in the popup.
+  // While Settings is open, typing STYXDEV reveals the Developer switch.
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if ($settingsModal && !$settingsModal.hidden) closeSettings();
+    const settingsOpen = $settingsModal && !$settingsModal.hidden;
+    if (e.key === "Escape") {
+      if (settingsOpen) closeSettings();
+      return;
+    }
+    if (!settingsOpen || devModeEnabled) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (typeof e.key !== "string" || e.key.length !== 1) return;
+    const ch = e.key.toUpperCase();
+    if (!/^[A-Z0-9]$/.test(ch)) return;
+    settingsUnlockBuffer = (settingsUnlockBuffer + ch).slice(-DEV_UNLOCK_CODE.length);
+    if (settingsUnlockBuffer === DEV_UNLOCK_CODE) {
+      setSettingsDevSectionVisible(true);
+      if ($devModeToggle) $devModeToggle.focus();
+      toast("Developer options unlocked", "ok");
+    }
   });
 
   // ---- Dismissal persistence -----------------------------------------------

@@ -136,11 +136,49 @@ body.mc-move-modal-open {
   );
 }
 
-html[data-surface="panel"] .mc-header {
+html[data-surface="panel"] .mc-header,
+html[data-surface="sidepanel"] .mc-header {
   position: sticky;
   top: 0;
   z-index: 20;
   padding: 12px;
+}
+
+/* Chrome's native side-panel header already shows the "Styx Multi-Cart" title
+   + close, so we hide our own brand. Rather than waste a whole empty row on
+   two buttons, float the settings + theme icons up onto the "Save current
+   Amazon cart as" label line. The label reserves matching height + right
+   padding so nothing overlaps. */
+html[data-surface="sidepanel"] .mc-header {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 20;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+html[data-surface="sidepanel"] .mc-brand {
+  display: none;
+}
+
+html[data-surface="sidepanel"] .mc-header-actions {
+  gap: 8px;
+}
+
+html[data-surface="sidepanel"] .mc-save-block {
+  padding-top: 12px;
+}
+
+html[data-surface="sidepanel"] .mc-label {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  margin-bottom: 8px;
+  padding-right: 76px;
 }
 
 /* ---- Theme toggle -------------------------------------------------------- */
@@ -206,11 +244,13 @@ html[data-surface="panel"] .mc-header {
   letter-spacing: -0.01em;
 }
 
-html[data-surface="panel"] .mc-brand-text {
+html[data-surface="panel"] .mc-brand-text,
+html[data-surface="sidepanel"] .mc-brand-text {
   min-width: 0;
 }
 
-html[data-surface="panel"] .mc-brand-text h1 {
+html[data-surface="panel"] .mc-brand-text h1,
+html[data-surface="sidepanel"] .mc-brand-text h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -243,7 +283,8 @@ html[data-surface="panel"] .mc-brand-text h1 {
   color: var(--mc-fg-muted);
 }
 
-html[data-surface="panel"] .mc-tag {
+html[data-surface="panel"] .mc-tag,
+html[data-surface="sidepanel"] .mc-tag {
   display: none;
 }
 

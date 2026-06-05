@@ -239,7 +239,7 @@ test.describe("popup — managing existing carts", () => {
 
     await expect(page.locator("#mc-confirm-title")).toHaveText("Switch to this cart?");
     await expect(page.locator("#mc-confirm-body")).toHaveText(
-      'This will replace your current Amazon cart with "Cart A".'
+      'This will replace your current Amazon cart with the contents of "Cart A".'
     );
 
     await page.locator("#mc-confirm-ok").click();
@@ -559,6 +559,24 @@ test.describe("popup — moving items between carts", () => {
 });
 
 test.describe("popup — settings toggles", () => {
+  test("developer mode is hidden until the settings unlock code is typed", async ({
+    popup,
+  }) => {
+    const page = await popup({ carts: [] });
+
+    await page.locator("#mc-settings-toggle").click();
+    await expect(page.locator("#mc-settings-dev-section")).toBeHidden();
+
+    await page.keyboard.type("STYXDEV");
+    await expect(page.locator("#mc-settings-dev-section")).toBeVisible();
+
+    await page.locator("#mc-devmode-toggle").check();
+    const enabled = await page.evaluate(
+      () => window.__mcTestState["mc.dev.v1"]
+    );
+    expect(enabled).toBe(true);
+  });
+
   test("intercept toggle reflects stored setting and persists changes", async ({
     popup,
   }) => {
