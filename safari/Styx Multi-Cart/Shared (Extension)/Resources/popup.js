@@ -30,6 +30,7 @@
   const $debugOutput = document.getElementById("mc-debug-output");
   const $debugPanel = document.getElementById("mc-debug");
   const $debugEntState = document.getElementById("mc-debug-ent-state");
+  const $copyLogs = document.getElementById("mc-copy-logs");
   const $combineBtn = document.getElementById("mc-combine");
   const $combineBar = document.getElementById("mc-combine-bar");
   const $combineStatus = document.getElementById("mc-combine-status");
@@ -78,11 +79,46 @@
   const $promptOk = document.getElementById("mc-prompt-ok");
   const $promptCancel = document.getElementById("mc-prompt-cancel");
 
-  // Cached at popup boot. The Ctrl+Alt+D + 5-click-tagline debug unlocks are
-  // *only* live when this is true — production users never see them.
-  // Bootstrap dev mode by setting `mc.dev.v1 = true` in chrome.storage.local
-  // via DevTools on the service worker.
+  // Cached at popup boot. Developer mode is unlocked by typing the code
+  // STYXDEV while the Settings modal is open (see the Settings section below).
+  // Once unlocked, Ctrl+Alt+D and 5-clicking the tagline toggle the debug
+  // panel — both are gated on this flag, so production users never trigger
+  // them. mc.dev.v1 in chrome.storage.local is the source of truth, mirrored
+  // here and in the service worker / content scripts.
   let devModeEnabled = false;
+
+  // ---- Diagnostic logging --------------------------------------------------
+  // Mirrors the service-worker / content-script loggers: when Developer mode is
+  // on, dlog/dwarn forward popup-side logs (and uncaught errors) to the SW's
+  // diagnostic ring via MC_LOG_PUSH, so "Copy diagnostic logs" gathers them
+  // alongside the rest. Gated on devModeEnabled, which already tracks mc.dev.v1.
+  const mcStringifyArgs = (args) =>
+    args
+      .map((v) => {
+        if (typeof v === "string") return v;
+        try { return JSON.stringify(v); } catch (_) { return String(v); }
+      })
+      .join(" ");
+  function mcForwardLog(level, args) {
+    try {
+      chrome.runtime.sendMessage({
+        type: "MC_LOG_PUSH",
+        entry: { ts: Date.now(), ctx: "popup", level, url: location.href, msg: mcStringifyArgs(args) },
+      });
+    } catch (_) {}
+  }
+  const dlog = (...a) => { if (!devModeEnabled) return; console.log(...a); mcForwardLog("log", a); };
+  const dwarn = (...a) => { if (!devModeEnabled) return; console.warn(...a); mcForwardLog("warn", a); };
+  window.addEventListener("error", (e) => {
+    if (!devModeEnabled) return;
+    mcForwardLog("error", [`uncaught: ${e.message} @ ${e.filename}:${e.lineno}`]);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    if (!devModeEnabled) return;
+    mcForwardLog("error", [`unhandledrejection: ${(e.reason && e.reason.message) || e.reason}`]);
+  });
+  void dlog;
+  void dwarn;
 
   // Cached entitlement from the last MC_LIST_CARTS / MC_GET_ENTITLEMENT response.
   // See docs/MONETIZATION_PLAN.md. Always populated before render() runs.
@@ -1294,7 +1330,7 @@
         li.querySelector(".mc-item-name").textContent.trim() || "this";
       const ok = await confirmDialog({
         title: "Switch to this cart?",
-        message: `This will replace your current Amazon cart with "${cartName}".`,
+        message: `This will replace your current Amazon cart with the contents of "${cartName}".`,
         okLabel: "Switch",
       });
       if (!ok) return;
@@ -1490,7 +1526,7 @@
   // ---- Debug: entitlement controls --------------------------------------
   //
   // Hidden affordance behind chrome.storage.local["mc.dev.v1"]. Toggle visibility
-  // with Ctrl+Shift+D (also persists the flag so it stays on across popup opens).
+  // with Ctrl+Alt+D (also persists the flag so it stays on across popup opens).
   // Buttons write chrome.storage.local["mc.entitlement.v1"] directly — no
   // service-worker round trip needed — then trigger a refresh.
 
@@ -1662,6 +1698,74 @@
         toast(`Entitlement → ${action}`, "ok");
       } catch (err) {
         toast(`Failed: ${err.message}`, "error");
+      }
+    });
+  }
+
+  // Assemble a paste-able diagnostic report: extension version + state
+  // snapshot + the cross-context log ring (SW, content scripts, popup). The
+  // ring only fills while Developer mode is on, so the support flow is: turn on
+  // Developer mode → reproduce the issue → click Copy diagnostic logs.
+  async function buildDiagnosticReport() {
+    const lines = [];
+    let version = "";
+    try { version = chrome.runtime.getManifest().version; } catch (_) {}
+    lines.push("Styx Multi-Cart — diagnostic report");
+    lines.push("Generated: " + new Date().toISOString());
+    lines.push("Version: " + version);
+    lines.push("Surface: " + (document.documentElement.dataset.surface || "popup"));
+    lines.push("User agent: " + navigator.userAgent);
+    try {
+      const got = await chrome.storage.local.get([
+        ENT_KEY,
+        "mc.settings.v1",
+        "mc.carts.v1",
+        DEV_FLAG_KEY,
+      ]);
+      lines.push("Dev mode: " + (got[DEV_FLAG_KEY] === true));
+      lines.push("Entitlement: " + JSON.stringify(got[ENT_KEY] || null));
+      lines.push("Settings: " + JSON.stringify(got["mc.settings.v1"] || null));
+      const carts = got["mc.carts.v1"];
+      const list =
+        carts && Array.isArray(carts.carts)
+          ? carts.carts
+          : Array.isArray(carts)
+          ? carts
+          : [];
+      lines.push("Saved carts: " + list.length);
+    } catch (e) {
+      lines.push("State snapshot error: " + (e && e.message));
+    }
+    let entries = [];
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: "MC_LOG_GET" });
+      if (resp && Array.isArray(resp.entries)) entries = resp.entries;
+    } catch (e) {
+      lines.push("Log fetch error: " + (e && e.message));
+    }
+    lines.push("");
+    lines.push(`--- logs (${entries.length}) ---`);
+    for (const en of entries) {
+      let t = "";
+      try { t = new Date(en.ts).toISOString().slice(11, 23); } catch (_) {}
+      lines.push(`${t} [${en.ctx}/${en.level}] ${en.msg}`);
+    }
+    if (!entries.length) {
+      lines.push(
+        "(no logs captured yet — keep Developer mode on, reproduce the issue, then copy again)"
+      );
+    }
+    return lines.join("\n");
+  }
+
+  if ($copyLogs) {
+    $copyLogs.addEventListener("click", async () => {
+      try {
+        const report = await buildDiagnosticReport();
+        await navigator.clipboard.writeText(report);
+        toast("Diagnostic logs copied", "ok");
+      } catch (e) {
+        toast("Copy failed: " + (e && e.message), "error");
       }
     });
   }

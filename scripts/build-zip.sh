@@ -69,17 +69,20 @@ fi
 # Belt-and-suspenders: DEBUG is now runtime-controlled by the mc.dev.v1
 # storage flag (popup Settings → Developer mode), so there's no good reason
 # to hard-code `DEBUG = true` in source. Catch the historic mistake of doing
-# so anyway. Override with STYX_ALLOW_DEBUG_TRUE=1 if you genuinely want it.
-if grep -qE '^\s*(let|var|const)\s+DEBUG\s*=\s*true' background.js; then
-  if [[ "${STYX_ALLOW_DEBUG_TRUE:-0}" != "1" ]]; then
-    echo "error: background.js has DEBUG = true hardcoded." >&2
-    echo "       DEBUG is runtime-controlled by Settings → Developer mode now;" >&2
-    echo "       flip it back to false and toggle from the popup instead." >&2
-    echo "       Override with STYX_ALLOW_DEBUG_TRUE=1 if you really mean it." >&2
-    exit 1
+# so anyway, across every script that carries a DEBUG switch.
+# Override with STYX_ALLOW_DEBUG_TRUE=1 if you genuinely want it.
+for f in background.js observer.js content.js; do
+  if grep -qE '^\s*(let|var|const)\s+DEBUG\s*=\s*true' "$f"; then
+    if [[ "${STYX_ALLOW_DEBUG_TRUE:-0}" != "1" ]]; then
+      echo "error: $f has DEBUG = true hardcoded." >&2
+      echo "       DEBUG is runtime-controlled by Settings → Developer mode now;" >&2
+      echo "       flip it back to false and toggle from the popup instead." >&2
+      echo "       Override with STYX_ALLOW_DEBUG_TRUE=1 if you really mean it." >&2
+      exit 1
+    fi
+    echo "warning: building with DEBUG = true hardcoded in $f — verbose logs always on." >&2
   fi
-  echo "warning: building with DEBUG = true hardcoded — verbose logs always on." >&2
-fi
+done
 
 zip -q "$OUT" "${FILES[@]}"
 

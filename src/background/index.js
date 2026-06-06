@@ -34,9 +34,55 @@ import { extpayUserToEntitlementPatch } from "../../lib/extpay-sync.js";
 // diagnostic in the service-worker console. Inside page-injected functions
 // always use raw `console.log` / `console.warn`.
 let DEBUG = false;
-const dlog = (...a) => { if (DEBUG) console.log(...a); };
-const dinfo = (...a) => { if (DEBUG) console.info(...a); };
-const dwarn = (...a) => { if (DEBUG) console.warn(...a); };
+
+// In-memory diagnostic log ring. Every extension context (this service worker,
+// the content scripts, and the popup) funnels its dev-mode logs here via
+// MC_LOG_PUSH, so the popup's "Copy diagnostic logs" button can assemble one
+// paste-able report spanning all of them. In-memory only: it's wiped when the
+// SW is evicted, which is fine — diagnostics are gathered live, right after the
+// user reproduces the issue with Developer mode on.
+const LOG_RING_MAX = 500;
+const LOG_RING = [];
+function mcStringifyArgs(args) {
+  return args
+    .map((v) => {
+      if (typeof v === "string") return v;
+      try {
+        return JSON.stringify(v);
+      } catch (_) {
+        return String(v);
+      }
+    })
+    .join(" ");
+}
+function pushLogEntry(entry) {
+  if (!entry || typeof entry !== "object") return;
+  LOG_RING.push({
+    ts: typeof entry.ts === "number" ? entry.ts : Date.now(),
+    ctx: typeof entry.ctx === "string" ? entry.ctx : "?",
+    level: typeof entry.level === "string" ? entry.level : "log",
+    url: typeof entry.url === "string" ? entry.url : "",
+    msg: typeof entry.msg === "string" ? entry.msg : mcStringifyArgs([entry.msg]),
+  });
+  if (LOG_RING.length > LOG_RING_MAX) {
+    LOG_RING.splice(0, LOG_RING.length - LOG_RING_MAX);
+  }
+}
+const dlog = (...a) => {
+  if (!DEBUG) return;
+  console.log(...a);
+  pushLogEntry({ ctx: "sw", level: "log", msg: mcStringifyArgs(a) });
+};
+const dinfo = (...a) => {
+  if (!DEBUG) return;
+  console.info(...a);
+  pushLogEntry({ ctx: "sw", level: "info", msg: mcStringifyArgs(a) });
+};
+const dwarn = (...a) => {
+  if (!DEBUG) return;
+  console.warn(...a);
+  pushLogEntry({ ctx: "sw", level: "warn", msg: mcStringifyArgs(a) });
+};
 
 const STORAGE_KEY = "mc.carts.v1";
 const SETTINGS_KEY = "mc.settings.v1";
@@ -283,6 +329,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (Object.prototype.hasOwnProperty.call(changes, DEV_FLAG_KEY)) {
     DEBUG = changes[DEV_FLAG_KEY].newValue === true;
   }
+});
+
+// Capture uncaught service-worker errors into the diagnostic ring while
+// Developer mode is on, so they surface in "Copy diagnostic logs" too.
+self.addEventListener("error", (e) => {
+  if (!DEBUG) return;
+  pushLogEntry({ ctx: "sw", level: "error", msg: `uncaught: ${e && e.message}` });
+});
+self.addEventListener("unhandledrejection", (e) => {
+  if (!DEBUG) return;
+  const reason = e && e.reason;
+  pushLogEntry({
+    ctx: "sw",
+    level: "error",
+    msg: `unhandledrejection: ${(reason && reason.message) || reason}`,
+  });
 });
 
 // Immediate flip when the user completes checkout — ExtPay fires onPaid
@@ -2828,6 +2890,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       switch (msg.type) {
         case "MC_GET_STATUS": {
           sendResponse(_opStatus || { active: false, title: "", detail: "" });
+          break;
+        }
+
+        case "MC_LOG_PUSH": {
+          // A content script or the popup forwarded a dev-mode log line.
+          pushLogEntry(msg.entry);
+          sendResponse({ ok: true });
+          break;
+        }
+
+        case "MC_LOG_GET": {
+          // The popup's "Copy diagnostic logs" button requests the ring.
+          sendResponse({ ok: true, entries: LOG_RING.slice() });
           break;
         }
 

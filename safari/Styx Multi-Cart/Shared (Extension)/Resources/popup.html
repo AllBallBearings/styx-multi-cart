@@ -346,7 +346,7 @@
             </button>
           </div>
           <div class="mc-debug-hint">
-            Ctrl+Shift+D toggles this panel. Changes write directly to
+            Ctrl+Alt+D toggles this panel. Changes write directly to
             <code>chrome.storage.local</code> and reload the popup state.
           </div>
         </div>
@@ -361,6 +361,23 @@
             Run cart diagnostics
           </button>
           <pre id="mc-debug-output" class="mc-debug-output"></pre>
+        </div>
+
+        <div class="mc-debug-section">
+          <div class="mc-debug-section-title">Diagnostic logs</div>
+          <button
+            id="mc-copy-logs"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+          >
+            Copy diagnostic logs
+          </button>
+          <div class="mc-debug-hint">
+            Copies the extension version, current state, and recent logs from
+            every context (service worker, content scripts, popup) to the
+            clipboard. Keep Developer mode on, reproduce the issue, then copy
+            and send the result to support.
+          </div>
         </div>
       </div>
     </details>
