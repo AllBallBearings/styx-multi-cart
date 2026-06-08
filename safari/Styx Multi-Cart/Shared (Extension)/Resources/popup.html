@@ -305,6 +305,12 @@
     <details id="mc-debug" class="mc-debug" hidden>
       <summary class="mc-debug-toggle">Debug</summary>
       <div class="mc-debug-body">
+        <!-- MC_DEBUG_ENT_START -->
+        <!--
+          DEVELOPER-ONLY entitlement presets. These forge a premium/lapsed/free
+          state directly into storage, so scripts/build-zip.sh strips this whole
+          marked block out of the Chrome Web Store build.
+        -->
         <div class="mc-debug-section">
           <div class="mc-debug-section-title">Entitlement</div>
           <div id="mc-debug-ent-state" class="mc-debug-state">loading…</div>
@@ -346,10 +352,11 @@
             </button>
           </div>
           <div class="mc-debug-hint">
-            Ctrl+Shift+D toggles this panel. Changes write directly to
+            Ctrl+Alt+D toggles this panel. Changes write directly to
             <code>chrome.storage.local</code> and reload the popup state.
           </div>
         </div>
+        <!-- MC_DEBUG_ENT_END -->
 
         <div class="mc-debug-section">
           <div class="mc-debug-section-title">Cart diagnostics</div>
@@ -361,6 +368,23 @@
             Run cart diagnostics
           </button>
           <pre id="mc-debug-output" class="mc-debug-output"></pre>
+        </div>
+
+        <div class="mc-debug-section">
+          <div class="mc-debug-section-title">Diagnostic logs</div>
+          <button
+            id="mc-copy-logs"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+          >
+            Copy diagnostic logs
+          </button>
+          <div class="mc-debug-hint">
+            Copies the extension version, current state, and recent logs from
+            every context (service worker, content scripts, popup) to the
+            clipboard. Keep Developer mode on, reproduce the issue, then copy
+            and send the result to support.
+          </div>
         </div>
       </div>
     </details>

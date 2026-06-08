@@ -12,6 +12,56 @@
 (function () {
   "use strict";
 
+  // Diagnostic logging — mirrors the popup's Developer mode switch (the
+  // mc.dev.v1 flag in chrome.storage.local). When it's on, dlog/dwarn print to
+  // this page's console AND forward to the service worker's in-memory ring
+  // buffer, so the popup's "Copy diagnostic logs" button can gather logs from
+  // every context in one paste. When off, they're no-ops. Flip it via
+  // Settings → Developer mode in the popup.
+  const MC_DEV_FLAG_KEY = "mc.dev.v1";
+  const MC_LOG_CTX = "content";
+  let DEBUG = false;
+  const mcStringifyArgs = (args) =>
+    args
+      .map((v) => {
+        if (typeof v === "string") return v;
+        try { return JSON.stringify(v); } catch (_) { return String(v); }
+      })
+      .join(" ");
+  function mcForwardLog(level, args) {
+    try {
+      chrome.runtime.sendMessage({
+        type: "MC_LOG_PUSH",
+        entry: { ts: Date.now(), ctx: MC_LOG_CTX, level, url: location.href, msg: mcStringifyArgs(args) },
+      });
+    } catch (_) {
+      // Extension context invalidated (e.g. reload/update) — ignore.
+    }
+  }
+  const dlog = (...a) => { if (!DEBUG) return; console.log(...a); mcForwardLog("log", a); };
+  const dwarn = (...a) => { if (!DEBUG) return; console.warn(...a); mcForwardLog("warn", a); };
+  try {
+    chrome.storage.local.get(MC_DEV_FLAG_KEY, (r) => {
+      DEBUG = !!(r && r[MC_DEV_FLAG_KEY] === true);
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local") return;
+      if (Object.prototype.hasOwnProperty.call(changes, MC_DEV_FLAG_KEY)) {
+        DEBUG = changes[MC_DEV_FLAG_KEY].newValue === true;
+      }
+    });
+    window.addEventListener("error", (e) => {
+      if (!DEBUG) return;
+      mcForwardLog("error", [`uncaught: ${e.message} @ ${e.filename}:${e.lineno}`]);
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      if (!DEBUG) return;
+      mcForwardLog("error", [`unhandledrejection: ${(e.reason && e.reason.message) || e.reason}`]);
+    });
+  } catch (_) {}
+
+  dlog("[Styx MC] content.js loaded on", location.href);
+
   /** Pull the Amazon host (e.g. "www.amazon.com") so restore URLs match the storefront the user is on. */
   function getAmazonHost() {
     return location.hostname;
@@ -92,6 +142,7 @@
       });
     });
 
+    dlog("[Styx MC] scrapeCart found", items.length, "active item(s)");
     return {
       host: getAmazonHost(),
       capturedAt: new Date().toISOString(),
@@ -176,6 +227,7 @@
     let safety = 200; // hard cap so we never spin forever
     let stalledClicks = 0;
     const initialCount = getActiveCartRows().length;
+    dlog("[Styx MC] clearCart start —", initialCount, "active row(s)");
 
     while (safety-- > 0) {
       const rows = getActiveCartRows();
@@ -206,12 +258,14 @@
       }
     }
 
-    return {
+    const result = {
       removed,
       remaining: getRemainingCartCount(),
       found: initialCount,
       sawCartSurface: hasCartSurface(),
     };
+    dlog("[Styx MC] clearCart done", result);
+    return result;
   }
 
   function getActiveCartScopes() {
@@ -545,6 +599,9 @@
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg || typeof msg !== "object") return false;
+    if (typeof msg.type === "string" && msg.type.startsWith("MC_")) {
+      dlog("[Styx MC] content received", msg.type);
+    }
 
     if (msg.type === "MC_SCRAPE_CART") {
       try {

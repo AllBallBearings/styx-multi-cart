@@ -48,14 +48,45 @@ importScripts("ExtPay.js");
 
   // src/background/index.js
   var DEBUG = false;
+  var LOG_RING_MAX = 500;
+  var LOG_RING = [];
+  function mcStringifyArgs(args) {
+    return args.map((v) => {
+      if (typeof v === "string") return v;
+      try {
+        return JSON.stringify(v);
+      } catch (_) {
+        return String(v);
+      }
+    }).join(" ");
+  }
+  function pushLogEntry(entry) {
+    if (!entry || typeof entry !== "object") return;
+    LOG_RING.push({
+      ts: typeof entry.ts === "number" ? entry.ts : Date.now(),
+      ctx: typeof entry.ctx === "string" ? entry.ctx : "?",
+      level: typeof entry.level === "string" ? entry.level : "log",
+      url: typeof entry.url === "string" ? entry.url : "",
+      msg: typeof entry.msg === "string" ? entry.msg : mcStringifyArgs([entry.msg])
+    });
+    if (LOG_RING.length > LOG_RING_MAX) {
+      LOG_RING.splice(0, LOG_RING.length - LOG_RING_MAX);
+    }
+  }
   var dlog = (...a) => {
-    if (DEBUG) console.log(...a);
+    if (!DEBUG) return;
+    console.log(...a);
+    pushLogEntry({ ctx: "sw", level: "log", msg: mcStringifyArgs(a) });
   };
   var dinfo = (...a) => {
-    if (DEBUG) console.info(...a);
+    if (!DEBUG) return;
+    console.info(...a);
+    pushLogEntry({ ctx: "sw", level: "info", msg: mcStringifyArgs(a) });
   };
   var dwarn = (...a) => {
-    if (DEBUG) console.warn(...a);
+    if (!DEBUG) return;
+    console.warn(...a);
+    pushLogEntry({ ctx: "sw", level: "warn", msg: mcStringifyArgs(a) });
   };
   var STORAGE_KEY = "mc.carts.v1";
   var SETTINGS_KEY = "mc.settings.v1";
@@ -201,6 +232,19 @@ importScripts("ExtPay.js");
     if (Object.prototype.hasOwnProperty.call(changes, DEV_FLAG_KEY)) {
       DEBUG = changes[DEV_FLAG_KEY].newValue === true;
     }
+  });
+  self.addEventListener("error", (e) => {
+    if (!DEBUG) return;
+    pushLogEntry({ ctx: "sw", level: "error", msg: `uncaught: ${e && e.message}` });
+  });
+  self.addEventListener("unhandledrejection", (e) => {
+    if (!DEBUG) return;
+    const reason = e && e.reason;
+    pushLogEntry({
+      ctx: "sw",
+      level: "error",
+      msg: `unhandledrejection: ${reason && reason.message || reason}`
+    });
   });
   if (extpay) {
     extpay.onPaid.addListener(() => {
@@ -1923,6 +1967,15 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
         switch (msg.type) {
           case "MC_GET_STATUS": {
             sendResponse(_opStatus || { active: false, title: "", detail: "" });
+            break;
+          }
+          case "MC_LOG_PUSH": {
+            pushLogEntry(msg.entry);
+            sendResponse({ ok: true });
+            break;
+          }
+          case "MC_LOG_GET": {
+            sendResponse({ ok: true, entries: LOG_RING.slice() });
             break;
           }
           case "MC_OBSERVE_ATC": {

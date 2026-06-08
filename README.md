@@ -49,6 +49,59 @@ Firefox supports Manifest V3 with one minor change: you need an `applications.ge
 
 The extension will run until Firefox restarts.
 
+## Developer mode & diagnostics
+
+The popup hides a developer panel behind a private unlock so normal users never
+stumble into it. To open it: click the gear (**Settings**), then type
+`STYXDEV`. A **Developer mode** switch appears; turning it on reveals the debug
+panel and enables verbose logging across the service worker and content
+scripts.
+
+With Developer mode on you can:
+
+- **Copy diagnostic logs** — gathers the extension version, current state, and
+  recent logs from every context (service worker, content scripts, popup) onto
+  the clipboard. The intended support flow: ask a user to turn on Developer
+  mode, reproduce the issue, then send you the copied report.
+- **Run cart diagnostics** — dumps what the cart-clear logic sees on the page.
+
+The unlock code is a convenience to keep normal users out, **not** a security
+boundary — anyone can read it in the source. The entitlement-forging controls
+in the debug panel are therefore stripped from production builds (see below),
+so the shipped artifact carries no in-UI way to grant premium.
+
+## Building for release
+
+The source in this repo is the **developer** build: it includes the debug
+entitlement presets (behind the Developer-mode unlock) so you can exercise the
+paywall UI locally. Production builds strip those controls.
+
+### Chrome / Edge / Brave / … (Chrome Web Store)
+
+```bash
+npm run build              # regenerate background.js from src/
+bash scripts/build-zip.sh  # → dist/styx-multi-cart-v<version>.zip (controls stripped)
+```
+
+Upload the resulting zip to the Chrome Web Store. To produce a dev-flavored zip
+that keeps the debug controls, set `STYX_KEEP_DEBUG_ENT=1`.
+
+### Safari (App Store)
+
+```bash
+npm run sync:safari            # dev build  — debug controls KEPT (for Xcode debugging)
+npm run sync:safari -- --prod  # release    — debug controls STRIPPED
+```
+
+Run the `--prod` sync immediately before archiving in Xcode for App Store
+submission. Both forms regenerate `background.js` and copy the web-extension
+files into the Xcode project's `Resources/`.
+
+### Loading the dev build unpacked
+
+For day-to-day development just load the repo folder unpacked (see the install
+steps above) — no build step needed, and the debug controls are present.
+
 ## How to use
 
 1. Go to your Amazon cart (`amazon.com/gp/cart/view.html` or click the cart icon).
