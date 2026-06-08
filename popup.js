@@ -1525,13 +1525,18 @@
 
   // ---- Debug: entitlement controls --------------------------------------
   //
-  // Hidden affordance behind chrome.storage.local["mc.dev.v1"]. Toggle visibility
-  // with Ctrl+Alt+D (also persists the flag so it stays on across popup opens).
-  // Buttons write chrome.storage.local["mc.entitlement.v1"] directly — no
-  // service-worker round trip needed — then trigger a refresh.
+  // DEVELOPER-ONLY, and stripped from production builds. The preset buttons
+  // below forge an entitlement straight into chrome.storage.local, which is a
+  // premium bypass — so scripts/build-zip.sh deletes everything between the
+  // debug-entitlement strip markers (here and in popup.html) when packaging
+  // the Chrome Web Store zip. Keep all entitlement-mutating code inside those
+  // markers. The dev unlock only hides this from normal users; it is NOT a
+  // security boundary, since anyone can read the source.
 
   const DEV_FLAG_KEY = "mc.dev.v1";
   const ENT_KEY = "mc.entitlement.v1";
+
+  /* MC_DEBUG_ENT_START */
   const DAY_MS = 86400000;
 
   function entPresets(now) {
@@ -1568,6 +1573,7 @@
       },
     };
   }
+  /* MC_DEBUG_ENT_END */
 
   function formatEntForDisplay(ent) {
     if (!ent) return "(none)";
@@ -1665,7 +1671,9 @@
     });
   })();
 
-  // Button delegation inside the debug entitlement section.
+  /* MC_DEBUG_ENT_START */
+  // Button delegation inside the debug entitlement section. (Stripped from
+  // production builds along with the buttons in popup.html.)
   if ($debugPanel) {
     $debugPanel.addEventListener("click", async (e) => {
       const btn = e.target.closest("[data-debug-ent]");
@@ -1701,6 +1709,7 @@
       }
     });
   }
+  /* MC_DEBUG_ENT_END */
 
   // Assemble a paste-able diagnostic report: extension version + state
   // snapshot + the cross-context log ring (SW, content scripts, popup). The
