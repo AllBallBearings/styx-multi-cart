@@ -105,28 +105,7 @@ done
 if [[ "${STYX_KEEP_DEBUG_ENT:-0}" == "1" ]]; then
   echo "warning: keeping developer entitlement controls in the zip (STYX_KEEP_DEBUG_ENT=1)." >&2
 else
-  python3 - "$STAGE/popup.html" "$STAGE/popup.js" <<'PY'
-import re, sys
-
-marker = re.compile(
-    r"[ \t]*(?:<!--|/\*)\s*MC_DEBUG_ENT_START\s*(?:-->|\*/)"
-    r".*?"
-    r"(?:<!--|/\*)\s*MC_DEBUG_ENT_END\s*(?:-->|\*/)[ \t]*\n?",
-    re.DOTALL,
-)
-
-for path in sys.argv[1:]:
-    with open(path, encoding="utf-8") as fh:
-        src = fh.read()
-    stripped, n = marker.subn("", src)
-    if n == 0:
-        sys.exit(f"error: no MC_DEBUG_ENT markers found in {path}; refusing to ship.")
-    if "MC_DEBUG_ENT" in stripped or "data-debug-ent" in stripped:
-        sys.exit(f"error: residual debug-entitlement code left in {path} after strip.")
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(stripped)
-    print(f"stripped {n} developer entitlement block(s) from {path.split('/')[-1]}")
-PY
+  python3 scripts/strip-debug-ent.py "$STAGE/popup.html" "$STAGE/popup.js"
 fi
 
 ( cd "$STAGE" && zip -q "$OUT_ABS" "${FILES[@]}" )
