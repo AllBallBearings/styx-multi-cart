@@ -84,7 +84,52 @@ for f in background.js observer.js content.js; do
   fi
 done
 
-zip -q "$OUT" "${FILES[@]}"
+# Stage the files into a temp dir and strip developer-only blocks before
+# zipping, so the published artifact carries no in-UI premium bypass. The
+# working tree is left untouched (devs loading unpacked keep the controls).
+OUT_ABS="$(pwd)/$OUT"
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
+
+for f in "${FILES[@]}"; do
+  mkdir -p "$STAGE/$(dirname "$f")"
+  cp "$f" "$STAGE/$f"
+done
+
+# Delete everything between MC_DEBUG_ENT_START / MC_DEBUG_ENT_END (inclusive)
+# in the staged popup. These markers wrap the entitlement preset buttons +
+# their handler — forging premium straight into chrome.storage.local. The
+# strip MUST find a marker in each file or the build fails (so a refactor that
+# drops the markers can't silently ship the bypass). Override the whole strip
+# for a dev-flavored zip with STYX_KEEP_DEBUG_ENT=1.
+if [[ "${STYX_KEEP_DEBUG_ENT:-0}" == "1" ]]; then
+  echo "warning: keeping developer entitlement controls in the zip (STYX_KEEP_DEBUG_ENT=1)." >&2
+else
+  python3 - "$STAGE/popup.html" "$STAGE/popup.js" <<'PY'
+import re, sys
+
+marker = re.compile(
+    r"[ \t]*(?:<!--|/\*)\s*MC_DEBUG_ENT_START\s*(?:-->|\*/)"
+    r".*?"
+    r"(?:<!--|/\*)\s*MC_DEBUG_ENT_END\s*(?:-->|\*/)[ \t]*\n?",
+    re.DOTALL,
+)
+
+for path in sys.argv[1:]:
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    stripped, n = marker.subn("", src)
+    if n == 0:
+        sys.exit(f"error: no MC_DEBUG_ENT markers found in {path}; refusing to ship.")
+    if "MC_DEBUG_ENT" in stripped or "data-debug-ent" in stripped:
+        sys.exit(f"error: residual debug-entitlement code left in {path} after strip.")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(stripped)
+    print(f"stripped {n} developer entitlement block(s) from {path.split('/')[-1]}")
+PY
+fi
+
+( cd "$STAGE" && zip -q "$OUT_ABS" "${FILES[@]}" )
 
 echo "built $OUT"
 unzip -l "$OUT"
