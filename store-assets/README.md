@@ -12,15 +12,15 @@ Assets uploaded to the Chrome Web Store listing form. **Not bundled into the ext
 | `product-logo-2048.png` | Extra-large product logo | 2048×2048 PNG | ✅ done — regenerate via `node store-assets/_render_product_logo.js` |
 | `icon-128.png` | Store icon | 128×128 PNG | ✅ done (copied from `icons/icon128.png`) |
 | `promo-440x280.png` | Small promo tile | 440×280 PNG (no transparency) | ✅ done — regenerate via `python3 store-assets/_render_promo.py` |
-| `screenshots/01-popup.png` | Screenshot 1 | 1280×800 PNG | ⏳ TODO — popup with 2-3 saved carts |
-| `screenshots/02-restoring.png` | Screenshot 2 | 1280×800 PNG | ⏳ TODO — mid-restore status toast on a cart page |
-| `screenshots/03-done.png` | Screenshot 3 | 1280×800 PNG | ⏳ TODO — "Cart restored — N items added" |
-| `screenshots/04-paywall.png` (optional) | Screenshot 4 | 1280×800 PNG | ⏳ optional — the upgrade modal (good for premium-feature legibility) |
+| `promo-1400x560.png` | Marquee promo tile | 1400×560 PNG (no transparency) | ✅ done — regenerate via `python3 store-assets/_render_promo.py` |
+| `screenshots/01-popup.png` | Screenshot 1 | 1280×800 PNG | ✅ done — Amazon cart beside the side panel with 2 saved carts |
+| `screenshots/02-switchCart.png` | Screenshot 2 | 1280×800 PNG | ✅ done — "Switch to this cart?" confirmation |
+| `screenshots/03-clickToAdd.png` | Screenshot 3 | 1280×800 PNG | ✅ done — add-to-cart interception callout |
+| `screenshots/04-toCart.png` | Screenshot 4 | 1280×800 PNG | ✅ done — "Add to which saved cart?" picker modal |
 
 Optional (defer until after initial launch):
 
 - `promo-920x680.png` — large promo tile (improves featured-section placement)
-- `promo-1400x560.png` — marquee tile
 - demo video (YouTube link, 30s)
 
 ## How to capture screenshots
