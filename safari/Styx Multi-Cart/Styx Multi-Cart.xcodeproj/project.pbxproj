@@ -53,6 +53,8 @@
 		C1B0B1EF2FBBB5B6006F37EF /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D72FBBB5B6006F37EF /* popup.css */; };
 		C1B0B1F02FBBB5B6006F37EF /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D82FBBB5B6006F37EF /* content.js */; };
 		C1B0B1F12FBBB5B6006F37EF /* status.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D92FBBB5B6006F37EF /* status.css */; };
+		C1B0B1F22FBBB5B6006F37EF /* ExtPay.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */; };
+		C1B0B1F32FBBB5B6006F37EF /* ExtPay.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -131,6 +133,7 @@
 		C1B0B1D72FBBB5B6006F37EF /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = popup.css; path = Resources/popup.css; sourceTree = "<group>"; };
 		C1B0B1D82FBBB5B6006F37EF /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = Resources/content.js; sourceTree = "<group>"; };
 		C1B0B1D92FBBB5B6006F37EF /* status.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = status.css; path = Resources/status.css; sourceTree = "<group>"; };
+		C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ExtPay.js; path = Resources/ExtPay.js; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -272,6 +275,7 @@
 				C1B0B1D72FBBB5B6006F37EF /* popup.css */,
 				C1B0B1D82FBBB5B6006F37EF /* content.js */,
 				C1B0B1D92FBBB5B6006F37EF /* status.css */,
+				C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */,
 			);
 			name = Resources;
 			path = "Shared (Extension)";
@@ -450,6 +454,7 @@
 				C1B0B1E62FBBB5B6006F37EF /* status.html in Resources */,
 				C1B0B1EC2FBBB5B6006F37EF /* icons in Resources */,
 				C1B0B1E72FBBB5B6006F37EF /* popup.js in Resources */,
+				C1B0B1F22FBBB5B6006F37EF /* ExtPay.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -469,6 +474,7 @@
 				C1B0B1DA2FBBB5B6006F37EF /* status.html in Resources */,
 				C1B0B1E02FBBB5B6006F37EF /* icons in Resources */,
 				C1B0B1DB2FBBB5B6006F37EF /* popup.js in Resources */,
+				C1B0B1F32FBBB5B6006F37EF /* ExtPay.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

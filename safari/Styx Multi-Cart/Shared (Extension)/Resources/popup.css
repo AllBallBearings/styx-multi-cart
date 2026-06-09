@@ -144,11 +144,18 @@ html[data-surface="sidepanel"] .mc-header {
   padding: 12px;
 }
 
+/* Chrome's native side-panel header already shows the "Styx Multi-Cart" title
+   + close, so we hide our own brand. Rather than waste a whole empty row on
+   two buttons, float the settings + theme icons up onto the "Save current
+   Amazon cart as" label line. The label reserves matching height + right
+   padding so nothing overlaps. */
 html[data-surface="sidepanel"] .mc-header {
   position: absolute;
-  top: 8px;
+  top: 10px;
   right: 12px;
+  z-index: 20;
   justify-content: flex-end;
+  gap: 8px;
   padding: 0;
   border-bottom: 0;
   background: transparent;
@@ -163,10 +170,14 @@ html[data-surface="sidepanel"] .mc-header-actions {
 }
 
 html[data-surface="sidepanel"] .mc-save-block {
-  padding-top: 16px;
+  padding-top: 12px;
 }
 
 html[data-surface="sidepanel"] .mc-label {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  margin-bottom: 8px;
   padding-right: 76px;
 }
 

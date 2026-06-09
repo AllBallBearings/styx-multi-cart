@@ -4,8 +4,8 @@ dist/
 node_modules/
 coverage/
 safari/build/
-safari/*.xcodeproj/xcuserdata/
-safari/*.xcodeproj/project.xcworkspace/xcuserdata/
+safari/**/*.xcodeproj/xcuserdata/
+safari/**/*.xcodeproj/project.xcworkspace/xcuserdata/
 __pycache__/
 *.pyc
 
