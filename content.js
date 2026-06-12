@@ -12,6 +12,14 @@
 (function () {
   "use strict";
 
+  // Re-injection guard. Besides the manifest declaration, background.js
+  // injects this file on demand when a tab has no listener (Safari's "Ask"
+  // site-access level blocks manifest content scripts while the activeTab
+  // grant still allows scripting). A second evaluation must not register a
+  // second onMessage listener or every request would get double responses.
+  if (window.__styxMcContentLoaded) return;
+  window.__styxMcContentLoaded = true;
+
   // Diagnostic logging — mirrors the popup's Developer mode switch (the
   // mc.dev.v1 flag in chrome.storage.local). When it's on, dlog/dwarn print to
   // this page's console AND forward to the service worker's in-memory ring
@@ -298,6 +306,11 @@
           if (isSaveForLaterRow(row)) {
             return;
           }
+          // Amazon's "Coupon Clipped" confirmation box carries data-asin +
+          // data-itemid but is not a cart item — never try to delete it.
+          if (row.closest(".sc-clipcoupon, .sc-clipcoupon-container")) {
+            return;
+          }
           seen.add(row);
           rows.push(row);
         });
@@ -338,6 +351,36 @@
     }
 
     return 0;
+  }
+
+  // Quantity-badge reading only (nav badge / EWC totals) — never rows. This
+  // mirrors the quantity branch of pageGetCartCountDetailed in
+  // src/background/index.js so the pre-delete baseline and the background's
+  // settle polling measure the same thing. Returns null when no badge exists.
+  function getCartQuantityCount() {
+    const parseCount = (value) => {
+      const n = parseInt(String(value || "").replace(/[^\d]/g, ""), 10);
+      return Number.isNaN(n) ? null : n;
+    };
+
+    const quantityEl =
+      document.querySelector("#nav-cart-count") ||
+      document.querySelector("#ewc-total-quantity") ||
+      document.querySelector("input[name='totalCartQuantity']");
+    if (quantityEl) {
+      const count = parseCount(quantityEl.value || quantityEl.textContent);
+      if (count != null) return count;
+    }
+
+    const quantityText = document.querySelector(
+      "#nav-flyout-ewc .ewc-quantity, #ewc-content .ewc-quantity"
+    );
+    if (quantityText) {
+      const match = (quantityText.textContent || "").match(/\b(\d+)\s+items?\b/i);
+      if (match) return parseCount(match[1]);
+    }
+
+    return null;
   }
 
   function isSaveForLaterRow(row) {
@@ -484,6 +527,29 @@
     }
   }
 
+  function submitOrClickDeleteControl(el) {
+    const form = el && el.closest ? el.closest("form") : null;
+    const tag = el && el.tagName ? el.tagName.toLowerCase() : "";
+    const type = (el && el.getAttribute ? el.getAttribute("type") : "") || "";
+    const isSubmitControl =
+      (tag === "button" || tag === "input") &&
+      (type === "" || /^(submit|image)$/i.test(type));
+
+    if (form && isSubmitControl && typeof form.requestSubmit === "function") {
+      try {
+        // requestSubmit(btn) includes the button's name/value in the POST body
+        // so Amazon knows which item to delete.
+        form.requestSubmit(el);
+        return;
+      } catch (_e) {
+        // Safari is stricter about submitters. Fall back to the page's own
+        // click handlers instead of reporting success without doing anything.
+      }
+    }
+
+    clickControl(el);
+  }
+
   function waitForCartChange(row, beforeCount, timeoutMs) {
     return new Promise((resolve) => {
       const target =
@@ -597,7 +663,7 @@
 
   // ---- Message bus ---------------------------------------------------------
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  function handleExtensionMessage(msg, sendResponse) {
     if (!msg || typeof msg !== "object") return false;
     if (typeof msg.type === "string" && msg.type.startsWith("MC_")) {
       dlog("[Styx MC] content received", msg.type);
@@ -643,15 +709,18 @@
     }
 
     if (msg.type === "MC_CLEAR_ONE") {
-      // Delete exactly one active cart item, responding BEFORE triggering the
-      // form submission. Amazon's delete is a full-page POST (not XHR), so the
-      // page reloads and destroys this content script immediately after submit.
-      // Background.js drives the loop: it calls MC_CLEAR_ONE once per item,
-      // waits for the page reload, then calls again until the cart is empty.
+      // Delete exactly one active cart item, responding BEFORE activating the
+      // control. Amazon may reload the page or update the cart in-place, so
+      // background.js verifies the count change before sending the next delete.
       try {
         const rows = getActiveCartRows();
         if (!rows.length) {
-          sendResponse({ ok: true, empty: true });
+          sendResponse({
+            ok: true,
+            empty: true,
+            remaining: getRemainingCartCount(),
+            sawCartSurface: hasCartSurface(),
+          });
           return true;
         }
 
@@ -667,16 +736,17 @@
 
         // Respond BEFORE submitting — the page reload will kill this script
         // before a post-submit sendResponse could ever be delivered.
-        sendResponse({ ok: true, asin: row.getAttribute("data-asin") });
+        // rowCount and quantityCount are pre-delete baselines in their two
+        // distinct units (line items vs nav-badge quantity); background.js
+        // compares each only against readings from the same unit.
+        sendResponse({
+          ok: true,
+          asin: row.getAttribute("data-asin"),
+          rowCount: rows.length,
+          quantityCount: getCartQuantityCount(),
+        });
 
-        const form = deleteBtn.closest("form");
-        if (form && typeof form.requestSubmit === "function") {
-          // requestSubmit(btn) includes the button's name/value in the POST body
-          // so Amazon knows which item to delete, and works from script context.
-          form.requestSubmit(deleteBtn);
-        } else {
-          deleteBtn.click();
-        }
+        submitOrClickDeleteControl(deleteBtn);
       } catch (err) {
         sendResponse({ ok: false, error: String(err) });
       }
@@ -684,5 +754,28 @@
     }
 
     return false;
-  });
+  }
+
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) =>
+    handleExtensionMessage(msg, sendResponse)
+  );
+
+  // Safari never delivers tabs.sendMessage to content scripts injected via
+  // chrome.scripting.executeScript({files}) — the listener registers, but the
+  // message router ignores that world. executeScript({func}) DOES execute in
+  // it, so the background falls back to calling this bridge directly. The
+  // promise resolves with the handler's response (or undefined when the
+  // message type isn't handled), covering both sync and async handlers.
+  window.__styxMcHandleMessage = (msg) =>
+    new Promise((resolve) => {
+      let willRespond;
+      try {
+        willRespond = handleExtensionMessage(msg, resolve);
+      } catch (e) {
+        resolve({ ok: false, error: String(e) });
+        return;
+      }
+      if (!willRespond) resolve(undefined);
+    });
+
 })();

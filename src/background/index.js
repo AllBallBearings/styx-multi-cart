@@ -16,6 +16,7 @@
 // ExtensionPay SDK. Must come before any reference to `ExtPay(...)`.
 // Vendored from `npm install extpay` → node_modules/extpay/dist/ExtPay.js.
 import { extpayUserToEntitlementPatch } from "../../lib/extpay-sync.js";
+import { evaluateClearStep } from "../../lib/clear-cart.js";
 
 // Verbose service-worker logging. Controlled at runtime by the `mc.dev.v1`
 // flag. The popup keeps that switch behind a private Settings unlock so normal
@@ -747,6 +748,12 @@ function pageApplyUpsellChoice(recorded) {
 let _opStatus = null;        // { active, title, detail } | null
 let _statusWindowId = null;  // chrome.windows id of the status popup
 
+// Safari ignores chrome.windows.create's type:"popup" and opens a full-size
+// blank window that never renders status.html (so it never self-closes),
+// leaking one untitled window per operation. The on-page toast carries the
+// same progress there, so the status window is Chrome-only.
+const IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
+
 /** Set the current in-progress status shown in the status window. */
 function setOpStatus(title, detail = "") {
   _opStatus = { active: true, title, detail };
@@ -766,6 +773,7 @@ function clearOpStatus(doneTitle = "Done") {
 
 /** Open (or focus) the floating status window. Non-blocking — call without await. */
 async function openStatusWindow() {
+  if (IS_SAFARI) return;
   // If the window is still open, just bring it to front.
   if (_statusWindowId !== null) {
     try {
@@ -1072,12 +1080,14 @@ async function clearAmazonCart(preferredHost, options = {}) {
     }
   }
 
-  // Delete items one at a time using MC_CLEAR_ONE. Amazon's cart delete is a
-  // real form POST (not XHR) that reloads the page, which destroys the content
-  // script mid-execution. MC_CLEAR_ONE responds BEFORE submitting the form so
-  // the response is delivered before the reload. We then wait for the reload
-  // and call again until the cart is empty.
+  // Delete items one at a time using MC_CLEAR_ONE. Amazon often submits a real
+  // form POST, but Safari can also complete the delete via in-page DOM/XHR.
+  // MC_CLEAR_ONE responds BEFORE activating the control, then we wait for
+  // either a reload or a verified cart-count drop before continuing.
   let removed = 0;
+  let lastKnownCount = Number.isFinite(currentCount) ? currentCount : null;
+  let sawEmpty = false;
+  let stalledDeletes = 0;
 
   // Show initial status on the cart tab and in the status window.
   setOpStatus("Clearing cart");
@@ -1091,6 +1101,24 @@ async function clearAmazonCart(preferredHost, options = {}) {
       // Message port closed before response — page navigated unexpectedly.
       // Wait for the tab to settle and try again.
       await waitForTabReload(tabId, 15000);
+      const after = await getAmazonCartCountDetailedFromTab(tabId);
+      if (after) {
+        if (after.count === 0) {
+          // Zero means empty no matter which signal produced it.
+          sawEmpty = true;
+          lastKnownCount = 0;
+          break;
+        }
+        // Only row readings update the row-based bookkeeping — the quantity
+        // badge counts units, not rows, and the two diverge on
+        // multi-quantity items.
+        if (after.source === "rows") {
+          if (Number.isFinite(lastKnownCount) && after.count < lastKnownCount) {
+            removed += lastKnownCount - after.count;
+          }
+          lastKnownCount = after.count;
+        }
+      }
       // Re-show status after page reload (the old toast was destroyed).
       const retryMsg = totalToRemove
         ? `Removed ${removed} of ${totalToRemove}…`
@@ -1103,13 +1131,62 @@ async function clearAmazonCart(preferredHost, options = {}) {
     }
 
     if (!result) break;
-    if (result.empty) break;   // cart is now empty
+    if (result.empty) {
+      // Trust the content script's direct observation of an empty cart over a
+      // stale cached count — the final injection check below can fail on
+      // Safari, and a stale lastKnownCount would then report a false failure.
+      const contentRemaining = Number.isFinite(result.remaining) ? result.remaining : null;
+      if (
+        (contentRemaining === 0 && result.sawCartSurface) ||
+        !Number.isFinite(lastKnownCount) ||
+        lastKnownCount === 0
+      ) {
+        sawEmpty = true;
+        lastKnownCount = 0;
+      } else if (contentRemaining != null) {
+        // Content saw no rows but its quantity fallback still reports items;
+        // leave the verdict to the final verification below.
+        lastKnownCount = contentRemaining;
+      }
+      break;
+    }
     if (!result.ok) break;     // unrecoverable error
 
-    removed++;
-    // Wait for the full-page reload triggered by the form POST, then pause
-    // briefly before sending the next delete.
-    await waitForTabReload(tabId, 15000);
+    // Pre-delete baselines in both units. rowCount comes straight from the
+    // rows the content script saw; quantityCount is the nav-badge reading,
+    // which sums per-item quantities. The settle watcher compares each unit
+    // only against its own baseline.
+    const beforeRows = Number.isFinite(result.rowCount)
+      ? result.rowCount
+      : lastKnownCount;
+    const beforeQuantity = Number.isFinite(result.quantityCount)
+      ? result.quantityCount
+      : null;
+    const settled = await waitForCartSettleAfterDelete(
+      tabId,
+      { rows: beforeRows, quantity: beforeQuantity },
+      15000
+    );
+
+    const step = evaluateClearStep({ settled, beforeRows, beforeQuantity, stalledDeletes });
+    if (step.action === "stuck") break;
+    if (step.action === "retry") {
+      // Amazon sometimes swallows the first activation (e.g. EWC mid-update
+      // spinner) — retry the same row once before treating the cart as stuck.
+      stalledDeletes++;
+      continue;
+    }
+    removed += step.removedDelta;
+    if (step.action === "progress") {
+      stalledDeletes = 0;
+      if (step.lastKnownRows != null) lastKnownCount = step.lastKnownRows;
+      if (step.empty) {
+        sawEmpty = true;
+        lastKnownCount = 0;
+        break;
+      }
+    }
+
     await sleep(300);
     // Re-show status on the freshly-loaded page (previous toast was destroyed).
     const progressMsg = totalToRemove
@@ -1119,6 +1196,27 @@ async function clearAmazonCart(preferredHost, options = {}) {
     await showStatus(tabId, totalToRemove
       ? `Clearing cart — removed ${removed} of ${totalToRemove}…`
       : `Clearing cart — ${removed} removed so far…`, 'loading');
+  }
+
+  // Final verification. A rows-sourced reading is authoritative; a
+  // quantity-sourced one is the nav badge, which lags behind delete POSTs —
+  // it must not override the loop's own evidence that the cart emptied.
+  const verified = await getAmazonCartCountDetailedFromTab(tabId);
+  const remaining =
+    verified && (verified.source === "rows" || verified.count === 0)
+      ? verified.count
+      : sawEmpty
+        ? 0
+        : verified
+          ? verified.count
+          : Number.isFinite(lastKnownCount)
+            ? lastKnownCount
+            : null;
+  if (Number.isFinite(remaining) && remaining > 0) {
+    const errorMsg = `Could not clear cart — ${remaining} item${remaining === 1 ? '' : 's'} still in cart`;
+    clearOpStatus(errorMsg);
+    await showStatus(tabId, errorMsg, 'error');
+    return { ok: false, removed, remaining, sawCartSurface: true };
   }
 
   // Show completion state.
@@ -1145,16 +1243,130 @@ async function getActiveAmazonCartCount(preferredHost) {
   const active = await getActiveAmazonTab(preferredHost);
   if (!active) return null;
 
+  return getAmazonCartCountFromTab(active.id);
+}
+
+async function getAmazonCartCountDetailedFromTab(tabId) {
   try {
     const result = await chrome.scripting.executeScript({
-      target: { tabId: active.id },
-      func: pageGetCartCount,
+      target: { tabId },
+      func: pageGetCartCountDetailed,
     });
-    const count = result && result[0] && result[0].result;
-    return Number.isFinite(count) ? count : null;
+    const value = result && result[0] && result[0].result;
+    if (value && Number.isFinite(value.count)) return value;
+    return null;
   } catch (_e) {
     return null;
   }
+}
+
+async function getAmazonCartCountFromTab(tabId) {
+  const detailed = await getAmazonCartCountDetailedFromTab(tabId);
+  return detailed ? detailed.count : null;
+}
+
+/**
+ * Wait for the cart to settle after a delete: either a count drops against
+ * its own pre-delete baseline, or a reload completes with the cart unchanged,
+ * or we time out. `before` carries baselines in both units ({ rows,
+ * quantity }); resolves { rows, quantity, changed } with the latest reading
+ * observed in each unit.
+ */
+async function waitForCartSettleAfterDelete(tabId, before, timeoutMs = 15000) {
+  const beforeRows = before && Number.isFinite(before.rows) ? before.rows : null;
+  const beforeQuantity =
+    before && Number.isFinite(before.quantity) ? before.quantity : null;
+  return new Promise((resolve) => {
+    let done = false;
+    let timer = null;
+    let pollTimer = null;
+    let polling = false;
+    let latestRows = null;
+    let latestQuantity = null;
+    let sawLoading = false;
+    let completedAfterLoading = false;
+
+    const finish = (changed) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clearTimeout(pollTimer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      chrome.tabs.onRemoved.removeListener(removedListener);
+      resolve({ rows: latestRows, quantity: latestQuantity, changed });
+    };
+
+    // Single scheduler: always clears the pending timer before arming a new
+    // one, so the listener and an in-flight poll can't fork parallel chains.
+    const schedulePoll = (delay) => {
+      if (done) return;
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(poll, delay);
+    };
+
+    const poll = async () => {
+      // If a poll is mid-await (executeScript can hang across a navigation),
+      // skip — its tail call keeps the chain alive.
+      if (done || polling) return;
+      polling = true;
+      try {
+        const reading = await getAmazonCartCountDetailedFromTab(tabId);
+        if (reading) {
+          if (reading.source === "rows") latestRows = reading.count;
+          else latestQuantity = reading.count;
+          // Zero means empty no matter which signal produced it.
+          if (reading.count === 0) {
+            finish(true);
+            return;
+          }
+          // Compare each unit only against its own baseline — rows count
+          // line items, the nav badge counts quantity, and mid-reload the
+          // badge renders before the rows do.
+          if (
+            (reading.source === "rows" &&
+              beforeRows != null &&
+              reading.count < beforeRows) ||
+            (reading.source === "quantity" &&
+              beforeQuantity != null &&
+              reading.count < beforeQuantity)
+          ) {
+            finish(true);
+            return;
+          }
+          // After a completed reload, a steady ROW reading means the delete
+          // genuinely didn't land. A quantity reading proves nothing here:
+          // the rows may simply not have rendered yet.
+          if (completedAfterLoading && reading.source === "rows") {
+            finish(false);
+            return;
+          }
+        }
+      } catch (_e) {
+        // The page can be between unload/load here; keep polling until timeout.
+      } finally {
+        polling = false;
+      }
+      schedulePoll(350);
+    };
+
+    const listener = (id, info) => {
+      if (id !== tabId) return;
+      if (info.status === "loading") sawLoading = true;
+      if (info.status === "complete" && sawLoading) {
+        completedAfterLoading = true;
+        schedulePoll(500);
+      }
+    };
+
+    const removedListener = (id) => {
+      if (id === tabId) finish(false);
+    };
+
+    timer = setTimeout(() => finish(false), timeoutMs);
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.onRemoved.addListener(removedListener);
+    schedulePoll(350);
+  });
 }
 
 /**
@@ -1163,16 +1375,44 @@ async function getActiveAmazonCartCount(preferredHost) {
  * example if the user is on a cart subroute we didn't list, we can still work.
  */
 async function sendToContent(tabId, message) {
+  // Chrome rejects when the tab has no listener, but Safari RESOLVES with
+  // undefined — e.g. when site access is "Ask", which blocks manifest
+  // content scripts even though the popup's activeTab grant lets
+  // executeScript work. Every content.js handler responds with an object,
+  // so a falsy result means "nobody answered": fall through to injection.
   try {
-    return await chrome.tabs.sendMessage(tabId, message);
+    const result = await chrome.tabs.sendMessage(tabId, message);
+    if (result !== undefined && result !== null) return result;
   } catch (_e) {
     // Content script not loaded yet — inject and retry.
+  }
+  try {
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["content.js"],
     });
-    return chrome.tabs.sendMessage(tabId, message);
+    const retry = await chrome.tabs.sendMessage(tabId, message);
+    if (retry !== undefined && retry !== null) return retry;
+  } catch (_e) {
+    // Injection can fail on restricted pages; the bridge below still works
+    // when an earlier injection (manifest or programmatic) is present.
   }
+  // Safari never delivers tabs.sendMessage to content scripts injected via
+  // scripting.executeScript({files}) — the listener registers, but the
+  // message router ignores that world. executeScript({func}) DOES execute in
+  // the same world, so call the bridge content.js exposes on window there.
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (m) => (window.__styxMcHandleMessage ? window.__styxMcHandleMessage(m) : null),
+      args: [message],
+    });
+    const value = results && results[0] ? results[0].result : null;
+    if (value !== undefined && value !== null) return value;
+  } catch (_e) {
+    // Fall through — callers treat undefined as "no content script".
+  }
+  return undefined;
 }
 
 // ---- Restore: batch endpoint + per-item fallback -------------------------
@@ -1543,38 +1783,48 @@ function pagePromptChoice(title, message, choices, theme) {
  * closes the tab OR the timeout expires. Resolves with the navigation
  * outcome so the caller can branch on success vs. abandon.
  */
-function waitForUserBulkConfirm(tabId, timeoutMs = 5 * 60 * 1000) {
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = (result) => {
-      if (done) return;
-      done = true;
-      try { chrome.tabs.onUpdated.removeListener(navListener); } catch (_e) {}
-      try { chrome.tabs.onRemoved.removeListener(removeListener); } catch (_e) {}
-      clearTimeout(timer);
-      resolve(result);
-    };
-    const navListener = (id, info, tab) => {
-      if (id !== tabId) return;
-      // The click POSTs and triggers a navigation away from add.html.
-      // Use status:'loading' so we catch the navigation start (the URL
-      // is already the new destination at this point).
-      if (info.status === "loading" && tab && tab.url) {
-        if (!/\/gp\/aws\/cart\/add\.html/i.test(tab.url)) {
-          finish({ ok: true, url: tab.url });
-        }
+async function waitForUserBulkConfirm(tabId, timeoutMs = 5 * 60 * 1000) {
+  // The click POSTs and navigates away from add.html, so "user confirmed" ==
+  // "tab URL is no longer add.html". Poll for the URL rather than trusting
+  // tabs.onUpdated events: Safari fires spurious update events whose tab.url
+  // doesn't reflect the real main-frame URL, which made this resolve before
+  // the user ever clicked (reconciliation then read a cart the user hadn't
+  // filled yet and raised a false "Bulk add incomplete").
+  //
+  // Two stale-metadata defenses: when tabs.get doesn't show add.html, ask the
+  // page itself for location.href; and only accept "navigated away" after the
+  // add page has been observed at least once.
+  const isAddUrl = (u) => /\/gp\/aws\/cart\/add\.html/i.test(u || "");
+  const deadline = Date.now() + timeoutMs;
+  let sawAddPage = false;
+  while (Date.now() < deadline) {
+    let tab;
+    try {
+      tab = await chrome.tabs.get(tabId);
+    } catch (_e) {
+      return { ok: false, error: "tab closed" };
+    }
+    let url = tab.url || "";
+    if (!isAddUrl(url)) {
+      try {
+        const r = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: () => location.href,
+        });
+        const href = r && r[0] && r[0].result;
+        if (href) url = href;
+      } catch (_e) {
+        // Mid-navigation or page not scriptable — keep the tabs.get URL.
       }
-    };
-    const removeListener = (id) => {
-      if (id === tabId) finish({ ok: false, error: "tab closed" });
-    };
-    const timer = setTimeout(
-      () => finish({ ok: false, error: "user did not confirm within timeout" }),
-      timeoutMs
-    );
-    chrome.tabs.onUpdated.addListener(navListener);
-    chrome.tabs.onRemoved.addListener(removeListener);
-  });
+    }
+    if (isAddUrl(url)) {
+      sawAddPage = true;
+    } else if (url && sawAddPage) {
+      return { ok: true, url };
+    }
+    await sleep(400);
+  }
+  return { ok: false, error: "user did not confirm within timeout" };
 }
 
 /**
@@ -2573,8 +2823,10 @@ function pageShowStatus(message, type, theme) {
     : '0 0 0 1px ' + accent + ', 0 0 18px rgba(' + glowRgb + ',.22), 0 6px 24px rgba(15,17,21,.18)';
 
   var ts = toast.style;
-  ts.position = 'fixed'; ts.top = '24px'; ts.left = '50%';
-  ts.transform = 'translateX(-50%)'; ts.bottom = ''; ts.right = '';
+  // Bottom-center: browser extension popovers drop from the toolbar over the
+  // top of the page and would cover a top-anchored toast.
+  ts.position = 'fixed'; ts.bottom = '24px'; ts.left = '50%';
+  ts.transform = 'translateX(-50%)'; ts.top = ''; ts.right = '';
   ts.zIndex = '2147483647';
   ts.display = 'flex'; ts.alignItems = 'center'; ts.gap = '14px';
   ts.padding = '16px 22px'; ts.borderRadius = '14px';
@@ -2670,7 +2922,12 @@ function pageShowStatus(message, type, theme) {
   }
 }
 
-function pageGetCartCount() {
+/**
+ * Runs inside the cart page context via chrome.scripting.executeScript.
+ * Self-contained — no closures, no imports, no content.js dependency.
+ * Keep byte-identical with the copy in lib/scrape.js (which is unit-tested).
+ */
+function pageGetCartCountDetailed() {
   const parseCount = (value) => {
     const n = parseInt(String(value || "").replace(/[^\d]/g, ""), 10);
     return Number.isNaN(n) ? null : n;
@@ -2693,9 +2950,29 @@ function pageGetCartCount() {
     ) {
       return false;
     }
+    // Amazon's "Coupon Clipped" confirmation box carries data-asin +
+    // data-itemid but is not a cart item — it survives on the empty-cart
+    // page and would read as one phantom row.
+    if (row.closest(".sc-clipcoupon, .sc-clipcoupon-container")) return false;
     return true;
   });
-  if (liveRows.length) return liveRows.length;
+  // "rows" counts cart line items; "quantity" sums per-item quantities (the
+  // nav badge). Callers must never compare counts across the two sources —
+  // a cart holding multi-quantity items makes them diverge.
+  if (liveRows.length) return { count: liveRows.length, source: "rows" };
+
+  // An explicit cart surface with zero rows is an authoritative empty — it
+  // outranks the quantity fallbacks below, because the nav badge lags behind
+  // delete POSTs and keeps reporting stale non-zero counts on the
+  // "Your Amazon Cart is empty" page.
+  if (
+    document.querySelector(".sc-your-amazon-cart-is-empty") ||
+    document.querySelector("#sc-empty-cart") ||
+    document.querySelector("#sc-active-cart") ||
+    document.querySelector("#sc-list-body")
+  ) {
+    return { count: 0, source: "rows" };
+  }
 
   const quantityEl =
     document.querySelector("#nav-cart-count") ||
@@ -2703,7 +2980,7 @@ function pageGetCartCount() {
     document.querySelector("input[name='totalCartQuantity']");
   if (quantityEl) {
     const count = parseCount(quantityEl.value || quantityEl.textContent);
-    if (count != null) return count;
+    if (count != null) return { count, source: "quantity" };
   }
 
   const quantityText = document.querySelector(
@@ -2711,7 +2988,10 @@ function pageGetCartCount() {
   );
   if (quantityText) {
     const match = (quantityText.textContent || "").match(/\b(\d+)\s+items?\b/i);
-    if (match) return parseCount(match[1]);
+    if (match) {
+      const count = parseCount(match[1]);
+      if (count != null) return { count, source: "quantity" };
+    }
   }
 
   return null;
@@ -3843,3 +4123,4 @@ function normalizeUrlForWait(url) {
     return String(url || "").replace(/#.*$/, "").replace(/\/$/, "");
   }
 }
+

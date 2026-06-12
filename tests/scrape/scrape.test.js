@@ -23,7 +23,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 
-import { pageScrapeCart, pageGetCartCount } from "../../lib/scrape.js";
+import {
+  pageScrapeCart,
+  pageGetCartCount,
+  pageGetCartCountDetailed,
+} from "../../lib/scrape.js";
 
 const FIXTURE_DIR = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -261,9 +265,11 @@ describe("pageGetCartCount", () => {
 
   it("returns null when no count source is available", () => {
     teardown = mountFixture("cart-empty.html");
-    // Remove the #nav-cart-count element to force the function past every
-    // fallback. We expect null rather than 0 since "0" was already removed.
+    // Remove the #nav-cart-count element AND the cart surface to force the
+    // function past every fallback (an empty cart surface now counts as an
+    // authoritative zero). We expect null rather than 0.
     document.getElementById("nav-cart-count").remove();
+    document.getElementById("sc-active-cart").remove();
     expect(pageGetCartCount()).toBeNull();
   });
 
@@ -273,5 +279,72 @@ describe("pageGetCartCount", () => {
     const row = document.querySelector("div[data-asin='B000AAAAAA']");
     row.classList.add("sc-list-item-removed");
     expect(pageGetCartCount()).toBe(2);
+  });
+});
+
+describe("pageGetCartCountDetailed", () => {
+  // The source tag is load-bearing: the clear-cart loop compares "rows"
+  // readings only against row baselines and "quantity" readings only against
+  // quantity baselines, since multi-quantity items make the units diverge.
+
+  it("tags a live-row count with source 'rows'", () => {
+    teardown = mountFixture("cart-multi-item.html");
+    expect(pageGetCartCountDetailed()).toEqual({ count: 3, source: "rows" });
+  });
+
+  it("ignores Amazon's 'Coupon Clipped' box, which carries data-asin but is not a cart item", () => {
+    teardown = mountFixture("cart-multi-item.html");
+    const coupon = document.createElement("div");
+    coupon.className = "a-box a-text-center sc-clipcoupon sc-clipcoupon-container";
+    coupon.setAttribute("data-asin", "B0COUPON00");
+    coupon.setAttribute("data-itemid", "cf0182bf-3140-47f0");
+    coupon.textContent = "Coupon Clipped";
+    document.getElementById("sc-active-cart").appendChild(coupon);
+    expect(pageGetCartCountDetailed()).toEqual({ count: 3, source: "rows" });
+  });
+
+  it("still reads empty when only a 'Coupon Clipped' box remains", () => {
+    teardown = mountFixture("cart-empty.html");
+    const coupon = document.createElement("div");
+    coupon.className = "sc-clipcoupon sc-clipcoupon-container";
+    coupon.setAttribute("data-asin", "B0COUPON00");
+    coupon.setAttribute("data-itemid", "cf0182bf-3140-47f0");
+    document.getElementById("sc-active-cart").appendChild(coupon);
+    expect(pageGetCartCountDetailed()).toEqual({ count: 0, source: "rows" });
+  });
+
+  it("treats a cart surface with zero rows as an authoritative rows-source empty", () => {
+    teardown = mountFixture("cart-empty.html");
+    // #sc-active-cart is present with no rows — that outranks the badge.
+    expect(pageGetCartCountDetailed()).toEqual({ count: 0, source: "rows" });
+  });
+
+  it("ignores a stale non-zero nav badge on the empty-cart page", () => {
+    teardown = mountFixture("cart-empty.html");
+    // Amazon's badge lags behind delete POSTs: empty cart, badge still "1".
+    document.getElementById("nav-cart-count").textContent = "1";
+    expect(pageGetCartCountDetailed()).toEqual({ count: 0, source: "rows" });
+  });
+
+  it("tags the #nav-cart-count fallback with source 'quantity' when no cart surface exists", () => {
+    teardown = mountFixture("cart-empty.html");
+    document.getElementById("sc-active-cart").remove();
+    document.getElementById("nav-cart-count").textContent = "4";
+    expect(pageGetCartCountDetailed()).toEqual({ count: 4, source: "quantity" });
+  });
+
+  it("tags the .ewc-quantity text fallback with source 'quantity'", () => {
+    teardown = mountFixture("cart-flyout-ewc.html");
+    document
+      .querySelectorAll("[data-asin], #nav-cart-count, #ewc-total-quantity, input[name='totalCartQuantity']")
+      .forEach((el) => el.remove());
+    expect(pageGetCartCountDetailed()).toEqual({ count: 3, source: "quantity" });
+  });
+
+  it("returns null when no count source is available", () => {
+    teardown = mountFixture("cart-empty.html");
+    document.getElementById("nav-cart-count").remove();
+    document.getElementById("sc-active-cart").remove();
+    expect(pageGetCartCountDetailed()).toBeNull();
   });
 });
