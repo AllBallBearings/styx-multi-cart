@@ -46,6 +46,12 @@ for f in "${FILES[@]}"; do
   cp "$f" "$DEST/$f"
 done
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "error: python3 is required to patch manifest.json for Safari" >&2
+  exit 1
+fi
+python3 scripts/patch-safari-manifest.py "$DEST/manifest.json"
+
 mkdir -p "$DEST/icons"
 cp icons/icon16.png "$DEST/icons/icon16.png"
 cp icons/icon32.png "$DEST/icons/icon32.png"

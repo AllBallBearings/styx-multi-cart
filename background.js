@@ -46,6 +46,36 @@ importScripts("ExtPay.js");
     };
   }
 
+  // lib/clear-cart.js
+  function evaluateClearStep({ settled, beforeRows, beforeQuantity, stalledDeletes }) {
+    const rows = settled && Number.isFinite(settled.rows) ? settled.rows : null;
+    const quantity = settled && Number.isFinite(settled.quantity) ? settled.quantity : null;
+    const changed = Boolean(settled && settled.changed);
+    const rowsDropped = rows != null && beforeRows != null && rows < beforeRows;
+    if (changed || rowsDropped) {
+      return {
+        action: "progress",
+        // Rows map 1:1 to deletes, so a multi-row drop (Amazon collapsed a
+        // duplicate, a reload pruned stale rows) counts every removed row. A
+        // quantity-only drop proves the delete landed but not how many rows
+        // went with it — count the one row we know we deleted.
+        removedDelta: rowsDropped ? Math.max(1, beforeRows - rows) : 1,
+        lastKnownRows: rows,
+        empty: rows === 0 || rows == null && quantity === 0
+      };
+    }
+    const sawSteadyReading = rows != null || quantity != null && beforeQuantity != null;
+    if (sawSteadyReading) {
+      return {
+        action: stalledDeletes === 0 ? "retry" : "stuck",
+        removedDelta: 0,
+        lastKnownRows: rows,
+        empty: false
+      };
+    }
+    return { action: "blind", removedDelta: 1, lastKnownRows: null, empty: false };
+  }
+
   // src/background/index.js
   var DEBUG = false;
   var LOG_RING_MAX = 500;
@@ -537,6 +567,7 @@ importScripts("ExtPay.js");
   }
   var _opStatus = null;
   var _statusWindowId = null;
+  var IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
   function setOpStatus(title, detail = "") {
     _opStatus = { active: true, title, detail };
   }
@@ -547,6 +578,7 @@ importScripts("ExtPay.js");
     }, 5e3);
   }
   async function openStatusWindow() {
+    if (IS_SAFARI) return;
     if (_statusWindowId !== null) {
       try {
         await chrome.windows.update(_statusWindowId, { focused: true });
@@ -731,6 +763,9 @@ importScripts("ExtPay.js");
       }
     }
     let removed = 0;
+    let lastKnownCount = Number.isFinite(currentCount) ? currentCount : null;
+    let sawEmpty = false;
+    let stalledDeletes = 0;
     setOpStatus("Clearing cart");
     await showStatus(tabId, "Clearing cart\u2026", "loading");
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -739,20 +774,72 @@ importScripts("ExtPay.js");
         result = await sendToContent(tabId, { type: "MC_CLEAR_ONE" });
       } catch (_err) {
         await waitForTabReload(tabId, 15e3);
+        const after = await getAmazonCartCountDetailedFromTab(tabId);
+        if (after) {
+          if (after.count === 0) {
+            sawEmpty = true;
+            lastKnownCount = 0;
+            break;
+          }
+          if (after.source === "rows") {
+            if (Number.isFinite(lastKnownCount) && after.count < lastKnownCount) {
+              removed += lastKnownCount - after.count;
+            }
+            lastKnownCount = after.count;
+          }
+        }
         const retryMsg = totalToRemove ? `Removed ${removed} of ${totalToRemove}\u2026` : `${removed} removed so far\u2026`;
         setOpStatus("Clearing cart", retryMsg);
         await showStatus(tabId, totalToRemove ? `Clearing cart \u2014 removed ${removed} of ${totalToRemove}\u2026` : `Clearing cart \u2014 ${removed} removed so far\u2026`, "loading");
         continue;
       }
       if (!result) break;
-      if (result.empty) break;
+      if (result.empty) {
+        const contentRemaining = Number.isFinite(result.remaining) ? result.remaining : null;
+        if (contentRemaining === 0 && result.sawCartSurface || !Number.isFinite(lastKnownCount) || lastKnownCount === 0) {
+          sawEmpty = true;
+          lastKnownCount = 0;
+        } else if (contentRemaining != null) {
+          lastKnownCount = contentRemaining;
+        }
+        break;
+      }
       if (!result.ok) break;
-      removed++;
-      await waitForTabReload(tabId, 15e3);
+      const beforeRows = Number.isFinite(result.rowCount) ? result.rowCount : lastKnownCount;
+      const beforeQuantity = Number.isFinite(result.quantityCount) ? result.quantityCount : null;
+      const settled = await waitForCartSettleAfterDelete(
+        tabId,
+        { rows: beforeRows, quantity: beforeQuantity },
+        15e3
+      );
+      const step = evaluateClearStep({ settled, beforeRows, beforeQuantity, stalledDeletes });
+      if (step.action === "stuck") break;
+      if (step.action === "retry") {
+        stalledDeletes++;
+        continue;
+      }
+      removed += step.removedDelta;
+      if (step.action === "progress") {
+        stalledDeletes = 0;
+        if (step.lastKnownRows != null) lastKnownCount = step.lastKnownRows;
+        if (step.empty) {
+          sawEmpty = true;
+          lastKnownCount = 0;
+          break;
+        }
+      }
       await sleep(300);
       const progressMsg = totalToRemove ? `Removed ${removed} of ${totalToRemove}\u2026` : `${removed} removed so far\u2026`;
       setOpStatus("Clearing cart", progressMsg);
       await showStatus(tabId, totalToRemove ? `Clearing cart \u2014 removed ${removed} of ${totalToRemove}\u2026` : `Clearing cart \u2014 ${removed} removed so far\u2026`, "loading");
+    }
+    const verified = await getAmazonCartCountDetailedFromTab(tabId);
+    const remaining = verified && (verified.source === "rows" || verified.count === 0) ? verified.count : sawEmpty ? 0 : verified ? verified.count : Number.isFinite(lastKnownCount) ? lastKnownCount : null;
+    if (Number.isFinite(remaining) && remaining > 0) {
+      const errorMsg = `Could not clear cart \u2014 ${remaining} item${remaining === 1 ? "" : "s"} still in cart`;
+      clearOpStatus(errorMsg);
+      await showStatus(tabId, errorMsg, "error");
+      return { ok: false, removed, remaining, sawCartSurface: true };
     }
     const doneMsg = `Cart cleared \u2014 ${removed} item${removed === 1 ? "" : "s"} removed`;
     clearOpStatus(doneMsg);
@@ -771,27 +858,121 @@ importScripts("ExtPay.js");
   async function getActiveAmazonCartCount(preferredHost) {
     const active = await getActiveAmazonTab(preferredHost);
     if (!active) return null;
+    return getAmazonCartCountFromTab(active.id);
+  }
+  async function getAmazonCartCountDetailedFromTab(tabId) {
     try {
       const result = await chrome.scripting.executeScript({
-        target: { tabId: active.id },
-        func: pageGetCartCount
+        target: { tabId },
+        func: pageGetCartCountDetailed
       });
-      const count = result && result[0] && result[0].result;
-      return Number.isFinite(count) ? count : null;
+      const value = result && result[0] && result[0].result;
+      if (value && Number.isFinite(value.count)) return value;
+      return null;
     } catch (_e) {
       return null;
     }
   }
+  async function getAmazonCartCountFromTab(tabId) {
+    const detailed = await getAmazonCartCountDetailedFromTab(tabId);
+    return detailed ? detailed.count : null;
+  }
+  async function waitForCartSettleAfterDelete(tabId, before, timeoutMs = 15e3) {
+    const beforeRows = before && Number.isFinite(before.rows) ? before.rows : null;
+    const beforeQuantity = before && Number.isFinite(before.quantity) ? before.quantity : null;
+    return new Promise((resolve) => {
+      let done = false;
+      let timer = null;
+      let pollTimer = null;
+      let polling = false;
+      let latestRows = null;
+      let latestQuantity = null;
+      let sawLoading = false;
+      let completedAfterLoading = false;
+      const finish = (changed) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        clearTimeout(pollTimer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        chrome.tabs.onRemoved.removeListener(removedListener);
+        resolve({ rows: latestRows, quantity: latestQuantity, changed });
+      };
+      const schedulePoll = (delay) => {
+        if (done) return;
+        clearTimeout(pollTimer);
+        pollTimer = setTimeout(poll, delay);
+      };
+      const poll = async () => {
+        if (done || polling) return;
+        polling = true;
+        try {
+          const reading = await getAmazonCartCountDetailedFromTab(tabId);
+          if (reading) {
+            if (reading.source === "rows") latestRows = reading.count;
+            else latestQuantity = reading.count;
+            if (reading.count === 0) {
+              finish(true);
+              return;
+            }
+            if (reading.source === "rows" && beforeRows != null && reading.count < beforeRows || reading.source === "quantity" && beforeQuantity != null && reading.count < beforeQuantity) {
+              finish(true);
+              return;
+            }
+            if (completedAfterLoading && reading.source === "rows") {
+              finish(false);
+              return;
+            }
+          }
+        } catch (_e) {
+        } finally {
+          polling = false;
+        }
+        schedulePoll(350);
+      };
+      const listener = (id, info) => {
+        if (id !== tabId) return;
+        if (info.status === "loading") sawLoading = true;
+        if (info.status === "complete" && sawLoading) {
+          completedAfterLoading = true;
+          schedulePoll(500);
+        }
+      };
+      const removedListener = (id) => {
+        if (id === tabId) finish(false);
+      };
+      timer = setTimeout(() => finish(false), timeoutMs);
+      chrome.tabs.onUpdated.addListener(listener);
+      chrome.tabs.onRemoved.addListener(removedListener);
+      schedulePoll(350);
+    });
+  }
   async function sendToContent(tabId, message) {
     try {
-      return await chrome.tabs.sendMessage(tabId, message);
+      const result = await chrome.tabs.sendMessage(tabId, message);
+      if (result !== void 0 && result !== null) return result;
     } catch (_e) {
+    }
+    try {
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ["content.js"]
       });
-      return chrome.tabs.sendMessage(tabId, message);
+      const retry = await chrome.tabs.sendMessage(tabId, message);
+      if (retry !== void 0 && retry !== null) return retry;
+    } catch (_e) {
     }
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (m) => window.__styxMcHandleMessage ? window.__styxMcHandleMessage(m) : null,
+        args: [message]
+      });
+      const value = results && results[0] ? results[0].result : null;
+      if (value !== void 0 && value !== null) return value;
+    } catch (_e) {
+    }
+    return void 0;
   }
   var STYX_ASSOCIATE_TAG = "styxmcart-20";
   function buildBulkAddUrl(host, items, associateTag) {
@@ -1028,41 +1209,37 @@ importScripts("ExtPay.js");
       });
     });
   }
-  function waitForUserBulkConfirm(tabId, timeoutMs = 5 * 60 * 1e3) {
-    return new Promise((resolve) => {
-      let done = false;
-      const finish = (result) => {
-        if (done) return;
-        done = true;
+  async function waitForUserBulkConfirm(tabId, timeoutMs = 5 * 60 * 1e3) {
+    const isAddUrl = (u) => /\/gp\/aws\/cart\/add\.html/i.test(u || "");
+    const deadline = Date.now() + timeoutMs;
+    let sawAddPage = false;
+    while (Date.now() < deadline) {
+      let tab;
+      try {
+        tab = await chrome.tabs.get(tabId);
+      } catch (_e) {
+        return { ok: false, error: "tab closed" };
+      }
+      let url = tab.url || "";
+      if (!isAddUrl(url)) {
         try {
-          chrome.tabs.onUpdated.removeListener(navListener);
+          const r = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => location.href
+          });
+          const href = r && r[0] && r[0].result;
+          if (href) url = href;
         } catch (_e) {
         }
-        try {
-          chrome.tabs.onRemoved.removeListener(removeListener);
-        } catch (_e) {
-        }
-        clearTimeout(timer);
-        resolve(result);
-      };
-      const navListener = (id, info, tab) => {
-        if (id !== tabId) return;
-        if (info.status === "loading" && tab && tab.url) {
-          if (!/\/gp\/aws\/cart\/add\.html/i.test(tab.url)) {
-            finish({ ok: true, url: tab.url });
-          }
-        }
-      };
-      const removeListener = (id) => {
-        if (id === tabId) finish({ ok: false, error: "tab closed" });
-      };
-      const timer = setTimeout(
-        () => finish({ ok: false, error: "user did not confirm within timeout" }),
-        timeoutMs
-      );
-      chrome.tabs.onUpdated.addListener(navListener);
-      chrome.tabs.onRemoved.addListener(removeListener);
-    });
+      }
+      if (isAddUrl(url)) {
+        sawAddPage = true;
+      } else if (url && sawAddPage) {
+        return { ok: true, url };
+      }
+      await sleep(400);
+    }
+    return { ok: false, error: "user did not confirm within timeout" };
   }
   async function restoreCartBulk(savedCart) {
     const allItems = (savedCart.items || []).filter((it) => it && it.asin);
@@ -1759,10 +1936,10 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     var shadow = isDark ? "0 0 0 1px " + accent + ", 0 0 24px rgba(" + glowRgb + ",.35), 0 6px 24px rgba(0,0,0,.45)" : "0 0 0 1px " + accent + ", 0 0 18px rgba(" + glowRgb + ",.22), 0 6px 24px rgba(15,17,21,.18)";
     var ts = toast.style;
     ts.position = "fixed";
-    ts.top = "24px";
+    ts.bottom = "24px";
     ts.left = "50%";
     ts.transform = "translateX(-50%)";
-    ts.bottom = "";
+    ts.top = "";
     ts.right = "";
     ts.zIndex = "2147483647";
     ts.display = "flex";
@@ -1817,7 +1994,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       }, delay);
     }
   }
-  function pageGetCartCount() {
+  function pageGetCartCountDetailed() {
     const parseCount = (value) => {
       const n = parseInt(String(value || "").replace(/[^\d]/g, ""), 10);
       return Number.isNaN(n) ? null : n;
@@ -1833,20 +2010,27 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       if (row.classList.contains("ewc-item-deleted") || row.classList.contains("sc-list-item-removed")) {
         return false;
       }
+      if (row.closest(".sc-clipcoupon, .sc-clipcoupon-container")) return false;
       return true;
     });
-    if (liveRows.length) return liveRows.length;
+    if (liveRows.length) return { count: liveRows.length, source: "rows" };
+    if (document.querySelector(".sc-your-amazon-cart-is-empty") || document.querySelector("#sc-empty-cart") || document.querySelector("#sc-active-cart") || document.querySelector("#sc-list-body")) {
+      return { count: 0, source: "rows" };
+    }
     const quantityEl = document.querySelector("#nav-cart-count") || document.querySelector("#ewc-total-quantity") || document.querySelector("input[name='totalCartQuantity']");
     if (quantityEl) {
       const count = parseCount(quantityEl.value || quantityEl.textContent);
-      if (count != null) return count;
+      if (count != null) return { count, source: "quantity" };
     }
     const quantityText = document.querySelector(
       "#nav-flyout-ewc .ewc-quantity, #ewc-content .ewc-quantity"
     );
     if (quantityText) {
       const match = (quantityText.textContent || "").match(/\b(\d+)\s+items?\b/i);
-      if (match) return parseCount(match[1]);
+      if (match) {
+        const count = parseCount(match[1]);
+        if (count != null) return { count, source: "quantity" };
+      }
     }
     return null;
   }

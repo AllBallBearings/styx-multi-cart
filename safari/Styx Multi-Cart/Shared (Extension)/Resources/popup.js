@@ -816,6 +816,9 @@
             ? "Your Amazon cart is already empty."
             : "Clearing your cart — check the Amazon tab."
         );
+        // Get out of the way: progress continues as a toast on the page,
+        // which this popover would otherwise cover.
+        if (!res.alreadyEmpty) setTimeout(() => window.close(), 1200);
       } else {
         toast(res.error || "Could not clear cart", "error");
       }
@@ -1342,6 +1345,9 @@
           toast(
             `Switching carts — loading ${total} item${total === 1 ? "" : "s"}. If Amazon shows an upsell, choose an option there to continue.`
           );
+          // Get out of the way: progress continues as a toast on the page,
+          // which this popover would otherwise cover.
+          setTimeout(() => window.close(), 1200);
         } else if (!handleEntitlementError(res)) {
           toast(res.error || "Could not switch carts", "error");
         }
