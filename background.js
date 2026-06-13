@@ -143,6 +143,10 @@ importScripts("ExtPay.js");
   });
   var DEFAULT_SETTINGS = {
     interceptAtc: true,
+    // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
+    // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
+    // is unavailable (e.g. Safari), which always uses the popup.
+    uiSurface: "sidepanel",
     // Ephemeral flag — set to true for the duration of a cart restore so the
     // observer.js ATC intercept stands down. Cleared in a finally block so a
     // crash or early return can never leave interception permanently disabled.
@@ -228,8 +232,24 @@ importScripts("ExtPay.js");
       );
     }
   }
+  function applyUiSurface(surface) {
+    if (!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior)) return;
+    const wantPopup = surface === "popup";
+    Promise.resolve(
+      chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !wantPopup })
+    ).catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+    if (chrome.action && chrome.action.setPopup) {
+      try {
+        chrome.action.setPopup({
+          popup: wantPopup ? "popup.html?surface=popup" : ""
+        });
+      } catch (e) {
+        console.error("[Styx Multi-Cart] action.setPopup failed:", e);
+      }
+    }
+  }
   if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
-    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+    readSettings().then((s) => applyUiSurface(s.uiSurface)).catch(() => applyUiSurface("sidepanel"));
   }
   async function syncEntitlementFromExtPay() {
     if (!extpay) return;
@@ -1763,15 +1783,18 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
   async function showStatus(tabId, message, type = "loading") {
     try {
       let theme = null;
+      let placement = "bottom";
       try {
         const settings = await readSettings();
         theme = settings.theme || null;
+        const panelSupported = !!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior);
+        placement = panelSupported && settings.uiSurface !== "popup" ? "top" : "bottom";
       } catch (_settingsErr) {
       }
       await chrome.scripting.executeScript({
         target: { tabId },
         func: pageShowStatus,
-        args: [message, type, theme]
+        args: [message, type, theme, placement]
       });
     } catch (_e) {
     }
@@ -1914,7 +1937,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     const text = (document.body && document.body.innerText ? document.body.innerText : "").toLowerCase();
     return (text.includes("protection plan") || text.includes("protect your purchase") || text.includes("warranty")) && (text.includes("no thanks") || text.includes("add protection") || text.includes("coverage"));
   }
-  function pageShowStatus(message, type, theme) {
+  function pageShowStatus(message, type, theme, placement) {
     var ID = "__styx-status-toast";
     var toast = document.getElementById(ID);
     if (!toast) {
@@ -1936,11 +1959,16 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     var shadow = isDark ? "0 0 0 1px " + accent + ", 0 0 24px rgba(" + glowRgb + ",.35), 0 6px 24px rgba(0,0,0,.45)" : "0 0 0 1px " + accent + ", 0 0 18px rgba(" + glowRgb + ",.22), 0 6px 24px rgba(15,17,21,.18)";
     var ts = toast.style;
     ts.position = "fixed";
-    ts.bottom = "24px";
     ts.left = "50%";
     ts.transform = "translateX(-50%)";
-    ts.top = "";
     ts.right = "";
+    if (placement === "top") {
+      ts.top = "72px";
+      ts.bottom = "";
+    } else {
+      ts.bottom = "24px";
+      ts.top = "";
+    }
     ts.zIndex = "2147483647";
     ts.display = "flex";
     ts.alignItems = "center";
@@ -2693,6 +2721,23 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
           case "MC_SET_INTERCEPT": {
             const next = await writeSettings({ interceptAtc: !!msg.enabled });
             sendResponse({ ok: true, enabled: !!next.interceptAtc });
+            break;
+          }
+          case "MC_GET_UI_SURFACE": {
+            const settings = await readSettings();
+            const supported = !!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior);
+            sendResponse({
+              ok: true,
+              supported,
+              surface: settings.uiSurface === "popup" ? "popup" : "sidepanel"
+            });
+            break;
+          }
+          case "MC_SET_UI_SURFACE": {
+            const surface = msg.surface === "popup" ? "popup" : "sidepanel";
+            const next = await writeSettings({ uiSurface: surface });
+            applyUiSurface(next.uiSurface);
+            sendResponse({ ok: true, surface: next.uiSurface });
             break;
           }
           case "MC_CREATE_EMPTY_CART": {

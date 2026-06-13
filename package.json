@@ -1,6 +1,6 @@
 {
   "name": "styx-multi-cart",
-  "version": "0.9.10",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Chrome MV3 extension to save, switch, and restore multiple Amazon shopping carts.",
