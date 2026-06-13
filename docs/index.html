@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Styx Multi-Cart — Multiple Amazon carts, one click to switch</title>
+  <meta name="description" content="Styx Multi-Cart is a free browser extension for managing multiple Amazon shopping carts. Save, switch, and restore carts with one click — all stored locally on your device.">
+  <link rel="icon" type="image/png" href="assets/favicon-128.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+
+  <meta property="og:title" content="Styx Multi-Cart">
+  <meta property="og:description" content="Multiple Amazon carts. One click to switch. Save, switch, and restore Amazon shopping carts — 100% local, no accounts.">
+  <meta property="og:image" content="https://allballbearings.github.io/styx-multi-cart/assets/promo-1400x560.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+  <header class="topnav">
+    <div class="wrap">
+      <a class="brand" href="#top">
+        <img src="assets/product-logo-1024.png" alt="" width="32" height="32">
+        Styx Multi-Cart
+      </a>
+      <nav>
+        <a class="hide-mobile" href="#features">Features</a>
+        <a class="hide-mobile" href="#how-it-works">How it works</a>
+        <a class="hide-mobile" href="#demo">Demo</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="https://github.com/AllBallBearings/styx-multi-cart">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero" id="top">
+    <div class="wrap">
+      <div class="hero-copy">
+        <span class="hero-eyebrow">Free browser extension</span>
+        <h1>Multiple Amazon carts.<br>One click to <span class="accent">switch</span>.</h1>
+        <p class="lead">
+          Save your current Amazon cart, switch between as many named carts as you want, and restore
+          any of them instantly — no accounts, no servers, nothing ever leaves your device.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/AllBallBearings/styx-multi-cart#install-chrome--edge--brave--arc--opera--vivaldi">Get Styx Multi-Cart</a>
+          <a class="btn btn-secondary" href="https://github.com/AllBallBearings/styx-multi-cart">View on GitHub</a>
+        </div>
+        <p class="cta-note">Chrome Web Store listing pending review · Works on Chrome, Edge, Brave, Arc &amp; other Chromium browsers · Safari supported</p>
+      </div>
+      <div class="hero-art">
+        <img src="assets/promo-1400x560.png" alt="Styx Multi-Cart — multiple Amazon carts, one click to switch" width="1400" height="560" loading="eager">
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">Why Styx</span>
+        <h2>Your carts, your way</h2>
+        <p>Amazon gives you one cart. Styx gives you as many as you need — and keeps them under your control.</p>
+      </div>
+      <div class="features">
+        <div class="feature-card">
+          <div class="icon">🛒</div>
+          <h3>Save unlimited carts</h3>
+          <p>Snapshot your active Amazon cart under any name you choose — "Birthday gifts," "Office supplies," "Wishlist." Keep as many as you like.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🔁</div>
+          <h3>Switch with one click</h3>
+          <p>Swap your live cart for any saved cart instantly. "Save &amp; clear" snapshots your current cart and empties it so you can start fresh.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🔒</div>
+          <h3>100% local &amp; private</h3>
+          <p>Everything lives in <code>chrome.storage.local</code> on your device. No accounts, no servers, no tracking — your carts never leave your browser.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="showcase" id="how-it-works">
+    <div class="wrap">
+      <div class="section-head" style="margin-top: 56px;">
+        <span class="kicker">How it works</span>
+        <h2>From cart chaos to one click</h2>
+        <p>A few screens from the actual extension in action on amazon.com.</p>
+      </div>
+
+      <div class="showcase-row">
+        <div class="showcase-img">
+          <img src="assets/screenshots/01-popup.png" alt="Amazon cart shown beside the Styx side panel, listing two saved carts">
+        </div>
+        <div class="showcase-text">
+          <span class="step">Step 1</span>
+          <h3>Your carts, at a glance</h3>
+          <p>Open the side panel next to your Amazon cart to see every saved cart — name, item count, and total — without leaving the page.</p>
+        </div>
+      </div>
+
+      <div class="showcase-row reverse">
+        <div class="showcase-img">
+          <img src="assets/screenshots/02-switchCart.png" alt="Confirmation dialog asking 'Switch to this cart?' before replacing the active Amazon cart">
+        </div>
+        <div class="showcase-text">
+          <span class="step">Step 2</span>
+          <h3>Switch carts without losing your place</h3>
+          <p>Pick a saved cart and Styx asks for confirmation before swapping it in — your current cart is replaced safely, with no surprises.</p>
+        </div>
+      </div>
+
+      <div class="showcase-row">
+        <div class="showcase-img">
+          <img src="assets/screenshots/03-clickToAdd.png" alt="Callout highlighting the 'Add to Cart' button on an Amazon product page, intercepted by Styx">
+        </div>
+        <div class="showcase-text">
+          <span class="step">Step 3</span>
+          <h3>Add to cart, your way</h3>
+          <p>Styx steps in right when you click <strong>Add to Cart</strong> on Amazon, so new items can be routed to the saved cart you're building — not just your live cart.</p>
+        </div>
+      </div>
+
+      <div class="showcase-row reverse">
+        <div class="showcase-img">
+          <img src="assets/screenshots/04-intercept.png" alt="Picker modal asking which saved cart to add the item to, shown over the Amazon product listing">
+        </div>
+        <div class="showcase-text">
+          <span class="step">Step 4</span>
+          <h3>Pick exactly which cart gets the item</h3>
+          <p>Choose any saved cart from the picker and the item is filed there — perfect for building out gift lists or project orders while you keep browsing.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="video-section" id="demo">
+    <div class="wrap">
+      <div class="section-head">
+        <span class="kicker">See it in action</span>
+        <h2>Watch the 60-second demo</h2>
+        <p>A quick walkthrough of saving a cart, switching carts, and adding an item straight into a saved list.</p>
+      </div>
+      <div class="video-frame">
+        <iframe
+          src="https://www.youtube.com/embed/pbYnSJjyBZ8"
+          title="Styx Multi-Cart demo"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen
+          loading="lazy"></iframe>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-band">
+    <div class="wrap">
+      <h2>Ready to tame your Amazon cart?</h2>
+      <p>Free, open source, and built to respect your privacy.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://github.com/AllBallBearings/styx-multi-cart#install-chrome--edge--brave--arc--opera--vivaldi">Get Styx Multi-Cart</a>
+        <a class="btn btn-ghost" href="https://github.com/AllBallBearings/styx-multi-cart">Star on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="brand">
+        <img src="assets/product-logo-1024.png" alt="" width="28" height="28">
+        Styx Multi-Cart
+      </div>
+      <div class="footer-links">
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="permissions.html">Permissions</a>
+        <a href="https://github.com/AllBallBearings/styx-multi-cart/blob/main/LICENSE">License</a>
+        <a href="https://github.com/AllBallBearings/styx-multi-cart">GitHub</a>
+        <a href="mailto:jaredgoolsby@gmail.com">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
