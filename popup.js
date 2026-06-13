@@ -16,6 +16,12 @@
     document.documentElement.dataset.surface = _surface;
   }
 
+  // In the side panel, window.close() tears the entire panel down — the user
+  // then has to reopen it from the toolbar. Only the fixed-size popup should
+  // auto-dismiss to "get out of the way" after an op; the panel sits beside
+  // the page and never covers it. Guard every close() call with this.
+  const IS_PANEL_SURFACE = _surface === "sidepanel" || _surface === "panel";
+
   // ---- DOM refs ----------------------------------------------------------
 
   const $name = document.getElementById("mc-name");
@@ -45,6 +51,10 @@
   const $qtyPop = document.getElementById("mc-qty-pop");
   const $qtyPopVal = $qtyPop.querySelector(".mc-qty-pop-val");
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
+  const $sidepanelToggle = document.getElementById("mc-sidepanel-toggle");
+  const $displaySection = document.getElementById(
+    "mc-settings-display-section"
+  );
   const $createNew = document.getElementById("mc-create-new");
   const $themeToggle = document.getElementById("mc-theme-toggle");
 
@@ -710,6 +720,36 @@
     }
   });
 
+  // ---- Settings: open as side panel vs popup (Chrome only) ---------------
+  //
+  // The row stays hidden unless the background reports chrome.sidePanel is
+  // available — Safari has no side panel, so the choice is moot there.
+
+  async function loadSurfaceSetting() {
+    const res = await send({ type: "MC_GET_UI_SURFACE" });
+    if (!res || !res.ok || !res.supported) return;
+    if ($displaySection) $displaySection.hidden = false;
+    $sidepanelToggle.checked = res.surface !== "popup";
+  }
+
+  if ($sidepanelToggle) {
+    $sidepanelToggle.addEventListener("change", async () => {
+      const surface = $sidepanelToggle.checked ? "sidepanel" : "popup";
+      const res = await send({ type: "MC_SET_UI_SURFACE", surface });
+      if (!res || !res.ok) {
+        // Revert and notify if the write failed.
+        $sidepanelToggle.checked = surface !== "sidepanel";
+        toast((res && res.error) || "Could not save setting", "error");
+        return;
+      }
+      toast(
+        surface === "sidepanel"
+          ? "Opens as side panel. Click the toolbar icon to reopen."
+          : "Opens as popup. Click the toolbar icon to reopen."
+      );
+    });
+  }
+
   // ---- Settings: light / dark mode toggle --------------------------------
 
   const MOON_SVG = `<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -818,7 +858,8 @@
         );
         // Get out of the way: progress continues as a toast on the page,
         // which this popover would otherwise cover.
-        if (!res.alreadyEmpty) setTimeout(() => window.close(), 1200);
+        if (!res.alreadyEmpty && !IS_PANEL_SURFACE)
+          setTimeout(() => window.close(), 1200);
       } else {
         toast(res.error || "Could not clear cart", "error");
       }
@@ -1347,7 +1388,7 @@
           );
           // Get out of the way: progress continues as a toast on the page,
           // which this popover would otherwise cover.
-          setTimeout(() => window.close(), 1200);
+          if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
         } else if (!handleEntitlementError(res)) {
           toast(res.error || "Could not switch carts", "error");
         }
@@ -2169,6 +2210,7 @@
     loadDebugPanelVisibility();
     refresh();
     loadInterceptSetting();
+    loadSurfaceSetting();
     // Fire-and-forget: ask the background to re-sync entitlement from
     // ExtensionPay. If the user just returned from a successful checkout,
     // the onPaid listener has usually already updated storage before we

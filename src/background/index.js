@@ -128,6 +128,10 @@ const DEFAULT_ENTITLEMENT = Object.freeze({
 // merge with defaults so old stored shapes never block a launch.
 const DEFAULT_SETTINGS = {
   interceptAtc: true,
+  // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
+  // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
+  // is unavailable (e.g. Safari), which always uses the popup.
+  uiSurface: "sidepanel",
   // Ephemeral flag — set to true for the duration of a cart restore so the
   // observer.js ATC intercept stands down. Cleared in a finally block so a
   // crash or early return can never leave interception permanently disabled.
@@ -270,10 +274,31 @@ if (!extpay) {
 // toolbar icon toggles the panel. Chrome forbids opening it without a user
 // gesture, so there is no auto-open on page load — once the user opens it,
 // Chrome keeps it open across tabs/navigation in that window.
+// Apply the user's chosen toolbar surface (Chrome only). "popup" sets an
+// action popup so the icon opens a compact popover; "sidepanel" clears the
+// popup so the icon toggles the docked side panel. No-op where chrome.sidePanel
+// is unavailable (Safari) — that path always falls back to the popup.
+function applyUiSurface(surface) {
+  if (!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior)) return;
+  const wantPopup = surface === "popup";
+  Promise.resolve(
+    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !wantPopup })
+  ).catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+  if (chrome.action && chrome.action.setPopup) {
+    try {
+      chrome.action.setPopup({
+        popup: wantPopup ? "popup.html?surface=popup" : "",
+      });
+    } catch (e) {
+      console.error("[Styx Multi-Cart] action.setPopup failed:", e);
+    }
+  }
+}
+
 if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+  readSettings()
+    .then((s) => applyUiSurface(s.uiSurface))
+    .catch(() => applyUiSurface("sidepanel"));
 }
 
 /**
@@ -2531,14 +2556,20 @@ async function showRestoreUpsellNotice(tabId, item) {
 async function showStatus(tabId, message, type = 'loading') {
   try {
     let theme = null;
+    let placement = 'bottom';
     try {
       const settings = await readSettings();
       theme = settings.theme || null;
-    } catch (_settingsErr) { /* fall back to system theme in the page */ }
+      // Side panel docks beside the page, so a top toast is uncovered and more
+      // visible. A popup drops from the toolbar over the top of the page, so
+      // there the toast stays at the bottom. Safari (no side panel) → bottom.
+      const panelSupported = !!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior);
+      placement = panelSupported && settings.uiSurface !== 'popup' ? 'top' : 'bottom';
+    } catch (_settingsErr) { /* fall back to system theme + bottom in the page */ }
     await chrome.scripting.executeScript({
       target: { tabId },
       func: pageShowStatus,
-      args: [message, type, theme],
+      args: [message, type, theme, placement],
     });
   } catch (_e) {
     // Status overlay is decorative — never block operations on failure.
@@ -2770,7 +2801,7 @@ function pageHasRestoreUpsell() {
  *   done:    green with checkmark (auto-dismisses after 4 s)
  *   error:   red with warning     (auto-dismisses after 5 s)
  */
-function pageShowStatus(message, type, theme) {
+function pageShowStatus(message, type, theme, placement) {
   var ID = '__styx-status-toast';
   var toast = document.getElementById(ID);
   if (!toast) {
@@ -2823,10 +2854,17 @@ function pageShowStatus(message, type, theme) {
     : '0 0 0 1px ' + accent + ', 0 0 18px rgba(' + glowRgb + ',.22), 0 6px 24px rgba(15,17,21,.18)';
 
   var ts = toast.style;
-  // Bottom-center: browser extension popovers drop from the toolbar over the
-  // top of the page and would cover a top-anchored toast.
-  ts.position = 'fixed'; ts.bottom = '24px'; ts.left = '50%';
-  ts.transform = 'translateX(-50%)'; ts.top = ''; ts.right = '';
+  // Placement follows the UI surface (passed from showStatus): the side panel
+  // docks beside the page so a top toast is uncovered and more visible; a popup
+  // drops from the toolbar over the top of the page, so there the toast sits at
+  // the bottom. The top offset clears Amazon's sticky header.
+  ts.position = 'fixed'; ts.left = '50%';
+  ts.transform = 'translateX(-50%)'; ts.right = '';
+  if (placement === 'top') {
+    ts.top = '72px'; ts.bottom = '';
+  } else {
+    ts.bottom = '24px'; ts.top = '';
+  }
   ts.zIndex = '2147483647';
   ts.display = 'flex'; ts.alignItems = 'center'; ts.gap = '14px';
   ts.padding = '16px 22px'; ts.borderRadius = '14px';
@@ -3842,6 +3880,27 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case "MC_SET_INTERCEPT": {
           const next = await writeSettings({ interceptAtc: !!msg.enabled });
           sendResponse({ ok: true, enabled: !!next.interceptAtc });
+          break;
+        }
+
+        case "MC_GET_UI_SURFACE": {
+          const settings = await readSettings();
+          const supported = !!(
+            chrome.sidePanel && chrome.sidePanel.setPanelBehavior
+          );
+          sendResponse({
+            ok: true,
+            supported,
+            surface: settings.uiSurface === "popup" ? "popup" : "sidepanel",
+          });
+          break;
+        }
+
+        case "MC_SET_UI_SURFACE": {
+          const surface = msg.surface === "popup" ? "popup" : "sidepanel";
+          const next = await writeSettings({ uiSurface: surface });
+          applyUiSurface(next.uiSurface);
+          sendResponse({ ok: true, surface: next.uiSurface });
           break;
         }
 

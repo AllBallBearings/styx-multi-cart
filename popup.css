@@ -1123,6 +1123,7 @@ body.mc-combine-active .mc-item:hover {
 .mc-modal-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
 }
 
 .mc-empty {
@@ -1174,6 +1175,15 @@ body.mc-combine-active .mc-item:hover {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+}
+
+/* In the full-height side panel, pin the toast to the top so it sits near the
+   controls the user just clicked instead of the far bottom of the screen. The
+   fixed-size popup keeps its bottom anchor. */
+html[data-surface="panel"] .mc-toast,
+html[data-surface="sidepanel"] .mc-toast {
+  top: 14px;
+  bottom: auto;
 }
 
 /* ---- Loading state ------------------------------------------------------ */
