@@ -2,6 +2,8 @@
 title: Privacy Policy — Styx Multi-Cart
 ---
 
+[← Back to Styx Multi-Cart](./)
+
 # Privacy Policy
 
 _Last updated: 2026-05-25_

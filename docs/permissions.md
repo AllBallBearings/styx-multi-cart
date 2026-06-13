@@ -2,6 +2,8 @@
 title: Permissions Justification — Styx Multi-Cart
 ---
 
+[← Back to Styx Multi-Cart](./)
+
 # Permissions Justification
 
 This document explains why Styx Multi-Cart requests each permission listed in its `manifest.json`. The content here is intended both as user-facing transparency and as copy-paste text for the Chrome Web Store's per-permission justification fields.
