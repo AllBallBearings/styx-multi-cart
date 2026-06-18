@@ -271,6 +271,24 @@ section { padding: 80px 0; }
   box-shadow: 0 12px 32px rgba(11, 18, 27, 0.08);
 }
 
+.showcase-img-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.showcase-img-placeholder {
+  border-radius: 10px;
+  border: 2px dashed var(--border);
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  background: rgba(0,0,0,0.02);
+}
+
 .showcase-text .step {
   display: inline-block;
   font-size: 0.75rem;
