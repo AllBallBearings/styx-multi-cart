@@ -2095,6 +2095,91 @@
     }
   });
 
+  // ---- Support module ------------------------------------------------------
+  // Subtle bottom-right life-buoy. Opens a small popover linking to the GitHub
+  // issue tracker and the reporting guide. The "Report a bug" link is built at
+  // open-time so we can pre-fill the new-issue body with the extension version
+  // and browser string — the two things we always end up asking reporters for.
+  const $support = document.getElementById("mc-support");
+  const $supportToggle = document.getElementById("mc-support-toggle");
+  const $supportPop = document.getElementById("mc-support-pop");
+  const $supportReport = document.getElementById("mc-support-report");
+  const NEW_ISSUE_URL =
+    "https://github.com/AllBallBearings/styx-multi-cart/issues/new";
+
+  function buildReportUrl() {
+    let version = "unknown";
+    try {
+      version = chrome.runtime.getManifest().version;
+    } catch (_) {}
+    const ua = (navigator && navigator.userAgent) || "unknown";
+    const body =
+      "**What happened?**\n" +
+      "_A clear description of the bug._\n\n" +
+      "**Steps to reproduce**\n" +
+      "1. \n2. \n3. \n\n" +
+      "**What did you expect to happen?**\n\n\n" +
+      "**Screenshots**\n" +
+      "_If it helps, drag an image in here._\n\n" +
+      "---\n" +
+      "- Extension version: " +
+      version +
+      "\n- Browser: " +
+      ua +
+      "\n";
+    return (
+      NEW_ISSUE_URL +
+      "?labels=bug&body=" +
+      encodeURIComponent(body)
+    );
+  }
+
+  function setSupportOpen(open) {
+    if (!$supportToggle || !$supportPop) return;
+    if (open && $supportReport) {
+      // Refresh the prefilled link each time the menu opens.
+      $supportReport.href = buildReportUrl();
+    }
+    $supportToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      $supportPop.hidden = false;
+      $supportPop.removeAttribute("inert");
+    } else {
+      $supportPop.setAttribute("inert", "");
+      $supportPop.hidden = true;
+    }
+  }
+
+  function isSupportOpen() {
+    return !!$supportPop && !$supportPop.hidden;
+  }
+
+  if ($supportToggle && $supportPop) {
+    $supportToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setSupportOpen(!isSupportOpen());
+    });
+
+    // Clicking a link opens a new tab; close the popover so it isn't left
+    // hanging open behind it (matters in the side panel, which stays alive).
+    $supportPop.addEventListener("click", (e) => {
+      if (e.target.closest("a")) setSupportOpen(false);
+    });
+
+    // Dismiss on outside click or Escape, like the other popovers.
+    document.addEventListener("click", (e) => {
+      if (isSupportOpen() && $support && !$support.contains(e.target)) {
+        setSupportOpen(false);
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isSupportOpen()) {
+        setSupportOpen(false);
+        $supportToggle.focus();
+      }
+    });
+  }
+
   // ---- Dismissal persistence -----------------------------------------------
 
   async function loadDismissed() {
