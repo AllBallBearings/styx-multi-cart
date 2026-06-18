@@ -1379,6 +1379,16 @@
         font-size: 20px; line-height: 1;
       }
       #${PICKER_ID} .styx-pk-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      #${PICKER_ID} .styx-pk-brand {
+        display: flex; align-items: center; gap: 7px;
+        padding: 9px 40px 8px 14px;
+      }
+      #${PICKER_ID} .styx-pk-brand-logo {
+        width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px;
+      }
+      #${PICKER_ID} .styx-pk-brand-name {
+        font-size: 12px; font-weight: 700; letter-spacing: 0.01em; color: #f3efe6;
+      }
       #${PICKER_ID} .styx-pk-header {
         display: flex; gap: 12px; padding: 14px 40px 12px 14px;
         border-bottom: 1px solid #2a3038;
@@ -1400,7 +1410,7 @@
       #${PICKER_ID} .styx-pk-prompt {
         padding: 10px 14px 6px; font-size: 11px;
         text-transform: uppercase; letter-spacing: 0.06em;
-        color: #8a93a0; font-weight: 700;
+        color: #ff9900; font-weight: 700;
       }
       #${PICKER_ID} .styx-pk-list {
         list-style: none; margin: 0; padding: 3px 10px 10px;
@@ -1627,6 +1637,7 @@
         background: #f7f3ec;
         border-color: #e0d9cc;
       }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-brand-name,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-title,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-name,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-upgrade-title,
@@ -1635,7 +1646,6 @@
         color: #131a22;
       }
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-sub,
-      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-prompt,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-count,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-upgrade-period,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-create-sub {
@@ -1967,6 +1977,10 @@
       <div class="styx-pk-backdrop" data-styx-action="cancel"></div>
       <div class="styx-pk-modal" role="document">
         <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+        <div class="styx-pk-brand">
+          <svg class="styx-pk-brand-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131a22"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/></g><circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/></g><circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/></g><circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
+          <span class="styx-pk-brand-name">Styx Multi-Cart</span>
+        </div>
         <div class="styx-pk-header">
           ${thumbHtml}
           <div class="styx-pk-meta">
