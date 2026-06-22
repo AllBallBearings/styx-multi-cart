@@ -22,6 +22,27 @@
   // the page and never covers it. Guard every close() call with this.
   const IS_PANEL_SURFACE = _surface === "sidepanel" || _surface === "panel";
 
+  // Safari serves extension pages from safari-web-extension://. On Safari the
+  // premium unlock is an App Store In-App Purchase handled by the native host
+  // app (Apple guideline 3.1.1), not an ExtensionPay/Stripe checkout tab.
+  const IS_SAFARI = chrome.runtime
+    .getURL("")
+    .startsWith("safari-web-extension://");
+
+  // Launch the native host app's StoreKit purchase via its custom URL scheme.
+  // A custom-scheme navigation in the extension popup would tear the popup
+  // down, so we fire it through a throwaway hidden iframe instead — the app
+  // comes forward and presents the system purchase sheet; the popup stays put.
+  function launchHostAppPurchase(plan) {
+    const known = plan === "lifetime" ? "lifetime" : "annual";
+    const url = "styxmulticart://purchase?plan=" + encodeURIComponent(known);
+    const frame = document.createElement("iframe");
+    frame.style.display = "none";
+    frame.src = url;
+    document.body.appendChild(frame);
+    setTimeout(() => frame.remove(), 1500);
+  }
+
   // ---- DOM refs ----------------------------------------------------------
 
   const $name = document.getElementById("mc-name");
@@ -1929,13 +1950,24 @@
     if (action === "paywall-close") {
       closePaywall();
     } else if (action === "paywall-upgrade") {
+      const plan = btn.dataset.plan || null;
+
+      if (IS_SAFARI) {
+        // Safari: hand off to the native host app's App Store purchase. The
+        // app writes the entitlement to the shared App Group on success;
+        // background.js re-reads it over the native bridge on the next
+        // MC_REFRESH_ENTITLEMENT (fired by boot() every time the popup opens).
+        launchHostAppPurchase(plan);
+        closePaywall();
+        return;
+      }
+
       // Open the ExtensionPay-hosted Stripe checkout for the chosen plan in a
       // new tab. The popup closes by Chrome anyway when focus moves; we also
       // call closePaywall so reopening later starts fresh. extpay.onPaid fires
       // in background.js when the user completes checkout and refreshes the
       // entitlement automatically. Disable BOTH buttons during the call so a
       // double-tap can't open two checkout tabs.
-      const plan = btn.dataset.plan || null;
       for (const b of $paywallPlanBtns) b.disabled = true;
       btn.textContent = "Opening checkout…";
       const res = await send({ type: "MC_OPEN_PAYMENT_PAGE", plan });

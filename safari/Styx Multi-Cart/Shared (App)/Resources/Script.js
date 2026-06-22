@@ -22,3 +22,20 @@ function openPreferences() {
 }
 
 document.querySelector("button.open-preferences").addEventListener("click", openPreferences);
+
+// Premium In-App Purchase buttons (macOS host app). Each posts an action to
+// the native ViewController, which drives StoreKit; the system purchase sheet
+// shows localized pricing. See StoreManager.swift.
+function sendController(action) {
+    webkit.messageHandlers.controller.postMessage(action);
+}
+
+document.querySelector("button.buy-annual")?.addEventListener("click", function () {
+    sendController("buy-annual");
+});
+document.querySelector("button.buy-lifetime")?.addEventListener("click", function () {
+    sendController("buy-lifetime");
+});
+document.querySelector("button.restore")?.addEventListener("click", function () {
+    sendController("restore");
+});

@@ -1,0 +1,64 @@
+{
+  "identifier" : "A1B2C3D4-0001-0001-0001-STYXMULTICART",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "14.99",
+      "familyShareable" : false,
+      "internalID" : "STYX0002",
+      "localizations" : [
+        {
+          "description" : "Unlock unlimited saved carts forever. One-time purchase.",
+          "displayName" : "Styx Multi-Cart Premium (Lifetime)",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.jaredgoolsby.styx.multicart.pro.lifetime",
+      "referenceName" : "Premium Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "STYXGRP01",
+      "localizations" : [],
+      "name" : "Styx Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "STYX0001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlock unlimited saved carts. Billed yearly.",
+              "displayName" : "Styx Multi-Cart Premium (Annual)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.jaredgoolsby.styx.multicart.pro.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Premium Annual",
+          "subscriptionGroupID" : "STYXGRP01",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
