@@ -1779,6 +1779,47 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       console.error("[Styx Multi-Cart] restore failed", err);
     }
   }
+  async function wishlistAddAllToCart(items, host) {
+    try {
+      const cleanItems = (items || []).filter((it) => it && it.asin);
+      if (!cleanItems.length) return;
+      const target = {
+        items: cleanItems,
+        host: host || "www.amazon.com",
+        name: "wishlist"
+      };
+      const bulk = await restoreCartBulk(target);
+      if (bulk.ok && bulk.userDeclinedFallback) return;
+      if (!bulk.ok && bulk.userAbandoned) return;
+      if (bulk.ok && bulk.missing.length === 0) {
+        const h = bulk.host || target.host || "www.amazon.com";
+        const doneMsg = `Added ${bulk.added} item${bulk.added === 1 ? "" : "s"} to your Amazon cart`;
+        clearOpStatus(doneMsg);
+        try {
+          if (bulk.helperTabId) {
+            await chrome.tabs.update(bulk.helperTabId, {
+              url: `https://${h}/gp/cart/view.html`,
+              active: true
+            });
+            await waitForTabReload(bulk.helperTabId, 15e3);
+            await showStatus(bulk.helperTabId, doneMsg, "done");
+          }
+        } catch (_e) {
+        }
+        return;
+      }
+      const fallbackItems = bulk.missing && bulk.missing.length ? bulk.missing : target.items;
+      if (!bulk.ok) {
+        dinfo(
+          "[Styx Multi-Cart] wishlist bulk add failed, falling back to per-item:",
+          bulk.error
+        );
+      }
+      await restoreCart({ ...target, items: fallbackItems });
+    } catch (err) {
+      console.error("[Styx Multi-Cart] wishlist add-all failed", err);
+    }
+  }
   async function clearCurrentCartInBackground() {
     try {
       await clearAmazonCart(void 0, { returnToOrigin: true });
@@ -2714,6 +2755,18 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             setOpStatus(`Restoring "${target.name || "cart"}"`, "Starting\u2026");
             openStatusWindow();
             setTimeout(() => clearThenRestoreCart(target), 0);
+            break;
+          }
+          case "MC_WISHLIST_ADD_ALL": {
+            const items = Array.isArray(msg.items) ? msg.items.filter((it) => it && it.asin) : [];
+            if (!items.length) {
+              sendResponse({ ok: false, error: "No items found on this wishlist." });
+              break;
+            }
+            sendResponse({ ok: true, started: true, total: items.length });
+            setOpStatus("Adding wishlist to cart", "Starting\u2026");
+            openStatusWindow();
+            setTimeout(() => wishlistAddAllToCart(items, msg.host), 0);
             break;
           }
           case "MC_CLEAR_CURRENT": {

@@ -2537,6 +2537,64 @@ async function clearThenRestoreCart(target) {
   }
 }
 
+// Add every item scraped from an Amazon wishlist page to the live Amazon
+// cart. Unlike clearThenRestoreCart this is purely ADDITIVE — it never
+// clears the existing cart — but it reuses the same proven bulk-add engine
+// (and per-item fallback) that powers cart restore. Items arrive from
+// observer.js as { asin, quantity, title, url }.
+async function wishlistAddAllToCart(items, host) {
+  try {
+    const cleanItems = (items || []).filter((it) => it && it.asin);
+    if (!cleanItems.length) return;
+    const target = {
+      items: cleanItems,
+      host: host || "www.amazon.com",
+      name: "wishlist",
+    };
+
+    // Fast path: Amazon's batch add endpoint, same as cart restore.
+    const bulk = await restoreCartBulk(target);
+
+    // User declined the per-item fallback in the bulk reconciliation prompt.
+    if (bulk.ok && bulk.userDeclinedFallback) return;
+    // User abandoned the bulk confirm page (closed tab / timeout).
+    if (!bulk.ok && bulk.userAbandoned) return;
+
+    if (bulk.ok && bulk.missing.length === 0) {
+      // Everything landed in one shot — land on the cart and toast.
+      const h = bulk.host || target.host || "www.amazon.com";
+      const doneMsg = `Added ${bulk.added} item${bulk.added === 1 ? "" : "s"} to your Amazon cart`;
+      clearOpStatus(doneMsg);
+      try {
+        if (bulk.helperTabId) {
+          await chrome.tabs.update(bulk.helperTabId, {
+            url: `https://${h}/gp/cart/view.html`,
+            active: true,
+          });
+          await waitForTabReload(bulk.helperTabId, 15000);
+          await showStatus(bulk.helperTabId, doneMsg, "done");
+        }
+      } catch (_e) { /* tab may have closed — fine */ }
+      return;
+    }
+
+    // Hard failure OR partial where the user chose "Add one by one" — drive
+    // the remainder through the per-item engine (also additive, no clear).
+    const fallbackItems = (bulk.missing && bulk.missing.length)
+      ? bulk.missing
+      : target.items;
+    if (!bulk.ok) {
+      dinfo(
+        "[Styx Multi-Cart] wishlist bulk add failed, falling back to per-item:",
+        bulk.error
+      );
+    }
+    await restoreCart({ ...target, items: fallbackItems });
+  } catch (err) {
+    console.error("[Styx Multi-Cart] wishlist add-all failed", err);
+  }
+}
+
 async function clearCurrentCartInBackground() {
   try {
     await clearAmazonCart(undefined, { returnToOrigin: true });
@@ -3857,6 +3915,25 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           setOpStatus(`Restoring "${target.name || 'cart'}"`, "Starting…");
           openStatusWindow(); // non-blocking — don't await
           setTimeout(() => clearThenRestoreCart(target), 0);
+          break;
+        }
+
+        case "MC_WISHLIST_ADD_ALL": {
+          // observer.js scraped an Amazon wishlist and wants every item
+          // added to the live Amazon cart (additive — does NOT clear).
+          const items = Array.isArray(msg.items)
+            ? msg.items.filter((it) => it && it.asin)
+            : [];
+          if (!items.length) {
+            sendResponse({ ok: false, error: "No items found on this wishlist." });
+            break;
+          }
+          // Acknowledge immediately — the bulk flow navigates a tab and waits
+          // on the user's confirmation, which can outlive the message channel.
+          sendResponse({ ok: true, started: true, total: items.length });
+          setOpStatus("Adding wishlist to cart", "Starting…");
+          openStatusWindow(); // non-blocking
+          setTimeout(() => wishlistAddAllToCart(items, msg.host), 0);
           break;
         }
 
