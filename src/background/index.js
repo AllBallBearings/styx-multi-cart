@@ -16,6 +16,7 @@
 // ExtensionPay SDK. Must come before any reference to `ExtPay(...)`.
 // Vendored from `npm install extpay` → node_modules/extpay/dist/ExtPay.js.
 import { extpayUserToEntitlementPatch } from "../../lib/extpay-sync.js";
+import { nativeEntitlementToPatch } from "../../lib/native-sync.js";
 import { evaluateClearStep } from "../../lib/clear-cart.js";
 
 // Verbose service-worker logging. Controlled at runtime by the `mc.dev.v1`
@@ -84,6 +85,14 @@ const dwarn = (...a) => {
   console.warn(...a);
   pushLogEntry({ ctx: "sw", level: "warn", msg: mcStringifyArgs(a) });
 };
+
+// Runtime platform flag. Safari serves extension pages from a
+// `safari-web-extension://` origin; Chrome/Edge/Firefox use other schemes.
+// Drives the payment-source branch (App Store IAP on Safari, ExtensionPay
+// elsewhere) plus a few Safari-only UI quirks further down.
+const IS_SAFARI = chrome.runtime
+  .getURL("")
+  .startsWith("safari-web-extension://");
 
 const STORAGE_KEY = "mc.carts.v1";
 const SETTINGS_KEY = "mc.settings.v1";
@@ -248,8 +257,17 @@ const EXTPAY_ID = "styx-multi-cart";
 const EXTPAY_SYNC_ALARM = "mc-extpay-sync";
 const EXTPAY_SYNC_PERIOD_MIN = 60 * 24; // daily
 
-const extpay = typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
-if (!extpay) {
+// ExtensionPay is the payment source for Chrome/Edge/Firefox only. On Safari,
+// Apple's App Store guideline 3.1.1 requires In-App Purchase for digital
+// unlocks, so the Safari build buys via StoreKit in the native host app and
+// reads the result over the native-message bridge (syncEntitlementFromNative).
+// Keep ExtPay entirely inert on Safari — no SDK init, no network, no console
+// noise for App Review.
+const extpay =
+  !IS_SAFARI && typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
+if (IS_SAFARI) {
+  // No-op: native StoreKit path is wired in below.
+} else if (!extpay) {
   // ExtPay.js failed to load — shouldn't happen in production but might in
   // a half-broken dev unpack. The rest of the extension keeps working;
   // upgrades and license-sync are just no-ops until reload.
@@ -330,18 +348,64 @@ async function syncEntitlementFromExtPay() {
   dlog("[Styx Multi-Cart] entitlement synced from ExtPay:", patch);
 }
 
+/**
+ * Safari only. Ask the native host (SafariWebExtensionHandler) for the current
+ * App Store entitlement — which the Swift StoreManager keeps in a shared App
+ * Group after each StoreKit purchase / Transaction.update — and translate it to
+ * an entitlement patch. Safe to call freely: on bridge error we leave the
+ * stored entitlement untouched so a paying user is never downgraded by a flaky
+ * read.
+ */
+async function syncEntitlementFromNative() {
+  if (!IS_SAFARI) return;
+  let native;
+  try {
+    // Safari exposes the promise-style sendNativeMessage on `browser`; fall
+    // back to `chrome` defensively. The message routes to the extension's
+    // SafariWebExtensionHandler (no application id needed on Safari).
+    const runtime =
+      typeof browser !== "undefined" &&
+      browser.runtime &&
+      typeof browser.runtime.sendNativeMessage === "function"
+        ? browser.runtime
+        : chrome.runtime;
+    native = await runtime.sendNativeMessage({ action: "getEntitlement" });
+  } catch (err) {
+    dwarn(
+      "[Styx Multi-Cart] native getEntitlement failed; leaving entitlement alone:",
+      err,
+    );
+    return;
+  }
+  dlog("[Styx Multi-Cart] native getEntitlement raw object:", JSON.stringify(native));
+  const current = await readEntitlement();
+  const patch = nativeEntitlementToPatch(native, current, Date.now());
+  await writeEntitlement(patch);
+  dlog("[Styx Multi-Cart] entitlement synced from App Store:", patch);
+}
+
+/**
+ * Refresh the entitlement from whichever payment source this build uses:
+ * StoreKit/App Store on Safari, ExtensionPay everywhere else.
+ */
+async function syncEntitlement() {
+  return IS_SAFARI ? syncEntitlementFromNative() : syncEntitlementFromExtPay();
+}
+
 // Daily alarm wakes the service worker even if the popup is never opened.
+// (Alarm name is historical — it now drives the active payment source for the
+// build, ExtPay or App Store.)
 chrome.alarms.create(EXTPAY_SYNC_ALARM, {
   periodInMinutes: EXTPAY_SYNC_PERIOD_MIN,
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlementFromExtPay();
+  if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlement();
 });
 
 // Sync once when the service worker spins up (e.g. on browser startup, on
 // install/update, or after the worker has been suspended). Doesn't block
 // other event registration because top-level awaits aren't allowed here.
-syncEntitlementFromExtPay();
+syncEntitlement();
 
 // Hydrate the DEBUG flag from storage at SW startup, and keep it in sync
 // when the user flips Settings → Developer mode in the popup. mc.dev.v1
@@ -773,11 +837,11 @@ function pageApplyUpsellChoice(recorded) {
 let _opStatus = null;        // { active, title, detail } | null
 let _statusWindowId = null;  // chrome.windows id of the status popup
 
-// Safari ignores chrome.windows.create's type:"popup" and opens a full-size
-// blank window that never renders status.html (so it never self-closes),
-// leaking one untitled window per operation. The on-page toast carries the
-// same progress there, so the status window is Chrome-only.
-const IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
+// NOTE: IS_SAFARI is defined near the top of the file (needed earlier for the
+// payment-source branch). Safari ignores chrome.windows.create's type:"popup"
+// and opens a full-size blank window that never renders status.html (so it
+// never self-closes), leaking one untitled window per operation. The on-page
+// toast carries the same progress there, so the status window is Chrome-only.
 
 /** Set the current in-progress status shown in the status window. */
 function setOpStatus(title, detail = "") {
@@ -2473,6 +2537,64 @@ async function clearThenRestoreCart(target) {
   }
 }
 
+// Add every item scraped from an Amazon wishlist page to the live Amazon
+// cart. Unlike clearThenRestoreCart this is purely ADDITIVE — it never
+// clears the existing cart — but it reuses the same proven bulk-add engine
+// (and per-item fallback) that powers cart restore. Items arrive from
+// observer.js as { asin, quantity, title, url }.
+async function wishlistAddAllToCart(items, host) {
+  try {
+    const cleanItems = (items || []).filter((it) => it && it.asin);
+    if (!cleanItems.length) return;
+    const target = {
+      items: cleanItems,
+      host: host || "www.amazon.com",
+      name: "wishlist",
+    };
+
+    // Fast path: Amazon's batch add endpoint, same as cart restore.
+    const bulk = await restoreCartBulk(target);
+
+    // User declined the per-item fallback in the bulk reconciliation prompt.
+    if (bulk.ok && bulk.userDeclinedFallback) return;
+    // User abandoned the bulk confirm page (closed tab / timeout).
+    if (!bulk.ok && bulk.userAbandoned) return;
+
+    if (bulk.ok && bulk.missing.length === 0) {
+      // Everything landed in one shot — land on the cart and toast.
+      const h = bulk.host || target.host || "www.amazon.com";
+      const doneMsg = `Added ${bulk.added} item${bulk.added === 1 ? "" : "s"} to your Amazon cart`;
+      clearOpStatus(doneMsg);
+      try {
+        if (bulk.helperTabId) {
+          await chrome.tabs.update(bulk.helperTabId, {
+            url: `https://${h}/gp/cart/view.html`,
+            active: true,
+          });
+          await waitForTabReload(bulk.helperTabId, 15000);
+          await showStatus(bulk.helperTabId, doneMsg, "done");
+        }
+      } catch (_e) { /* tab may have closed — fine */ }
+      return;
+    }
+
+    // Hard failure OR partial where the user chose "Add one by one" — drive
+    // the remainder through the per-item engine (also additive, no clear).
+    const fallbackItems = (bulk.missing && bulk.missing.length)
+      ? bulk.missing
+      : target.items;
+    if (!bulk.ok) {
+      dinfo(
+        "[Styx Multi-Cart] wishlist bulk add failed, falling back to per-item:",
+        bulk.error
+      );
+    }
+    await restoreCart({ ...target, items: fallbackItems });
+  } catch (err) {
+    console.error("[Styx Multi-Cart] wishlist add-all failed", err);
+  }
+}
+
 async function clearCurrentCartInBackground() {
   try {
     await clearAmazonCart(undefined, { returnToOrigin: true });
@@ -3399,6 +3521,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // the known nicknames (set in the extensionpay.com dashboard) so a
           // bad/renamed value can't build a broken URL — unknown/absent falls
           // back to the no-arg call, which shows ExtPay's full plan picker.
+          if (IS_SAFARI) {
+            // Safari buys via StoreKit in the native host app — the popup
+            // launches the styxmulticart:// URL scheme directly and never
+            // routes through here. Respond with a clear native signal in case
+            // a caller reaches this path anyway.
+            sendResponse({
+              ok: false,
+              native: true,
+              error: "Purchases are handled in the Styx Multi-Cart app.",
+            });
+            break;
+          }
           if (!extpay) {
             sendResponse({ ok: false, error: "Payment service not available." });
             break;
@@ -3420,10 +3554,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         case "MC_REFRESH_ENTITLEMENT": {
-          // Lets the popup ask for a fresh ExtPay-backed entitlement check
-          // (e.g. user returns from checkout tab). Best-effort; the response
+          // Lets the popup ask for a fresh entitlement check from the active
+          // payment source (e.g. user returns from the checkout tab on Chrome,
+          // or from the host-app purchase on Safari). Best-effort; the response
           // ignores the result and lets the caller re-query MC_GET_ENTITLEMENT.
-          await syncEntitlementFromExtPay();
+          await syncEntitlement();
           sendResponse({ ok: true });
           break;
         }
@@ -3780,6 +3915,25 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           setOpStatus(`Restoring "${target.name || 'cart'}"`, "Starting…");
           openStatusWindow(); // non-blocking — don't await
           setTimeout(() => clearThenRestoreCart(target), 0);
+          break;
+        }
+
+        case "MC_WISHLIST_ADD_ALL": {
+          // observer.js scraped an Amazon wishlist and wants every item
+          // added to the live Amazon cart (additive — does NOT clear).
+          const items = Array.isArray(msg.items)
+            ? msg.items.filter((it) => it && it.asin)
+            : [];
+          if (!items.length) {
+            sendResponse({ ok: false, error: "No items found on this wishlist." });
+            break;
+          }
+          // Acknowledge immediately — the bulk flow navigates a tab and waits
+          // on the user's confirmation, which can outlive the message channel.
+          sendResponse({ ok: true, started: true, total: items.length });
+          setOpStatus("Adding wishlist to cart", "Starting…");
+          openStatusWindow(); // non-blocking
+          setTimeout(() => wishlistAddAllToCart(items, msg.host), 0);
           break;
         }
 

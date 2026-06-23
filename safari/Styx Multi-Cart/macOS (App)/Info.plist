@@ -4,5 +4,18 @@
 <dict>
 	<key>SFSafariWebExtensionConverterVersion</key>
 	<string>26.0.1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.jaredgoolsby.styx.multicart.purchase</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>styxmulticart</string>
+			</array>
+		</dict>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

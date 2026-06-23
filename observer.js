@@ -2093,6 +2093,144 @@
     });
   }
 
+  // ---- Amazon wishlist "Send All to Amazon Cart" -------------------------
+
+  const STYX_WL_BTN_ID = "styx-wishlist-add-all";
+  const STYX_WL_LABEL = "Send All to Amazon Cart";
+
+  function isWishlistPage() {
+    return /\/hz\/wishlist\//i.test(location.pathname);
+  }
+
+  // Scrape every rendered wishlist item. Amazon lazy-loads items on scroll,
+  // so this captures whatever is currently in the DOM at click time.
+  function scrapeWishlistItems() {
+    const seen = new Set();
+    const out = [];
+    const lis = document.querySelectorAll(
+      "ul#g-items li[data-id], ol#g-items li[data-id], " +
+        "#g-items li[data-itemid], li.g-item-sortable, li[data-id][data-itemid]"
+    );
+    lis.forEach((li) => {
+      let asin = null;
+      const link = li.querySelector(
+        'a[href*="/dp/"], a[href*="/gp/product/"], a[href*="/gp/aw/d/"]'
+      );
+      if (link) asin = findAsinInUrl(link.getAttribute("href"));
+      if (!asin) asin = findAsinFromButton(li);
+      if (!asin || seen.has(asin)) return;
+      seen.add(asin);
+
+      let title = "";
+      const nameEl = li.querySelector('[id^="itemName_"]') || link;
+      if (nameEl) {
+        title = (nameEl.getAttribute("title") || nameEl.textContent || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 200);
+      }
+
+      let qty = 1;
+      const qEl = li.querySelector('[id^="itemRequested_"]');
+      if (qEl) {
+        const n = parseInt(String(qEl.textContent || "").replace(/\D+/g, ""), 10);
+        if (n > 0) qty = Math.min(n, 99);
+      }
+
+      out.push({
+        asin,
+        title,
+        quantity: qty,
+        url: `https://${location.hostname}/dp/${asin}`,
+      });
+    });
+    return out;
+  }
+
+  function setWishlistBtnLabel(btn, text) {
+    const label = btn.querySelector(".a-button-text");
+    if (label) label.textContent = text;
+  }
+
+  function injectWishlistButton() {
+    if (document.getElementById(STYX_WL_BTN_ID)) return true;
+    const title = document.getElementById("profile-list-name");
+    if (!title || !title.parentNode) return false;
+
+    const spacer = document.createElement("span");
+    spacer.className = "a-letter-space";
+
+    const btn = document.createElement("span");
+    btn.id = STYX_WL_BTN_ID;
+    btn.className = "a-button a-button-primary";
+    btn.style.marginLeft = "12px";
+    btn.style.verticalAlign = "middle";
+    btn.innerHTML =
+      '<span class="a-button-inner">' +
+      '<a class="a-button-text" role="button" href="#" style="white-space:nowrap;">' +
+      STYX_WL_LABEL +
+      "</a></span>";
+
+    // Insert "<spacer><button>" right after the list title.
+    title.parentNode.insertBefore(btn, title.nextSibling);
+    title.parentNode.insertBefore(spacer, btn);
+
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.busy === "1") return;
+
+      const items = scrapeWishlistItems();
+      if (!items.length) {
+        setWishlistBtnLabel(btn, "No items found");
+        setTimeout(() => setWishlistBtnLabel(btn, STYX_WL_LABEL), 2000);
+        return;
+      }
+
+      btn.dataset.busy = "1";
+      btn.classList.add("a-button-disabled");
+      setWishlistBtnLabel(btn, `Adding ${items.length}…`);
+
+      const res = await sendRequest({
+        type: "MC_WISHLIST_ADD_ALL",
+        items,
+        host: location.hostname,
+      });
+
+      if (!res || !res.ok) {
+        setWishlistBtnLabel(btn, (res && res.error) || "Try again");
+        btn.dataset.busy = "";
+        btn.classList.remove("a-button-disabled");
+        setTimeout(() => setWishlistBtnLabel(btn, STYX_WL_LABEL), 2500);
+        return;
+      }
+
+      // Background drives the confirm flow in a helper tab (often THIS tab,
+      // which then navigates away). Reset the button in case it survives.
+      setWishlistBtnLabel(btn, `Sending ${items.length} to cart…`);
+      setTimeout(() => {
+        btn.dataset.busy = "";
+        btn.classList.remove("a-button-disabled");
+        setWishlistBtnLabel(btn, STYX_WL_LABEL);
+      }, 5000);
+    });
+
+    dlog("[Styx ATC] wishlist Send-All button injected");
+    return true;
+  }
+
+  function initWishlist() {
+    if (injectWishlistButton()) return;
+    // The list title can render after document_idle (hydration / soft nav).
+    // Watch the DOM briefly and inject as soon as it appears.
+    let tries = 0;
+    const mo = new MutationObserver(() => {
+      if (injectWishlistButton() || ++tries > 40) mo.disconnect();
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => mo.disconnect(), 20000);
+  }
+
   // ---- Boot ---------------------------------------------------------------
 
   // Always install the ATC intercept on Amazon pages. It's a single
@@ -2113,4 +2251,5 @@
   // through because MC_LIST_CARTS hadn't responded yet.
   hydrateCachesFromStorage();
   if (onUpsell) watchUpsellClicks();
+  if (isWishlistPage()) initWishlist();
 })();

@@ -61,19 +61,35 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
 #if os(macOS)
-        if (message.body as! String != "open-preferences") {
+        guard let body = message.body as? String else { return }
+
+        switch body {
+        case "open-preferences":
+            SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
+                guard error == nil else {
+                    // Insert code to inform the user that something went wrong.
+                    return
+                }
+                DispatchQueue.main.async {
+                    NSApp.terminate(self)
+                }
+            }
+
+        case "buy-annual", "buy-lifetime":
+            // App Store In-App Purchase for the premium unlock. The system
+            // purchase sheet (with localized pricing) presents over this window.
+            if #available(macOS 12.0, *) {
+                let plan = (body == "buy-lifetime") ? "lifetime" : "annual"
+                Task { await StoreManager.shared.purchase(planNickname: plan) }
+            }
+
+        case "restore":
+            if #available(macOS 12.0, *) {
+                Task { await StoreManager.shared.restore() }
+            }
+
+        default:
             return
-        }
-
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: extensionBundleIdentifier) { error in
-            guard error == nil else {
-                // Insert code to inform the user that something went wrong.
-                return
-            }
-
-            DispatchQueue.main.async {
-                NSApp.terminate(self)
-            }
         }
 #endif
     }

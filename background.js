@@ -46,6 +46,45 @@ importScripts("ExtPay.js");
     };
   }
 
+  // lib/native-sync.js
+  var NATIVE_PREMIUM_BUFFER_MS = 3 * 24 * 60 * 60 * 1e3;
+  function nativeEntitlementToPatch(native, current, nowMs) {
+    const safeCurrent = current && typeof current === "object" ? current : {};
+    const n = native && typeof native === "object" ? native : {};
+    const activePremiumFloor = safeCurrent.tier === "premium" && typeof safeCurrent.premiumUntil === "number" && safeCurrent.premiumUntil > nowMs ? safeCurrent.premiumUntil : 0;
+    if (n.entitled === true) {
+      if (n.productType === "lifetime") {
+        return {
+          tier: "premium",
+          premiumUntil: null,
+          autoRenew: false,
+          source: "appstore",
+          lastChecked: nowMs
+        };
+      }
+      const expiresAt = Number(n.expiresAt);
+      const subscriptionUntil = Number.isFinite(expiresAt) && expiresAt > nowMs ? expiresAt : nowMs + NATIVE_PREMIUM_BUFFER_MS;
+      const premiumUntil = Math.max(subscriptionUntil, activePremiumFloor);
+      return {
+        tier: "premium",
+        premiumUntil,
+        autoRenew: n.willAutoRenew === true,
+        source: "appstore",
+        lastChecked: nowMs
+      };
+    }
+    if (activePremiumFloor > 0) {
+      return { lastChecked: nowMs };
+    }
+    return {
+      tier: "free",
+      premiumUntil: null,
+      autoRenew: false,
+      source: null,
+      lastChecked: nowMs
+    };
+  }
+
   // lib/clear-cart.js
   function evaluateClearStep({ settled, beforeRows, beforeQuantity, stalledDeletes }) {
     const rows = settled && Number.isFinite(settled.rows) ? settled.rows : null;
@@ -118,6 +157,7 @@ importScripts("ExtPay.js");
     console.warn(...a);
     pushLogEntry({ ctx: "sw", level: "warn", msg: mcStringifyArgs(a) });
   };
+  var IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
   var STORAGE_KEY = "mc.carts.v1";
   var SETTINGS_KEY = "mc.settings.v1";
   var ENTITLEMENT_KEY = "mc.entitlement.v1";
@@ -221,8 +261,9 @@ importScripts("ExtPay.js");
   var EXTPAY_ID = "styx-multi-cart";
   var EXTPAY_SYNC_ALARM = "mc-extpay-sync";
   var EXTPAY_SYNC_PERIOD_MIN = 60 * 24;
-  var extpay = typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
-  if (!extpay) {
+  var extpay = !IS_SAFARI && typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
+  if (IS_SAFARI) {
+  } else if (!extpay) {
     console.error("[Styx Multi-Cart] ExtPay SDK not available \u2014 payment paths disabled.");
   } else {
     extpay.startBackground();
@@ -267,13 +308,35 @@ importScripts("ExtPay.js");
     await writeEntitlement(patch);
     dlog("[Styx Multi-Cart] entitlement synced from ExtPay:", patch);
   }
+  async function syncEntitlementFromNative() {
+    if (!IS_SAFARI) return;
+    let native;
+    try {
+      const runtime = typeof browser !== "undefined" && browser.runtime && typeof browser.runtime.sendNativeMessage === "function" ? browser.runtime : chrome.runtime;
+      native = await runtime.sendNativeMessage({ action: "getEntitlement" });
+    } catch (err) {
+      dwarn(
+        "[Styx Multi-Cart] native getEntitlement failed; leaving entitlement alone:",
+        err
+      );
+      return;
+    }
+    dlog("[Styx Multi-Cart] native getEntitlement raw object:", JSON.stringify(native));
+    const current = await readEntitlement();
+    const patch = nativeEntitlementToPatch(native, current, Date.now());
+    await writeEntitlement(patch);
+    dlog("[Styx Multi-Cart] entitlement synced from App Store:", patch);
+  }
+  async function syncEntitlement() {
+    return IS_SAFARI ? syncEntitlementFromNative() : syncEntitlementFromExtPay();
+  }
   chrome.alarms.create(EXTPAY_SYNC_ALARM, {
     periodInMinutes: EXTPAY_SYNC_PERIOD_MIN
   });
   chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlementFromExtPay();
+    if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlement();
   });
-  syncEntitlementFromExtPay();
+  syncEntitlement();
   chrome.storage.local.get(DEV_FLAG_KEY).then((r) => {
     DEBUG = r[DEV_FLAG_KEY] === true;
   });
@@ -587,7 +650,6 @@ importScripts("ExtPay.js");
   }
   var _opStatus = null;
   var _statusWindowId = null;
-  var IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
   function setOpStatus(title, detail = "") {
     _opStatus = { active: true, title, detail };
   }
@@ -1717,6 +1779,47 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       console.error("[Styx Multi-Cart] restore failed", err);
     }
   }
+  async function wishlistAddAllToCart(items, host) {
+    try {
+      const cleanItems = (items || []).filter((it) => it && it.asin);
+      if (!cleanItems.length) return;
+      const target = {
+        items: cleanItems,
+        host: host || "www.amazon.com",
+        name: "wishlist"
+      };
+      const bulk = await restoreCartBulk(target);
+      if (bulk.ok && bulk.userDeclinedFallback) return;
+      if (!bulk.ok && bulk.userAbandoned) return;
+      if (bulk.ok && bulk.missing.length === 0) {
+        const h = bulk.host || target.host || "www.amazon.com";
+        const doneMsg = `Added ${bulk.added} item${bulk.added === 1 ? "" : "s"} to your Amazon cart`;
+        clearOpStatus(doneMsg);
+        try {
+          if (bulk.helperTabId) {
+            await chrome.tabs.update(bulk.helperTabId, {
+              url: `https://${h}/gp/cart/view.html`,
+              active: true
+            });
+            await waitForTabReload(bulk.helperTabId, 15e3);
+            await showStatus(bulk.helperTabId, doneMsg, "done");
+          }
+        } catch (_e) {
+        }
+        return;
+      }
+      const fallbackItems = bulk.missing && bulk.missing.length ? bulk.missing : target.items;
+      if (!bulk.ok) {
+        dinfo(
+          "[Styx Multi-Cart] wishlist bulk add failed, falling back to per-item:",
+          bulk.error
+        );
+      }
+      await restoreCart({ ...target, items: fallbackItems });
+    } catch (err) {
+      console.error("[Styx Multi-Cart] wishlist add-all failed", err);
+    }
+  }
   async function clearCurrentCartInBackground() {
     try {
       await clearAmazonCart(void 0, { returnToOrigin: true });
@@ -2320,6 +2423,14 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_OPEN_PAYMENT_PAGE": {
+            if (IS_SAFARI) {
+              sendResponse({
+                ok: false,
+                native: true,
+                error: "Purchases are handled in the Styx Multi-Cart app."
+              });
+              break;
+            }
             if (!extpay) {
               sendResponse({ ok: false, error: "Payment service not available." });
               break;
@@ -2340,7 +2451,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_REFRESH_ENTITLEMENT": {
-            await syncEntitlementFromExtPay();
+            await syncEntitlement();
             sendResponse({ ok: true });
             break;
           }
@@ -2644,6 +2755,18 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             setOpStatus(`Restoring "${target.name || "cart"}"`, "Starting\u2026");
             openStatusWindow();
             setTimeout(() => clearThenRestoreCart(target), 0);
+            break;
+          }
+          case "MC_WISHLIST_ADD_ALL": {
+            const items = Array.isArray(msg.items) ? msg.items.filter((it) => it && it.asin) : [];
+            if (!items.length) {
+              sendResponse({ ok: false, error: "No items found on this wishlist." });
+              break;
+            }
+            sendResponse({ ok: true, started: true, total: items.length });
+            setOpStatus("Adding wishlist to cart", "Starting\u2026");
+            openStatusWindow();
+            setTimeout(() => wishlistAddAllToCart(items, msg.host), 0);
             break;
           }
           case "MC_CLEAR_CURRENT": {

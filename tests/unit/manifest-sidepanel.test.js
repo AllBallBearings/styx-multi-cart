@@ -15,6 +15,10 @@ const manifest = JSON.parse(
   fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8")
 );
 const backgroundSrc = fs.readFileSync(path.join(ROOT, "background.js"), "utf8");
+const backgroundSource = fs.readFileSync(
+  path.join(ROOT, "src", "background", "index.js"),
+  "utf8"
+);
 const observerSrc = fs.readFileSync(path.join(ROOT, "observer.js"), "utf8");
 
 describe("native side panel config", () => {
@@ -37,8 +41,17 @@ describe("native side panel config", () => {
   });
 
   it("opens the side panel on toolbar click from the service worker", () => {
+    // Asserted against the source (not the minified bundle) so the surface
+    // toggle can't be reduced to a brittle literal. The bundle still gates
+    // panel behavior on chrome.sidePanel.setPanelBehavior...
     expect(backgroundSrc).toContain("setPanelBehavior");
-    expect(backgroundSrc).toContain("openPanelOnActionClick: true");
+    // ...and the source wires the toolbar-click behavior to the chosen surface,
+    // defaulting to the docked side panel (openPanelOnActionClick: true when the
+    // surface is anything but "popup").
+    expect(backgroundSource).toContain("setPanelBehavior");
+    expect(backgroundSource).toContain("openPanelOnActionClick: !wantPopup");
+    expect(backgroundSource).toMatch(/wantPopup\s*=\s*surface === "popup"/);
+    expect(backgroundSource).toMatch(/uiSurface:\s*"sidepanel"/);
   });
 
   it("removed the in-page overlay panel from the content script", () => {

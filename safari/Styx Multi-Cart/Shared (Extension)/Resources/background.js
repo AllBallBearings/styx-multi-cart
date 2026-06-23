@@ -46,6 +46,45 @@ importScripts("ExtPay.js");
     };
   }
 
+  // lib/native-sync.js
+  var NATIVE_PREMIUM_BUFFER_MS = 3 * 24 * 60 * 60 * 1e3;
+  function nativeEntitlementToPatch(native, current, nowMs) {
+    const safeCurrent = current && typeof current === "object" ? current : {};
+    const n = native && typeof native === "object" ? native : {};
+    const activePremiumFloor = safeCurrent.tier === "premium" && typeof safeCurrent.premiumUntil === "number" && safeCurrent.premiumUntil > nowMs ? safeCurrent.premiumUntil : 0;
+    if (n.entitled === true) {
+      if (n.productType === "lifetime") {
+        return {
+          tier: "premium",
+          premiumUntil: null,
+          autoRenew: false,
+          source: "appstore",
+          lastChecked: nowMs
+        };
+      }
+      const expiresAt = Number(n.expiresAt);
+      const subscriptionUntil = Number.isFinite(expiresAt) && expiresAt > nowMs ? expiresAt : nowMs + NATIVE_PREMIUM_BUFFER_MS;
+      const premiumUntil = Math.max(subscriptionUntil, activePremiumFloor);
+      return {
+        tier: "premium",
+        premiumUntil,
+        autoRenew: n.willAutoRenew === true,
+        source: "appstore",
+        lastChecked: nowMs
+      };
+    }
+    if (activePremiumFloor > 0) {
+      return { lastChecked: nowMs };
+    }
+    return {
+      tier: "free",
+      premiumUntil: null,
+      autoRenew: false,
+      source: null,
+      lastChecked: nowMs
+    };
+  }
+
   // lib/clear-cart.js
   function evaluateClearStep({ settled, beforeRows, beforeQuantity, stalledDeletes }) {
     const rows = settled && Number.isFinite(settled.rows) ? settled.rows : null;
@@ -118,6 +157,7 @@ importScripts("ExtPay.js");
     console.warn(...a);
     pushLogEntry({ ctx: "sw", level: "warn", msg: mcStringifyArgs(a) });
   };
+  var IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
   var STORAGE_KEY = "mc.carts.v1";
   var SETTINGS_KEY = "mc.settings.v1";
   var ENTITLEMENT_KEY = "mc.entitlement.v1";
@@ -143,6 +183,10 @@ importScripts("ExtPay.js");
   });
   var DEFAULT_SETTINGS = {
     interceptAtc: true,
+    // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
+    // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
+    // is unavailable (e.g. Safari), which always uses the popup.
+    uiSurface: "sidepanel",
     // Ephemeral flag — set to true for the duration of a cart restore so the
     // observer.js ATC intercept stands down. Cleared in a finally block so a
     // crash or early return can never leave interception permanently disabled.
@@ -217,8 +261,9 @@ importScripts("ExtPay.js");
   var EXTPAY_ID = "styx-multi-cart";
   var EXTPAY_SYNC_ALARM = "mc-extpay-sync";
   var EXTPAY_SYNC_PERIOD_MIN = 60 * 24;
-  var extpay = typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
-  if (!extpay) {
+  var extpay = !IS_SAFARI && typeof ExtPay === "function" ? ExtPay(EXTPAY_ID) : null;
+  if (IS_SAFARI) {
+  } else if (!extpay) {
     console.error("[Styx Multi-Cart] ExtPay SDK not available \u2014 payment paths disabled.");
   } else {
     extpay.startBackground();
@@ -228,8 +273,24 @@ importScripts("ExtPay.js");
       );
     }
   }
+  function applyUiSurface(surface) {
+    if (!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior)) return;
+    const wantPopup = surface === "popup";
+    Promise.resolve(
+      chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: !wantPopup })
+    ).catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+    if (chrome.action && chrome.action.setPopup) {
+      try {
+        chrome.action.setPopup({
+          popup: wantPopup ? "popup.html?surface=popup" : ""
+        });
+      } catch (e) {
+        console.error("[Styx Multi-Cart] action.setPopup failed:", e);
+      }
+    }
+  }
   if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
-    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => console.error("[Styx Multi-Cart] sidePanel setup failed:", e));
+    readSettings().then((s) => applyUiSurface(s.uiSurface)).catch(() => applyUiSurface("sidepanel"));
   }
   async function syncEntitlementFromExtPay() {
     if (!extpay) return;
@@ -247,13 +308,35 @@ importScripts("ExtPay.js");
     await writeEntitlement(patch);
     dlog("[Styx Multi-Cart] entitlement synced from ExtPay:", patch);
   }
+  async function syncEntitlementFromNative() {
+    if (!IS_SAFARI) return;
+    let native;
+    try {
+      const runtime = typeof browser !== "undefined" && browser.runtime && typeof browser.runtime.sendNativeMessage === "function" ? browser.runtime : chrome.runtime;
+      native = await runtime.sendNativeMessage({ action: "getEntitlement" });
+    } catch (err) {
+      dwarn(
+        "[Styx Multi-Cart] native getEntitlement failed; leaving entitlement alone:",
+        err
+      );
+      return;
+    }
+    dlog("[Styx Multi-Cart] native getEntitlement raw object:", JSON.stringify(native));
+    const current = await readEntitlement();
+    const patch = nativeEntitlementToPatch(native, current, Date.now());
+    await writeEntitlement(patch);
+    dlog("[Styx Multi-Cart] entitlement synced from App Store:", patch);
+  }
+  async function syncEntitlement() {
+    return IS_SAFARI ? syncEntitlementFromNative() : syncEntitlementFromExtPay();
+  }
   chrome.alarms.create(EXTPAY_SYNC_ALARM, {
     periodInMinutes: EXTPAY_SYNC_PERIOD_MIN
   });
   chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlementFromExtPay();
+    if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlement();
   });
-  syncEntitlementFromExtPay();
+  syncEntitlement();
   chrome.storage.local.get(DEV_FLAG_KEY).then((r) => {
     DEBUG = r[DEV_FLAG_KEY] === true;
   });
@@ -567,7 +650,6 @@ importScripts("ExtPay.js");
   }
   var _opStatus = null;
   var _statusWindowId = null;
-  var IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
   function setOpStatus(title, detail = "") {
     _opStatus = { active: true, title, detail };
   }
@@ -1763,15 +1845,18 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
   async function showStatus(tabId, message, type = "loading") {
     try {
       let theme = null;
+      let placement = "bottom";
       try {
         const settings = await readSettings();
         theme = settings.theme || null;
+        const panelSupported = !!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior);
+        placement = panelSupported && settings.uiSurface !== "popup" ? "top" : "bottom";
       } catch (_settingsErr) {
       }
       await chrome.scripting.executeScript({
         target: { tabId },
         func: pageShowStatus,
-        args: [message, type, theme]
+        args: [message, type, theme, placement]
       });
     } catch (_e) {
     }
@@ -1914,7 +1999,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     const text = (document.body && document.body.innerText ? document.body.innerText : "").toLowerCase();
     return (text.includes("protection plan") || text.includes("protect your purchase") || text.includes("warranty")) && (text.includes("no thanks") || text.includes("add protection") || text.includes("coverage"));
   }
-  function pageShowStatus(message, type, theme) {
+  function pageShowStatus(message, type, theme, placement) {
     var ID = "__styx-status-toast";
     var toast = document.getElementById(ID);
     if (!toast) {
@@ -1936,11 +2021,16 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     var shadow = isDark ? "0 0 0 1px " + accent + ", 0 0 24px rgba(" + glowRgb + ",.35), 0 6px 24px rgba(0,0,0,.45)" : "0 0 0 1px " + accent + ", 0 0 18px rgba(" + glowRgb + ",.22), 0 6px 24px rgba(15,17,21,.18)";
     var ts = toast.style;
     ts.position = "fixed";
-    ts.bottom = "24px";
     ts.left = "50%";
     ts.transform = "translateX(-50%)";
-    ts.top = "";
     ts.right = "";
+    if (placement === "top") {
+      ts.top = "72px";
+      ts.bottom = "";
+    } else {
+      ts.bottom = "24px";
+      ts.top = "";
+    }
     ts.zIndex = "2147483647";
     ts.display = "flex";
     ts.alignItems = "center";
@@ -2292,6 +2382,14 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_OPEN_PAYMENT_PAGE": {
+            if (IS_SAFARI) {
+              sendResponse({
+                ok: false,
+                native: true,
+                error: "Purchases are handled in the Styx Multi-Cart app."
+              });
+              break;
+            }
             if (!extpay) {
               sendResponse({ ok: false, error: "Payment service not available." });
               break;
@@ -2312,7 +2410,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_REFRESH_ENTITLEMENT": {
-            await syncEntitlementFromExtPay();
+            await syncEntitlement();
             sendResponse({ ok: true });
             break;
           }
@@ -2693,6 +2791,23 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
           case "MC_SET_INTERCEPT": {
             const next = await writeSettings({ interceptAtc: !!msg.enabled });
             sendResponse({ ok: true, enabled: !!next.interceptAtc });
+            break;
+          }
+          case "MC_GET_UI_SURFACE": {
+            const settings = await readSettings();
+            const supported = !!(chrome.sidePanel && chrome.sidePanel.setPanelBehavior);
+            sendResponse({
+              ok: true,
+              supported,
+              surface: settings.uiSurface === "popup" ? "popup" : "sidepanel"
+            });
+            break;
+          }
+          case "MC_SET_UI_SURFACE": {
+            const surface = msg.surface === "popup" ? "popup" : "sidepanel";
+            const next = await writeSettings({ uiSurface: surface });
+            applyUiSurface(next.uiSurface);
+            sendResponse({ ok: true, surface: next.uiSurface });
             break;
           }
           case "MC_CREATE_EMPTY_CART": {
