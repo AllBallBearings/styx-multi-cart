@@ -2231,6 +2231,111 @@
     setTimeout(() => mo.disconnect(), 20000);
   }
 
+  // ---- PDP: surface "Save to a List" above "Add to Cart" ------------------
+  //
+  // Amazon renders the native "Add to List" split-button far below the buybox
+  // (#wishlistButtonStack: a default-list button + a ▼ caret that opens the
+  // multi-list chooser). We RELOCATE that real node above Add to Cart so
+  // a single real click reaches Amazon's own chooser and the user picks any
+  // named list. We MOVE the node (never clone): a clone's click is trusted but
+  // unbound, whereas moving preserves Amazon's a-declarative handler (verified
+  // live — the moved caret still loads the chooser). No background round-trip:
+  // the user's own trusted click is the entire mechanism, which is also why
+  // this sidesteps Amazon's anti-automation on programmatic list writes.
+
+  const STYX_PDP_ATL_FLAG = "styxAtlRelocated"; // dataset marker on the stack
+  const STYX_PDP_ATL_STYLE_ID = "styx-pdp-atl-style";
+
+  function stylePdpAddToListButton(stack) {
+    // Keep Amazon's button DOM and classes intact so its bound handlers and
+    // split-button behavior survive. These overrides are visual only.
+    if (!document.getElementById(STYX_PDP_ATL_STYLE_ID)) {
+      const style = document.createElement("style");
+      style.id = STYX_PDP_ATL_STYLE_ID;
+      style.textContent = `
+        #wishlistButtonStack[data-styx-atl-relocated="1"] {
+          width: 100%;
+          margin: 0 0 10px !important;
+          padding: 0;
+          border-radius: 100px;
+          box-shadow: 0 2px 5px rgba(15, 23, 42, 0.18);
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button {
+          background: #2f855a !important;
+          border-color: #246b47 !important;
+          box-shadow: none !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button-inner {
+          background: transparent !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button-text {
+          color: #ffffff !important;
+          font-weight: 700 !important;
+          text-shadow: none !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button:hover {
+          background: #276749 !important;
+          border-color: #1f5a3d !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"]:focus-within {
+          outline: 3px solid rgba(47, 133, 90, 0.32);
+          outline-offset: 2px;
+        }
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    const label =
+      stack.querySelector("#wishListMainButton-announce") ||
+      stack.querySelector("#wishListMainButton .a-button-text");
+    if (label) label.textContent = "Save to a List";
+  }
+
+  function injectPdpAddToListButton() {
+    const atc = document.getElementById("add-to-cart-button");
+    if (!atc) return false; // not a buyable PDP (or buybox not hydrated yet)
+
+    const stack = document.getElementById("wishlistButtonStack");
+    if (!stack) return false; // wishlist widget not rendered (yet)
+
+    // Put the list action immediately before the Add-to-Cart stack.
+    const atcStack = atc.closest(".a-button-stack") || atc.parentElement;
+    if (!atcStack || !atcStack.parentNode) return false;
+
+    // Idempotent: already relocated and sitting immediately before Add to Cart.
+    if (
+      stack.dataset[STYX_PDP_ATL_FLAG] === "1" &&
+      atcStack.previousElementSibling === stack
+    ) {
+      stylePdpAddToListButton(stack);
+      return true;
+    }
+
+    atcStack.parentNode.insertBefore(stack, atcStack);
+    stack.dataset[STYX_PDP_ATL_FLAG] = "1";
+    stylePdpAddToListButton(stack);
+    dlog("[Styx ATC] relocated Save-to-a-List above Add to Cart");
+    return true;
+  }
+
+  function initPdpAddToList() {
+    injectPdpAddToListButton();
+    // The buybox hydrates after document_idle and re-renders on variant
+    // changes and soft navigations — each can spawn a fresh, unrelocated
+    // widget. Keep a debounced, idempotent re-check running, scoped to the
+    // stable product container to bound the cost.
+    const root = document.getElementById("dp") || document.documentElement;
+    let timer = 0;
+    const mo = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        injectPdpAddToListButton();
+      }, 250);
+    });
+    mo.observe(root, { childList: true, subtree: true });
+  }
+
   // ---- Boot ---------------------------------------------------------------
 
   // Always install the ATC intercept on Amazon pages. It's a single
@@ -2252,4 +2357,5 @@
   hydrateCachesFromStorage();
   if (onUpsell) watchUpsellClicks();
   if (isWishlistPage()) initWishlist();
+  if (onProduct) initPdpAddToList();
 })();

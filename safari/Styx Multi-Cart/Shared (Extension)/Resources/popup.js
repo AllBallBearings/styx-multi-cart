@@ -53,6 +53,10 @@
   const $empty = document.getElementById("mc-empty");
   const $toast = document.getElementById("mc-toast");
   const $template = document.getElementById("mc-item-template");
+  const $amazonListTemplate = document.getElementById("mc-amazon-list-template");
+  const $amazonListsRefresh = document.getElementById("mc-amazon-lists-refresh");
+  const $amazonListsStatus = document.getElementById("mc-amazon-lists-status");
+  const $amazonLists = $list;
   const $diagnose = document.getElementById("mc-diagnose");
   const $debugOutput = document.getElementById("mc-debug-output");
   const $debugPanel = document.getElementById("mc-debug");
@@ -183,7 +187,7 @@
   // ---- Messaging ---------------------------------------------------------
 
   /** Wraps chrome.runtime.sendMessage with a Promise + nicer error shape. */
-  function send(message) {
+  function send(message, timeoutMs = 10000) {
     return new Promise((resolve) => {
       let done = false;
       const timeout = setTimeout(() => {
@@ -193,7 +197,7 @@
           ok: false,
           error: "No response from extension service worker.",
         });
-      }, 10000);
+      }, timeoutMs);
 
       chrome.runtime.sendMessage(message, (response) => {
         if (done) return;
@@ -591,6 +595,32 @@
     node.querySelector(".mc-item-meta").textContent =
       `${host} · saved ${formatRelative(cart.savedAt)}`;
 
+    // Amazon-list sync state. When linked, show a "Synced · View list" line
+    // and relabel the save button to make re-syncing obvious.
+    const syncEl = node.querySelector(".mc-item-sync");
+    const saveBtn = node.querySelector('button[data-action="save-to-list"]');
+    if (syncEl && cart.amazonListId && cart.syncedAt) {
+      syncEl.hidden = false;
+      syncEl.innerHTML = "";
+      const tick = document.createElement("span");
+      tick.className = "mc-sync-ok";
+      tick.textContent = `✓ Synced ${formatRelative(cart.syncedAt)}`;
+      syncEl.appendChild(tick);
+      if (cart.amazonListUrl) {
+        syncEl.appendChild(document.createTextNode(" · "));
+        const a = document.createElement("a");
+        a.className = "mc-sync-link";
+        a.href = cart.amazonListUrl;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "View list";
+        syncEl.appendChild(a);
+      }
+      if (saveBtn) saveBtn.textContent = "Update Amazon List";
+    } else if (syncEl) {
+      syncEl.hidden = true;
+    }
+
     const thumbs = node.querySelector(".mc-item-thumbs");
     renderCartThumbs(thumbs, cart);
 
@@ -598,11 +628,13 @@
     // setting `disabled` ensures keyboard / screen-reader users see the
     // locked state, and the delegated click handlers below skip them.
     if (isLocked) {
-      const btn = node.querySelector('button[data-action="restore"]');
-      if (btn) {
+      const lockedBtns = node.querySelectorAll(
+        'button[data-action="restore"], button[data-action="save-to-list"]'
+      );
+      lockedBtns.forEach((btn) => {
         btn.setAttribute("disabled", "");
         btn.setAttribute("title", "Locked — renew Premium to use this cart");
-      }
+      });
     }
 
     return node;
@@ -716,12 +748,7 @@
   }
 
   async function refresh() {
-    const res = await send({ type: "MC_LIST_CARTS" });
-    if (!res.ok) return;
-    if (res.entitlement) {
-      currentEntitlement = Object.assign(currentEntitlement, res.entitlement);
-    }
-    render(res.carts || []);
+    await loadAmazonLists();
   }
 
   // ---- Settings: ATC intercept toggle ------------------------------------
@@ -1414,6 +1441,34 @@
           toast(res.error || "Could not switch carts", "error");
         }
       });
+    } else if (action === "save-to-list") {
+      const cartName =
+        li.querySelector(".mc-item-name").textContent.trim() || "this cart";
+      const cart = cartCache.get(id);
+      const isUpdate = !!(cart && cart.amazonListId && cart.syncedAt);
+      const ok = await confirmDialog({
+        title: isUpdate ? "Update Amazon list?" : "Save to Amazon list?",
+        message: isUpdate
+          ? `Re-sync "${cartName}" to its Amazon wish list. Styx opens Amazon tabs to add the items — keep them open until it finishes.`
+          : `Create a private Amazon wish list named "${cartName}" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.`,
+        okLabel: isUpdate ? "Update" : "Save to Amazon",
+      });
+      if (!ok) return;
+      withLoading(button, async () => {
+        toast("Saving to your Amazon list — Styx is opening Amazon tabs. This can take a moment…");
+        // Long timeout: the save creates a list + opens a product tab and only
+        // returns when done. Result carries added/failed/reason for display.
+        const res = await send({ type: "MC_SAVE_CART_TO_LIST", cartId: id }, 120000);
+        if (res.ok) {
+          const msg = res.failed
+            ? `Saved ${res.added}/${res.total}. ${res.failed} couldn't be added.`
+            : `Saved ${res.added} item${res.added === 1 ? "" : "s"} to your Amazon list.`;
+          toast(msg);
+          await refresh();
+        } else if (!handleEntitlementError(res)) {
+          toast(res.error || "Could not save to Amazon", "error");
+        }
+      });
     } else if (action === "rename") {
       const current = li.querySelector(".mc-item-name").textContent;
       const next = await promptDialog({
@@ -1456,6 +1511,197 @@
       });
     }
   });
+
+  // ---- Amazon Lists dashboard --------------------------------------------
+
+  const amazonListCache = new Map();
+  let amazonListsLoaded = false;
+  let amazonListsLoadPromise = null;
+
+  function listHostname(url) {
+    try {
+      return new URL(url).hostname;
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function setAmazonListExpanded(card, expanded) {
+    const toggle = card.querySelector('[data-action="toggle-amazon-list"]');
+    const thumbs = card.querySelector(".mc-item-thumbs");
+    const actions = card.querySelector(".mc-amazon-list-actions");
+    card.classList.toggle("mc-amazon-list-expanded", expanded);
+    toggle.setAttribute("aria-expanded", String(expanded));
+    if (thumbs) thumbs.hidden = !expanded;
+    if (actions) actions.hidden = !expanded;
+  }
+
+  function updateAmazonListCard(card, list) {
+    const items = list.items || [];
+    const totalQty = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+    const count = card.querySelector(".mc-item-count");
+    count.textContent = `${items.length} item${items.length === 1 ? "" : "s"} · ${totalQty} qty`;
+    const status = card.querySelector(".mc-amazon-list-load-status");
+    status.hidden = true;
+    status.textContent = "";
+    renderCartThumbs(card.querySelector(".mc-item-thumbs"), list);
+    const addAll = card.querySelector('[data-action="load-amazon-list-cart"]');
+    addAll.disabled = items.length === 0;
+    addAll.title = items.length
+      ? `Add all ${items.length} list items to your active Amazon cart`
+      : "This list has no readable items";
+  }
+
+  async function ensureAmazonListItems(card, forceRefresh = false) {
+    const id = card.dataset.listId;
+    const shouldForce = forceRefresh || card.dataset.forceRefresh === "1";
+    const cached = amazonListCache.get(id);
+    if (cached && Array.isArray(cached.items) && !shouldForce) return cached;
+
+    const status = card.querySelector(".mc-amazon-list-load-status");
+    status.hidden = false;
+    status.textContent = "Loading items from Amazon…";
+    const res = await send(
+      {
+        type: "MC_GET_AMAZON_LIST",
+        listId: id,
+        host: card.dataset.host || "",
+        forceRefresh: shouldForce,
+      },
+      30000
+    );
+    if (!res.ok || !res.list) {
+      status.textContent = res.error || "Could not load this Amazon list.";
+      status.classList.add("mc-amazon-list-load-error");
+      return null;
+    }
+
+    status.classList.remove("mc-amazon-list-load-error");
+    const list = Object.assign({}, cached || {}, res.list, {
+      id: `amazon:${id}`,
+      access: "readonly",
+    });
+    amazonListCache.set(id, list);
+    cartCache.set(list.id, list); // reuse the proven read-only thumbnail renderer
+    card.dataset.id = list.id;
+    delete card.dataset.forceRefresh;
+    updateAmazonListCard(card, list);
+    return list;
+  }
+
+  function renderAmazonListCard(list, forceItems = false) {
+    const node = $amazonListTemplate.content.firstElementChild.cloneNode(true);
+    const fullHost = listHostname(list.url);
+    node.dataset.listId = list.listId;
+    node.dataset.host = fullHost;
+    if (forceItems) node.dataset.forceRefresh = "1";
+    const nameEl = node.querySelector(".mc-amazon-list-name");
+    nameEl.textContent = list.name || "Amazon list";
+    nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
+    node.querySelector(".mc-amazon-list-meta").textContent =
+      `${fullHost.replace(/^www\./, "")} · Amazon Wish List`;
+    const open = node.querySelector(".mc-amazon-list-open");
+    open.href = list.url || "#";
+    amazonListCache.set(list.listId, Object.assign({}, list));
+    return node;
+  }
+
+  async function loadAmazonLists(forceRefresh = false) {
+    if (!$amazonLists) return;
+    if (amazonListsLoaded && !forceRefresh) return;
+    if (amazonListsLoadPromise && !forceRefresh) return amazonListsLoadPromise;
+
+    amazonListsLoadPromise = (async () => {
+      $amazonListsStatus.hidden = false;
+      $amazonListsStatus.textContent = "Loading your Amazon lists…";
+      $amazonLists.innerHTML = "";
+      const res = await send({ type: "MC_LIST_AMAZON_LISTS" });
+      if (!res.ok) {
+        $amazonListsStatus.textContent =
+          res.error || "Couldn't load your Amazon lists.";
+        $empty.hidden = true;
+        return;
+      }
+      const lists = res.lists || [];
+      $count.textContent = String(lists.length);
+      if (!lists.length) {
+        $amazonListsStatus.hidden = true;
+        $empty.hidden = false;
+        amazonListsLoaded = true;
+        return;
+      }
+      $empty.hidden = true;
+      $amazonListsStatus.hidden = true;
+      if (forceRefresh) {
+        amazonListCache.clear();
+        cartCache.clear();
+        expandedThumbs.clear();
+      }
+      lists.forEach((list) =>
+        $amazonLists.appendChild(renderAmazonListCard(list, forceRefresh))
+      );
+      amazonListsLoaded = true;
+    })();
+
+    try {
+      await amazonListsLoadPromise;
+    } finally {
+      amazonListsLoadPromise = null;
+    }
+  }
+
+  if ($amazonListsRefresh) {
+    $amazonListsRefresh.addEventListener("click", () => {
+      amazonListsLoaded = false;
+      withLoading($amazonListsRefresh, () => loadAmazonLists(true));
+    });
+  }
+
+  if ($amazonLists) {
+    $amazonLists.addEventListener("click", async (e) => {
+      const btn = e.target.closest(
+        'button[data-action="toggle-amazon-list"], button[data-action="load-amazon-list-cart"]'
+      );
+      if (!btn) return;
+      const li = btn.closest("li.mc-amazon-list-card");
+      if (!li) return;
+      const action = btn.dataset.action;
+
+      if (action === "toggle-amazon-list") {
+        const isExpanded = btn.getAttribute("aria-expanded") === "true";
+        if (isExpanded) {
+          setAmazonListExpanded(li, false);
+          return;
+        }
+        setAmazonListExpanded(li, true);
+        await withLoading(btn, () => ensureAmazonListItems(li));
+        return;
+      }
+
+      const list = await ensureAmazonListItems(li);
+      if (!list || !list.items.length) return;
+      const name = li.querySelector(".mc-amazon-list-name").textContent.trim();
+      const ok = await confirmDialog({
+        title: "Add this list to your cart?",
+        message: `Add all ${list.items.length} items from "${name}" to your active Amazon cart? Existing cart items will stay.`,
+        okLabel: "Add all",
+      });
+      if (!ok) return;
+      await withLoading(btn, async () => {
+        const res = await send({
+          type: "MC_WISHLIST_ADD_ALL",
+          items: list.items,
+          host: list.host || li.dataset.host,
+        });
+        if (res.ok) {
+          toast(`Adding ${list.items.length} item${list.items.length === 1 ? "" : "s"} to your Amazon cart…`);
+          if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
+        } else {
+          toast(res.error || "Could not add this list to your cart.", "error");
+        }
+      });
+    });
+  }
 
   // ---- Combine bar / modal wiring ----------------------------------------
 
@@ -1604,6 +1850,44 @@
   const DEV_FLAG_KEY = "mc.dev.v1";
   const ENT_KEY = "mc.entitlement.v1";
 
+  /* MC_DEBUG_ENT_START */
+  const DAY_MS = 86400000;
+
+  function entPresets(now) {
+    return {
+      premium: {
+        tier: "premium",
+        premiumUntil: now + 365 * DAY_MS,
+        autoRenew: true,
+        source: "dev",
+        lastChecked: now,
+      },
+      "premium-warn": {
+        // Premium, 5 days from expiry, auto-renew off → triggers warning paths.
+        tier: "premium",
+        premiumUntil: now + 5 * DAY_MS,
+        autoRenew: false,
+        source: "dev",
+        lastChecked: now,
+      },
+      lapsed: {
+        // Was premium, expired yesterday → top-N editable, rest read-only.
+        tier: "premium",
+        premiumUntil: now - 1 * DAY_MS,
+        autoRenew: false,
+        source: "dev",
+        lastChecked: now,
+      },
+      free: {
+        tier: "free",
+        premiumUntil: null,
+        autoRenew: false,
+        source: null,
+        lastChecked: now,
+      },
+    };
+  }
+  /* MC_DEBUG_ENT_END */
 
   function formatEntForDisplay(ent) {
     if (!ent) return "(none)";
@@ -1701,6 +1985,45 @@
     });
   })();
 
+  /* MC_DEBUG_ENT_START */
+  // Button delegation inside the debug entitlement section. (Stripped from
+  // production builds along with the buttons in popup.html.)
+  if ($debugPanel) {
+    $debugPanel.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-debug-ent]");
+      if (!btn) return;
+      const action = btn.dataset.debugEnt;
+      const now = Date.now();
+      if (action === "reset-dismiss") {
+        try {
+          await chrome.storage.local.remove(DISMISS_KEY);
+          uiDismissed = { tierStrip: null, lapsedBanner: null };
+          toast("Dismissed flags cleared", "ok");
+          await refresh();
+        } catch (err) {
+          toast(`Reset failed: ${err.message}`, "error");
+        }
+        return;
+      }
+      const presets = entPresets(now);
+      const next = presets[action];
+      if (!next) return;
+      try {
+        await chrome.storage.local.set({ [ENT_KEY]: next });
+        // Reset dismissed UI on entitlement state change so banners come back.
+        uiDismissed = { tierStrip: null, lapsedBanner: null };
+        await chrome.storage.local.set({
+          [DISMISS_KEY]: uiDismissed,
+        });
+        await refreshDebugEntDisplay();
+        await refresh();
+        toast(`Entitlement → ${action}`, "ok");
+      } catch (err) {
+        toast(`Failed: ${err.message}`, "error");
+      }
+    });
+  }
+  /* MC_DEBUG_ENT_END */
 
   // Assemble a paste-able diagnostic report: extension version + state
   // snapshot + the cross-context log ring (SW, content scripts, popup). The
@@ -2049,6 +2372,91 @@
       toast("Developer options unlocked", "ok");
     }
   });
+
+  // ---- Support module ------------------------------------------------------
+  // Subtle bottom-right life-buoy. Opens a small popover linking to the GitHub
+  // issue tracker and the reporting guide. The "Report a bug" link is built at
+  // open-time so we can pre-fill the new-issue body with the extension version
+  // and browser string — the two things we always end up asking reporters for.
+  const $support = document.getElementById("mc-support");
+  const $supportToggle = document.getElementById("mc-support-toggle");
+  const $supportPop = document.getElementById("mc-support-pop");
+  const $supportReport = document.getElementById("mc-support-report");
+  const NEW_ISSUE_URL =
+    "https://github.com/AllBallBearings/styx-multi-cart/issues/new";
+
+  function buildReportUrl() {
+    let version = "unknown";
+    try {
+      version = chrome.runtime.getManifest().version;
+    } catch (_) {}
+    const ua = (navigator && navigator.userAgent) || "unknown";
+    const body =
+      "**What happened?**\n" +
+      "_A clear description of the bug._\n\n" +
+      "**Steps to reproduce**\n" +
+      "1. \n2. \n3. \n\n" +
+      "**What did you expect to happen?**\n\n\n" +
+      "**Screenshots**\n" +
+      "_If it helps, drag an image in here._\n\n" +
+      "---\n" +
+      "- Extension version: " +
+      version +
+      "\n- Browser: " +
+      ua +
+      "\n";
+    return (
+      NEW_ISSUE_URL +
+      "?labels=bug&body=" +
+      encodeURIComponent(body)
+    );
+  }
+
+  function setSupportOpen(open) {
+    if (!$supportToggle || !$supportPop) return;
+    if (open && $supportReport) {
+      // Refresh the prefilled link each time the menu opens.
+      $supportReport.href = buildReportUrl();
+    }
+    $supportToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      $supportPop.hidden = false;
+      $supportPop.removeAttribute("inert");
+    } else {
+      $supportPop.setAttribute("inert", "");
+      $supportPop.hidden = true;
+    }
+  }
+
+  function isSupportOpen() {
+    return !!$supportPop && !$supportPop.hidden;
+  }
+
+  if ($supportToggle && $supportPop) {
+    $supportToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setSupportOpen(!isSupportOpen());
+    });
+
+    // Clicking a link opens a new tab; close the popover so it isn't left
+    // hanging open behind it (matters in the side panel, which stays alive).
+    $supportPop.addEventListener("click", (e) => {
+      if (e.target.closest("a")) setSupportOpen(false);
+    });
+
+    // Dismiss on outside click or Escape, like the other popovers.
+    document.addEventListener("click", (e) => {
+      if (isSupportOpen() && $support && !$support.contains(e.target)) {
+        setSupportOpen(false);
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && isSupportOpen()) {
+        setSupportOpen(false);
+        $supportToggle.focus();
+      }
+    });
+  }
 
   // ---- Dismissal persistence -----------------------------------------------
 

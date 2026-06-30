@@ -12,6 +12,9 @@ import {
   normalizeUrlForWait,
   buildBulkAddUrl,
   chunkItemsForBulk,
+  backfillCartSyncFields,
+  parseAmazonListId,
+  amazonListUrl,
   AMAZON_TLDS,
   PENDING_ATC_TTL_MS,
   UPSELL_TTL_MS,
@@ -298,5 +301,85 @@ describe("chunkItemsForBulk", () => {
 
   it("returns an empty array for an empty input", () => {
     expect(chunkItemsForBulk([])).toEqual([]);
+  });
+});
+
+describe("backfillCartSyncFields", () => {
+  it("adds null sync fields to carts that never synced", () => {
+    const carts = [{ id: "a", name: "x", items: [] }];
+    backfillCartSyncFields(carts);
+    expect(carts[0].amazonListId).toBeNull();
+    expect(carts[0].amazonListUrl).toBeNull();
+    expect(carts[0].syncedAt).toBeNull();
+  });
+
+  it("preserves existing sync fields", () => {
+    const carts = [
+      { id: "a", amazonListId: "L1", amazonListUrl: "u", syncedAt: 123 },
+    ];
+    backfillCartSyncFields(carts);
+    expect(carts[0].amazonListId).toBe("L1");
+    expect(carts[0].amazonListUrl).toBe("u");
+    expect(carts[0].syncedAt).toBe(123);
+  });
+
+  it("returns the same array and tolerates junk entries", () => {
+    const carts = [null, { id: "b" }, 5];
+    const out = backfillCartSyncFields(carts);
+    expect(out).toBe(carts);
+    expect(carts[1].amazonListId).toBeNull();
+  });
+
+  it("returns non-arrays unchanged", () => {
+    expect(backfillCartSyncFields(null)).toBeNull();
+  });
+});
+
+describe("parseAmazonListId", () => {
+  it("parses the modern /hz/wishlist/ls/<id> form", () => {
+    expect(
+      parseAmazonListId("/hz/wishlist/ls/3ABCXYZ123?ref_=foo")
+    ).toBe("3ABCXYZ123");
+  });
+
+  it("parses a full URL", () => {
+    expect(
+      parseAmazonListId("https://www.amazon.com/hz/wishlist/ls/H2K9QLP")
+    ).toBe("H2K9QLP");
+  });
+
+  it("parses the legacy /gp/registry/wishlist/<id> form", () => {
+    expect(
+      parseAmazonListId("https://www.amazon.com/gp/registry/wishlist/2OLDID9")
+    ).toBe("2OLDID9");
+  });
+
+  it("parses a listId query param", () => {
+    expect(parseAmazonListId("/anything?listId=QP4RAM5")).toBe("QP4RAM5");
+  });
+
+  it("returns null when no id is present", () => {
+    expect(parseAmazonListId("/hz/wishlist/")).toBeNull();
+    expect(parseAmazonListId("/hz/wishlist/ls/?ref_=topnav_storetab_wl")).toBeNull();
+    expect(parseAmazonListId("/hz/wishlist/ls/ref=cm_wl_your_lists")).toBeNull();
+    expect(parseAmazonListId("")).toBeNull();
+    expect(parseAmazonListId(null)).toBeNull();
+  });
+});
+
+describe("amazonListUrl", () => {
+  it("builds a canonical list URL and re-adds www", () => {
+    expect(amazonListUrl("www.amazon.com", "L1")).toBe(
+      "https://www.amazon.com/hz/wishlist/ls/L1"
+    );
+    expect(amazonListUrl("amazon.co.uk", "L2")).toBe(
+      "https://www.amazon.co.uk/hz/wishlist/ls/L2"
+    );
+  });
+
+  it("defaults a missing host to www.amazon.com", () => {
+    expect(amazonListUrl(undefined, "L3")).toBe(
+      "https://www.amazon.com/hz/wishlist/ls/L3"
+    );
   });
 });

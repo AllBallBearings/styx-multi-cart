@@ -32,7 +32,7 @@ const REPO_ROOT = path.resolve(path.dirname(__filename), "..", "..");
  *     and the popup's direct reads (mc.settings.v1) work.
  *
  * `initial` is a serializable object passed in to seed both stores. Shape:
- *   { carts: [...], settings: { interceptAtc, restoring, theme } }
+ *   { carts: [...], amazonLists: [...], settings: { interceptAtc, restoring, theme } }
  */
 function buildInitScript(initial) {
   const seed = JSON.stringify(initial || {});
@@ -50,6 +50,7 @@ function buildInitScript(initial) {
       // In-memory backend state.
       const store = {
         [STORAGE_KEY]: Array.isArray(seed.carts) ? seed.carts : [],
+        amazonLists: Array.isArray(seed.amazonLists) ? seed.amazonLists : [],
         [SETTINGS_KEY]: Object.assign(
           {
             interceptAtc: true,
@@ -82,6 +83,36 @@ function buildInitScript(initial) {
           return;
         }
         switch (message.type) {
+          case "MC_LIST_AMAZON_LISTS":
+            respond({
+              ok: true,
+              lists: store.amazonLists.map((list) => ({
+                listId: list.listId,
+                name: list.name,
+                count: Array.isArray(list.items) ? list.items.length : null,
+                url: list.url || "https://www.amazon.com/hz/wishlist/ls/" + list.listId,
+              })),
+            });
+            return;
+
+          case "MC_GET_AMAZON_LIST": {
+            const list = store.amazonLists.find((entry) => entry.listId === message.listId);
+            if (!list) { respond({ ok: false, error: "list not found" }); return; }
+            respond({
+              ok: true,
+              list: Object.assign(
+                { host: "www.amazon.com", items: [] },
+                list,
+                { items: Array.isArray(list.items) ? list.items.slice() : [] }
+              ),
+            });
+            return;
+          }
+
+          case "MC_WISHLIST_ADD_ALL":
+            respond({ ok: true, started: true, total: (message.items || []).length });
+            return;
+
           case "MC_LIST_CARTS":
             respond({ ok: true, carts: store[STORAGE_KEY].slice() });
             return;
@@ -327,9 +358,13 @@ export const test = base.extend({
       // load for this page, including the first navigation.
       await page.addInitScript(buildInitScript(initial));
       await page.goto(`chrome-extension://${extensionId}/popup.html`);
-      // Wait until the popup's first refresh() finished — the list count
-      // element is the cheapest signal that initial render happened.
-      await page.waitForSelector("#mc-list-count");
+      // Wait until the Amazon-list dashboard's initial discovery request has
+      // completed, including the empty-list case where the count stays zero.
+      await page.waitForFunction(() =>
+        Array.isArray(window.__mcMessageLog) &&
+        window.__mcMessageLog.some((message) => message.type === "MC_LIST_AMAZON_LISTS")
+      );
+      await page.waitForTimeout(20);
       return page;
     }
     await use(openPopup);

@@ -160,6 +160,14 @@ async function readCarts() {
       c.lastUsedAt = Number.isFinite(sa) ? sa : 0;
     }
   }
+  // Normalize the Amazon-list sync fields. Mirrored from
+  // lib/helpers.js#backfillCartSyncFields — keep in sync.
+  for (const c of carts) {
+    if (!c || typeof c !== "object") continue;
+    if (!("amazonListId" in c)) c.amazonListId = null;
+    if (!("amazonListUrl" in c)) c.amazonListUrl = null;
+    if (!("syncedAt" in c)) c.syncedAt = null;
+  }
   return carts;
 }
 
@@ -948,6 +956,23 @@ function isAmazonCartUrl(url) {
 
 function isAmazonUrl(url) {
   return /(^|\.)amazon\.[a-z.]+\//i.test(url || "");
+}
+
+// Amazon wish-list helpers. Mirrored from lib/helpers.js — keep in sync.
+function parseAmazonListId(href) {
+  if (!href) return null;
+  const s = String(href);
+  const m =
+    s.match(/\/hz\/wishlist\/ls\/([A-Z0-9]+)/i) ||
+    s.match(/\/gp\/registry\/wishlist\/([A-Z0-9]+)/i) ||
+    s.match(/[?&]listId=([A-Z0-9]+)/i);
+  return m ? m[1] : null;
+}
+
+function amazonListUrl(host, listId) {
+  const h = normalizeAmazonHost(host);
+  const full = h.startsWith("amazon.") ? `www.${h}` : h;
+  return `https://${full}/hz/wishlist/ls/${listId}`;
 }
 
 async function inferAmazonHost() {
@@ -3320,7 +3345,820 @@ async function pageScrapeCart() {
   }
 }
 
+// ---- Amazon list (wish list) sync -----------------------------------------
+//
+// Mirror a saved cart into an Amazon wish list so it follows the user across
+// devices, and pull the user's existing lists back into the popup. The READ
+// paths (list discovery, single-list import) reuse the proven wishlist
+// selectors from observer.js and are reliable. The WRITE paths (create list,
+// add item, set quantity) drive Amazon's DOM best-effort; their selectors are
+// defensive but should be confirmed against live traffic (see the "endpoint
+// spike" note in the feature plan) and they fail loud rather than silently.
+
+const AMAZON_LISTS_PATH = "/hz/wishlist/ls";
+const AMAZON_LIST_READ_CACHE_MS = 5 * 60 * 1000;
+const amazonListReadCache = new Map();
+
+/**
+ * Open a silent background tab at `url`, wait for it to load, run `fn(tabId)`,
+ * then close the tab (unless keepOpen). Mirrors the tab strategy in
+ * scrapeCartInBackground but factored out for the list flows.
+ */
+async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false } = {}) {
+  const tab = await chrome.tabs.create({ url, active: false });
+  try {
+    await waitForTabReload(tab.id, timeoutMs);
+    return await fn(tab.id, tab);
+  } finally {
+    if (!keepOpen) {
+      try { await chrome.tabs.remove(tab.id); } catch (_e) { /* already gone */ }
+    }
+  }
+}
+
+/** Scrape the user's wish lists from the "Your Lists" index page. */
+async function listAmazonLists(preferredHost) {
+  const host = preferredHost || (await inferAmazonHost());
+  const url = `https://${host}${AMAZON_LISTS_PATH}`;
+  const data = await runInAmazonTab(
+    url,
+    async (tabId) => {
+      const res = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pageScrapeAmazonLists,
+      });
+      return (res && res[0] && res[0].result) || { lists: [] };
+    },
+    { timeoutMs: 12000 }
+  );
+  if (data.error) throw new Error(data.error);
+  return (data.lists || []).map((l) => ({
+    listId: l.listId,
+    name: l.name,
+    count: l.count,
+    url: l.listId ? amazonListUrl(host, l.listId) : l.url,
+  }));
+}
+
+/** True if `listId` still appears among the user's lists. */
+async function amazonListExists(host, listId) {
+  const lists = await listAmazonLists(host).catch(() => []);
+  return lists.some((l) => l.listId === listId);
+}
+
+/** Read a single wish list's items, shaped like saved-cart items. */
+async function readAmazonList(listId, preferredHost, forceRefresh = false) {
+  const host = preferredHost || (await inferAmazonHost());
+  const cacheKey = `${host}:${listId}`;
+  const cached = amazonListReadCache.get(cacheKey);
+  if (
+    !forceRefresh &&
+    cached &&
+    Date.now() - cached.cachedAt < AMAZON_LIST_READ_CACHE_MS
+  ) {
+    return cached.value;
+  }
+  const url = amazonListUrl(host, listId);
+  const data = await runInAmazonTab(
+    url,
+    async (tabId) => {
+      // Lists lazy-load on scroll; give the first paint a beat before scraping.
+      await sleep(900);
+      const res = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pageScrapeSingleList,
+      });
+      return (res && res[0] && res[0].result) || { items: [] };
+    },
+    { timeoutMs: 15000 }
+  );
+  if (data.error) throw new Error(data.error);
+  const items = (data.items || [])
+    .filter((it) => it && it.asin)
+    .map((it) => ({
+      asin: String(it.asin).toUpperCase(),
+      title: it.title || "(untitled)",
+      quantity: Math.max(1, Math.min(99, Number(it.quantity) || 1)),
+      price: "",
+      image: it.image || "",
+      url: it.url || `https://${host}/dp/${it.asin}`,
+      variantLabel: "",
+    }));
+  const value = { host, name: data.name || "Amazon list", listId, url, items };
+  amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+  return value;
+}
+
+/** Read a list for the legacy local-cart import flow. */
+async function importAmazonListToCart(listId, preferredHost) {
+  return readAmazonList(listId, preferredHost);
+}
+
+/** Create a new wish list named `name`; returns { listId, listUrl }. */
+async function createAmazonList(host, name) {
+  const url = `https://${host}${AMAZON_LISTS_PATH}`;
+  return await runInAmazonTab(
+    url,
+    async (tabId) => {
+      let listId = null;
+
+      // Fast path: POST the confirmed create endpoint from the page context.
+      try {
+        const a = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageCreateListFetch,
+          args: [name],
+        });
+        const ar = a && a[0] && a[0].result;
+        if (ar && ar.ok && ar.listId) listId = ar.listId;
+      } catch (_e) { /* fall through to the DOM popover */ }
+
+      // Fallback: drive the create popover form by hand.
+      if (!listId) {
+        try {
+          const c = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: pageCreateList,
+            args: [name],
+          });
+          const cr = c && c[0] && c[0].result;
+          if (cr && cr.ok) {
+            await waitForTabReload(tabId, 15000).catch(() => {});
+            await sleep(1200);
+          }
+        } catch (_e) { /* the list may still have been created; resolve below */ }
+      }
+
+      // Resolve the id by matching the name on a fresh lists page. Covers both
+      // a fast-path response we couldn't parse and the DOM fallback.
+      if (!listId) {
+        await chrome.tabs.update(tabId, { url }).catch(() => {});
+        await waitForTabReload(tabId, 12000).catch(() => {});
+        await sleep(600);
+        const f = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageFindListByName,
+          args: [name],
+        });
+        const fr = f && f[0] && f[0].result;
+        if (fr && fr.listId) listId = fr.listId;
+      }
+
+      if (listId) return { listId, listUrl: amazonListUrl(host, listId) };
+      throw new Error(
+        "Couldn't create the Amazon list (or read its id back). Open Your Lists and try Save again."
+      );
+    },
+    { keepOpen: false, timeoutMs: 15000 }
+  );
+}
+
+/**
+ * Fast path: add every ASIN to a list from a single product page via the
+ * confirmed additemtolist endpoint. Returns { added, failures }.
+ */
+async function addItemsToList(host, listId, asins) {
+  if (!asins.length) return { added: 0, failures: [] };
+  const url = `https://${host}/dp/${asins[0]}`;
+  return await runInAmazonTab(
+    url,
+    async (tabId) => {
+      const r = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pageAddItemsToList,
+        args: [listId, asins],
+      });
+      const rr = r && r[0] && r[0].result;
+      console.log("[Styx list-sync] addItems →", rr);
+      if (!rr) return { added: 0, failures: asins.map((a) => ({ asin: a, error: "no result" })) };
+      return { added: rr.added || 0, failures: rr.failures || [], diag: rr.diag };
+    },
+    { timeoutMs: 20000 }
+  );
+}
+
+/** Add one product to a wish list by driving the product page's Add-to-List. */
+async function addItemToList(host, listId, asin) {
+  const url = `https://${host}/dp/${String(asin).toUpperCase()}`;
+  return await runInAmazonTab(
+    url,
+    async (tabId) => {
+      const r = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pageAddToList,
+        args: [listId],
+      });
+      return (r && r[0] && r[0].result) || { ok: false, error: "no result" };
+    },
+    { timeoutMs: 15000 }
+  );
+}
+
+/** Best-effort pass to set desired quantities on a list (qty>1 items only). */
+async function setListQuantities(host, listId, items) {
+  const map = {};
+  for (const it of items) {
+    const q = Math.max(1, Math.min(99, Number(it.quantity) || 1));
+    if (q > 1) map[String(it.asin).toUpperCase()] = q;
+  }
+  if (!Object.keys(map).length) return;
+  const url = amazonListUrl(host, listId);
+  await runInAmazonTab(
+    url,
+    async (tabId) => {
+      await sleep(900);
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pageSetListQuantities,
+        args: [map],
+      });
+    },
+    { timeoutMs: 15000 }
+  );
+}
+
+/**
+ * Orchestrate "save this cart to an Amazon list": create-or-reuse the list,
+ * add every item, set quantities, then stamp the link onto the cart. Tolerant
+ * of partial failure — reports added/failed counts.
+ */
+async function saveCartToAmazonList(cart) {
+  const host = cart.host || "www.amazon.com";
+  const items = (cart.items || []).filter((it) => it && it.asin);
+  if (!items.length) return { ok: false, error: "This cart has no items to save." };
+
+  const label = cart.name ? `"${cart.name}"` : "cart";
+  setOpStatus(`Saving ${label} to Amazon`, "Preparing your list…");
+
+  // 1. Ensure a target list exists (reuse a prior link if it still exists).
+  let listId = cart.amazonListId || null;
+  if (listId && !(await amazonListExists(host, listId).catch(() => false))) {
+    listId = null; // the linked list was deleted on Amazon — recreate it.
+  }
+  if (!listId) {
+    const created = await createAmazonList(host, cart.name || "Styx cart");
+    listId = created.listId;
+  }
+  const listUrl = amazonListUrl(host, listId);
+  console.log("[Styx list-sync] target listId =", listId, "host =", host, "items =", items.length);
+
+  // 2. Add items. Fast path: one product tab fires a POST per ASIN to the
+  //    confirmed additemtolist endpoint. Stragglers fall back to the per-item
+  //    DOM driver.
+  const asins = items.map((it) => String(it.asin).toUpperCase());
+  let added = 0;
+  let failures = [];
+  let batchDiag = null;
+  setOpStatus(`Saving ${label} to Amazon`, `Adding ${asins.length} item${asins.length === 1 ? "" : "s"}…`);
+  try {
+    const batch = await addItemsToList(host, listId, asins);
+    added = batch.added || 0;
+    failures = batch.failures || [];
+    batchDiag = batch.diag || null;
+  } catch (e) {
+    failures = asins.map((a) => ({ asin: a, error: String((e && e.message) || e) }));
+  }
+
+  // Fallback for anything the batch missed: per-item DOM "Add to List".
+  if (failures.length) {
+    const retry = failures;
+    failures = [];
+    for (let i = 0; i < retry.length; i++) {
+      const asin = retry[i].asin;
+      setOpStatus(`Saving ${label} to Amazon`, `Retrying item ${i + 1} of ${retry.length}…`);
+      try {
+        const r = await addItemToList(host, listId, asin);
+        if (r && r.ok) added++;
+        else failures.push({ asin, error: (r && r.error) || "add failed" });
+      } catch (e) {
+        failures.push({ asin, error: String((e && e.message) || e) });
+      }
+    }
+  }
+
+  // 3. Best-effort desired-quantity pass. Degrades to qty 1 if Amazon's list
+  //    UI doesn't expose an inline quantity input.
+  try { await setListQuantities(host, listId, items); } catch (_e) { /* non-fatal */ }
+
+  // 4. Persist the list link so re-saving updates instead of duplicating.
+  //    Only stamp syncedAt (which drives the "Synced" badge) when something
+  //    actually landed — a 0-item save must not masquerade as synced.
+  const carts = await readCarts();
+  const target = carts.find((c) => c.id === cart.id);
+  if (target) {
+    target.amazonListId = listId;
+    target.amazonListUrl = listUrl;
+    if (added > 0) target.syncedAt = Date.now();
+    await writeCarts(carts);
+  }
+
+  const firstFail = failures[0];
+  const reason =
+    added === 0
+      ? (batchDiag && batchDiag.tokenFound === false
+          ? "No CSRF token found on the product page. "
+          : "") + (firstFail ? "First error: " + firstFail.error : "Nothing was added.")
+      : "";
+  console.log("[Styx list-sync] saveCart done", {
+    listId, added, total: items.length, failed: failures.length, batchDiag, reason,
+  });
+
+  return {
+    ok: added > 0,
+    listId,
+    listUrl,
+    added,
+    failed: failures.length,
+    total: items.length,
+    failures,
+    diag: batchDiag,
+    error: added === 0 ? reason : undefined,
+  };
+}
+
+// ---- Amazon list page-context scrapers/drivers ----------------------------
+// These run in the Amazon page via chrome.scripting.executeScript, so they
+// must be fully self-contained (no references to worker-scope helpers).
+
+/** Scrape wish lists from the "Your Lists" index. Returns { lists, error? }. */
+function pageScrapeAmazonLists() {
+  try {
+    const out = [];
+    const seen = new Set();
+    const anchors = document.querySelectorAll(
+      'a[href*="/wishlist/ls/"], a[href*="/registry/wishlist/"]'
+    );
+    anchors.forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      // Keep the modern and legacy URL shapes separate. The former optional
+      // `(?:ls/)?` expression could backtrack and misread navigation URLs as
+      // list ids (`/ls/` -> "ls", `/ls/ref=...` -> "ref"). Real Amazon list
+      // ids are at least seven alphanumeric characters.
+      const m =
+        href.match(/\/hz\/wishlist\/ls\/([A-Z0-9]{7,})(?:[/?#]|$)/i) ||
+        href.match(/\/gp\/registry\/wishlist\/([A-Z0-9]{7,})(?:[/?#]|$)/i);
+      const id = m ? m[1].toUpperCase() : null;
+      if (!id || seen.has(id)) return;
+
+      // A list-row anchor contains status labels such as "Default List" and
+      // "Public". Prefer the dedicated title child so those badges do not
+      // become part of the name shown in the extension.
+      const titleEl = a.querySelector(
+        "[data-list-name], .wl-list-entry-title, .a-size-base-plus, .a-text-bold"
+      );
+      let name = (
+        a.getAttribute("data-list-name") ||
+        (titleEl && (titleEl.getAttribute("data-list-name") || titleEl.textContent)) ||
+        a.textContent ||
+        ""
+      )
+        .trim()
+        .replace(/\s+/g, " ");
+      // Defensive fallback for alternate list-row markup without a title
+      // class. Strip only trailing Amazon status badges.
+      for (let i = 0; i < 3; i++) {
+        name = name.replace(/\s+(?:Default List|Public|Private|Shared)\s*$/i, "").trim();
+      }
+      if (!name || name.length > 120) return; // skip icon-only / chrome anchors
+      seen.add(id);
+      out.push({
+        listId: id,
+        name,
+        url: location.origin + "/hz/wishlist/ls/" + id,
+        count: null,
+      });
+    });
+    return { lists: out };
+  } catch (e) {
+    return { lists: [], error: String((e && e.message) || e) };
+  }
+}
+
+/** Scrape one wish list's items. Returns { name, items, error? }. */
+function pageScrapeSingleList() {
+  return (async () => {
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const startY = window.scrollY;
+    try {
+      // Amazon lazy-loads long lists. Walk toward the bottom until the page
+      // height settles, with a hard cap so one pathological list cannot hold
+      // the extension open indefinitely.
+      let stablePasses = 0;
+      let lastHeight = 0;
+      for (let pass = 0; pass < 20 && stablePasses < 3; pass++) {
+        const height = Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0
+        );
+        window.scrollTo(0, height);
+        await sleep(250);
+        const nextHeight = Math.max(
+          document.body ? document.body.scrollHeight : 0,
+          document.documentElement ? document.documentElement.scrollHeight : 0
+        );
+        stablePasses = nextHeight <= lastHeight ? stablePasses + 1 : 0;
+        lastHeight = nextHeight;
+      }
+
+    const nameEl = document.getElementById("profile-list-name");
+    const name = nameEl ? (nameEl.textContent || "").trim() : "";
+    const items = [];
+    const seen = new Set();
+    const lis = document.querySelectorAll(
+      "ul#g-items li[data-id], ol#g-items li[data-id], " +
+        "#g-items li[data-itemid], li.g-item-sortable, li[data-id][data-itemid]"
+    );
+    lis.forEach((li) => {
+      const link = li.querySelector(
+        'a[href*="/dp/"], a[href*="/gp/product/"], a[href*="/gp/aw/d/"]'
+      );
+      let asin = null;
+      if (link) {
+        const m = (link.getAttribute("href") || "").match(
+          /\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/i
+        );
+        asin = m ? m[1].toUpperCase() : null;
+      }
+      if (!asin || seen.has(asin)) return;
+      seen.add(asin);
+
+      let title = "";
+      const tEl = li.querySelector('[id^="itemName_"]') || link;
+      if (tEl) {
+        title = (tEl.getAttribute("title") || tEl.textContent || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 200);
+      }
+
+      let qty = 1;
+      const qEl = li.querySelector('[id^="itemRequested_"]');
+      if (qEl) {
+        const n = parseInt(String(qEl.textContent || "").replace(/\D+/g, ""), 10);
+        if (n > 0) qty = Math.min(n, 99);
+      }
+
+      let image = "";
+      const img = li.querySelector("img");
+      if (img) image = img.currentSrc || img.src || "";
+
+      items.push({ asin, title, quantity: qty, url: location.origin + "/dp/" + asin, image });
+    });
+      window.scrollTo(0, startY);
+      return { name, items };
+    } catch (e) {
+      window.scrollTo(0, startY);
+      return { name: "", items: [], error: String((e && e.message) || e) };
+    }
+  })();
+}
+
+/**
+ * Fast path: create a list via the confirmed endpoint, no DOM.
+ * Confirmed via network capture:
+ *   1. GET  /hz/wishlist/create?isPopover=1&createIngressName=DESKTOP_LIST_OF_LIST
+ *           → HTML fragment carrying the anti-csrftoken-a2z + sid.
+ *   2. POST /hz/wishlist/create/newlist
+ *           body listName, sid, vendorId=website.wishlist.profile,
+ *                privacyStatus=PRIVATE, listType=WishList, isJson=true
+ * Returns { ok, listId?, status?, tokenFound, snippet?, error? }.
+ */
+function pageCreateListFetch(name) {
+  return (async () => {
+    const out = { ok: false, tokenFound: false };
+    const TOK = /anti-csrftoken-a2z["'\s:=]+["']?([A-Za-z0-9+/=_-]{16,})/i;
+    try {
+      const pop = await fetch(
+        "/hz/wishlist/create?isPopover=1&createIngressName=DESKTOP_LIST_OF_LIST&_=" + Date.now(),
+        { headers: { accept: "text/html,*/*", "x-requested-with": "XMLHttpRequest" }, credentials: "include" }
+      );
+      const popHtml = await pop.text();
+      const tokM = popHtml.match(TOK) || document.documentElement.innerHTML.match(TOK);
+      const token = tokM ? tokM[1] : null;
+      out.tokenFound = !!token;
+      if (!token) { out.error = "no create token in popover"; return out; }
+      const sidM =
+        popHtml.match(/name="sid"[^>]*value="([^"]+)"/i) ||
+        popHtml.match(/(\d{3}-\d{7}-\d{7})/) ||
+        document.cookie.match(/session-id=([\d-]+)/);
+      const sid = sidM ? sidM[1] : null;
+      const body = new URLSearchParams({
+        listName: name,
+        vendorId: "website.wishlist.profile",
+        privacyStatus: "PRIVATE",
+        listType: "WishList",
+        isJson: "true",
+      });
+      if (sid) body.set("sid", sid);
+      const resp = await fetch("/hz/wishlist/create/newlist", {
+        method: "POST",
+        headers: {
+          "anti-csrftoken-a2z": token,
+          "content-type": "application/x-www-form-urlencoded",
+          "x-requested-with": "XMLHttpRequest",
+          accept: "*/*",
+        },
+        body: body.toString(),
+        credentials: "include",
+      });
+      out.status = resp.status;
+      const text = await resp.text();
+      out.snippet = text.slice(0, 300);
+      let listId = null;
+      try {
+        const j = JSON.parse(text);
+        listId =
+          j.listExternalId || j.externalId || j.listId || j.list_id || j.id ||
+          (j.list && (j.list.listId || j.list.externalId || j.list.id)) ||
+          (j.data && (j.data.listId || j.data.externalId || j.data.id)) ||
+          null;
+      } catch (_e) { /* not JSON — fall through to regex */ }
+      if (!listId) {
+        const idM =
+          text.match(/"(?:listExternalId|externalId|listId)"\s*:\s*"([A-Z0-9]+)"/i) ||
+          text.match(/\/hz\/wishlist\/ls\/([A-Z0-9]+)/i);
+        if (idM) listId = idM[1];
+      }
+      if (resp.ok && listId) { out.ok = true; out.listId = listId; }
+      else out.error = "no listId in create response (status " + resp.status + ")";
+      return out;
+    } catch (e) {
+      out.error = String((e && e.message) || e);
+      return out;
+    }
+  })();
+}
+
+/**
+ * Open + submit Amazon's Create-a-List form. Returns { ok, error? }.
+ *
+ * Confirmed via network capture: the "#createList" control opens a popover
+ * whose form is fetched by XHR (GET /hz/wishlist/create?isPopover=1), so the
+ * name input appears asynchronously — we poll for it rather than wait a fixed
+ * delay. Submitting the real form carries Amazon's CSRF token for us.
+ */
+function pageCreateList(name) {
+  return new Promise((resolve) => {
+    const q = (sels) => {
+      for (const s of sels) {
+        const el = document.querySelector(s);
+        if (el) return el;
+      }
+      return null;
+    };
+    const vis = (el) => !!(el && el.offsetParent !== null);
+    const findInput = () =>
+      q([
+        "input#list-name",
+        'input[name="listName"]',
+        'input[name="wl-list-name"]',
+        'input[name="newListName"]',
+        'input[aria-label*="List name" i]',
+        'input[placeholder*="List name" i]',
+        '.a-popover-wrapper input[type="text"]',
+        '.a-popover input[type="text"]',
+      ]);
+    const findSubmit = (input) =>
+      q([
+        "#submit-create-list",
+        'input[name="submit.create-list"]',
+        'button[name="submit.create-list"]',
+        "span#submit-create-list input",
+        '.a-popover-wrapper [type="submit"]',
+        '.a-popover [type="submit"]',
+        'button[type="submit"][aria-label*="Create" i]',
+        'input[type="submit"][aria-label*="Create" i]',
+      ]) ||
+      (input && input.form &&
+        input.form.querySelector('button[type="submit"], input[type="submit"]'));
+    try {
+      const trigger = q([
+        "#createList",
+        "#wl-redesign-create-list",
+        'a[data-csa-c-content-id="create-list"]',
+        'button[aria-label*="Create a List" i]',
+        'a[aria-label*="Create a List" i]',
+      ]);
+      if (!trigger) {
+        resolve({ ok: false, error: "Create-a-List trigger (#createList) not found." });
+        return;
+      }
+      trigger.click();
+      // The form loads into an a-popover via XHR — poll up to ~6s for it.
+      let tries = 0;
+      const timer = setInterval(() => {
+        const input = findInput();
+        if (input && vis(input)) {
+          clearInterval(timer);
+          input.focus();
+          input.value = name;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          const submit = findSubmit(input);
+          if (!submit) {
+            resolve({ ok: false, error: "Create-a-List submit button not found in popover." });
+            return;
+          }
+          submit.click();
+          resolve({ ok: true });
+          return;
+        }
+        if (++tries > 40) {
+          clearInterval(timer);
+          resolve({ ok: false, error: "Create-a-List form (popover) didn't appear." });
+        }
+      }, 150);
+    } catch (e) {
+      resolve({ ok: false, error: String((e && e.message) || e) });
+    }
+  });
+}
+
+/** Find a list id by exact name, or off the current URL after a create. */
+function pageFindListByName(name) {
+  try {
+    const here = location.pathname.match(/\/hz\/wishlist\/ls\/([A-Z0-9]+)/i);
+    if (here) return { listId: here[1] };
+    const want = String(name || "").trim().toLowerCase();
+    const anchors = document.querySelectorAll(
+      'a[href*="/wishlist/ls/"], a[href*="/registry/wishlist/"]'
+    );
+    for (const a of anchors) {
+      const m = (a.getAttribute("href") || "").match(
+        /\/(?:hz\/wishlist|gp\/registry\/wishlist)\/(?:ls\/)?([A-Z0-9]+)/i
+      );
+      if (!m) continue;
+      const t = (a.textContent || "").trim().toLowerCase();
+      if (t && t === want) return { listId: m[1] };
+    }
+    return { listId: null };
+  } catch (e) {
+    return { listId: null, error: String((e && e.message) || e) };
+  }
+}
+
+/**
+ * Fast path: add many ASINs to a list with one POST each, all from a single
+ * product page (same-origin, cookies + CSRF auto). Returns { ok, added, failures }.
+ *
+ * Confirmed via network capture:
+ *   POST /hz/wishlist/additemtolist
+ *   header anti-csrftoken-a2z
+ *   body   asin, vendorId=website.wishlist.detail.add, listExternalId=<listId>,
+ *          listType=wishlist, isAjax=1   (no quantity — add is always qty 1)
+ * Runs on a /dp/<asin> page because that's where the wishlist widget embeds a
+ * token valid for this endpoint. One token is reused for the batch; failures
+ * are reported per-asin so the caller can fall back to the DOM driver.
+ */
+function pageAddItemsToList(listId, asins) {
+  return (async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const findToken = () => {
+      const inp = document.querySelector('input[name="anti-csrftoken-a2z"]');
+      if (inp && inp.value) return inp.value;
+      const html = document.documentElement.innerHTML;
+      const m = html.match(/anti-csrftoken-a2z["'\\\s:=]+([A-Za-z0-9+/=_-]{16,})/i);
+      return m ? m[1] : null;
+    };
+    const token = findToken();
+    const diag = { tokenFound: !!token, listId, firstStatus: null, firstSnippet: null };
+    if (!token) {
+      return { ok: false, error: "no csrf token", added: 0, failures: (asins || []).map((a) => ({ asin: a, error: "no token" })), diag };
+    }
+    // A 200 doesn't mean the item landed — Amazon returns 200 with an error
+    // body when the token/list/session is bad. Treat those as failures.
+    const looksRejected = (text) =>
+      /ap\/signin|\/signin|captcha|"?(?:isError|error)"?\s*:\s*(?:true|")|not\s+authorized|unauthorized|invalid|"?success"?\s*:\s*false/i.test(
+        text || ""
+      );
+    let added = 0;
+    const failures = [];
+    for (let i = 0; i < asins.length; i++) {
+      const asin = asins[i];
+      const body = new URLSearchParams({
+        asin,
+        vendorId: "website.wishlist.detail.add",
+        listExternalId: listId,
+        listType: "wishlist",
+        isAjax: "1",
+      });
+      try {
+        const resp = await fetch("/hz/wishlist/additemtolist", {
+          method: "POST",
+          headers: {
+            "anti-csrftoken-a2z": token,
+            "content-type": "application/x-www-form-urlencoded",
+            "x-requested-with": "XMLHttpRequest",
+            accept: "*/*",
+          },
+          body: body.toString(),
+          credentials: "include",
+        });
+        const text = await resp.text().catch(() => "");
+        if (i === 0) { diag.firstStatus = resp.status; diag.firstSnippet = (text || "").slice(0, 300); }
+        if (!resp.ok) failures.push({ asin, error: "HTTP " + resp.status });
+        else if (looksRejected(text)) failures.push({ asin, error: "rejected: " + (text || "").slice(0, 120) });
+        else added++;
+      } catch (e) {
+        failures.push({ asin, error: String((e && e.message) || e) });
+      }
+      await sleep(350); // gentle pacing — Amazon runs bot detection here
+    }
+    return { ok: true, added, failures, diag };
+  })();
+}
+
+/** Drive a product page's "Add to List" to add to a specific list. */
+function pageAddToList(listId) {
+  return new Promise((resolve) => {
+    const q = (sels, root) => {
+      root = root || document;
+      for (const s of sels) {
+        const el = root.querySelector(s);
+        if (el) return el;
+      }
+      return null;
+    };
+    try {
+      const trigger = q([
+        "#add-to-wishlist-button",
+        "#add-to-wishlist-button-submit",
+        "#wishListMainButton",
+        'input[name="submit.add-to-registry.wishlist"]',
+        'a[id*="add-to-wishlist"]',
+        'span[id*="wishlist"] a',
+      ]);
+      if (!trigger) {
+        resolve({ ok: false, error: "Add to List button not found on this page." });
+        return;
+      }
+      trigger.click();
+      // Wait for the list picker, then choose our list.
+      setTimeout(() => {
+        const target = document.querySelector(
+          'a[href*="' + listId + '"], [data-id="' + listId + '"], ' +
+            '[data-wl-list-id="' + listId + '"], input[value="' + listId + '"]'
+        );
+        if (target && target.tagName === "INPUT") {
+          target.checked = true;
+          const form = target.form;
+          const submit =
+            form && form.querySelector('button[type="submit"], input[type="submit"]');
+          if (submit) {
+            submit.click();
+            resolve({ ok: true });
+            return;
+          }
+        }
+        if (target) {
+          target.click();
+          resolve({ ok: true });
+          return;
+        }
+        resolve({ ok: false, error: "Target list not found in the Add-to-List menu." });
+      }, 900);
+    } catch (e) {
+      resolve({ ok: false, error: String((e && e.message) || e) });
+    }
+  });
+}
+
+/** Best-effort: set desired quantities on list rows from an asin->qty map. */
+function pageSetListQuantities(map) {
+  try {
+    const lis = document.querySelectorAll(
+      "#g-items li[data-id], #g-items li[data-itemid]"
+    );
+    let set = 0;
+    lis.forEach((li) => {
+      const link = li.querySelector('a[href*="/dp/"]');
+      if (!link) return;
+      const m = (link.getAttribute("href") || "").match(/\/dp\/([A-Z0-9]{10})/i);
+      if (!m) return;
+      const want = map[m[1].toUpperCase()];
+      if (!want) return;
+      const input = li.querySelector(
+        'input[name^="quantity"], input[id^="itemRequested"], input[type="number"]'
+      );
+      if (input) {
+        input.value = String(want);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        set++;
+      }
+    });
+    return { ok: true, set };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
 // ---- Message router -------------------------------------------------------
+
+// Boot marker — if you DON'T see this in the service-worker console after a
+// reload, you're looking at the wrong console (Safari = "background content",
+// not "service worker").
+console.log("[Styx] background loaded", new Date().toISOString());
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return false;
@@ -4174,6 +5012,108 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
+        case "MC_SAVE_CART_TO_LIST": {
+          console.log("[Styx list-sync] MC_SAVE_CART_TO_LIST received, cartId =", msg.cartId);
+          // Mirror a saved cart into an Amazon wish list so it syncs across
+          // devices. Long-running (creates a list + opens a tab per item), so
+          // we ack immediately and report progress through the status window.
+          const carts = await readCarts();
+          const target = carts.find((c) => c.id === msg.cartId);
+          if (!target) {
+            sendResponse({ ok: false, error: "Cart not found." });
+            break;
+          }
+          if (!(target.items && target.items.length)) {
+            sendResponse({ ok: false, error: "This cart has no items to save." });
+            break;
+          }
+          const ent = await readEntitlement();
+          const gate = canEditCart(target.id, carts, ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
+            break;
+          }
+          setOpStatus(`Saving "${target.name || "cart"}" to Amazon`, "Starting…");
+          openStatusWindow(); // non-blocking
+          // Await the whole flow and return the real result so the popup can
+          // show what happened (the popup uses a long timeout for this call).
+          let saveRes;
+          try {
+            saveRes = await saveCartToAmazonList(target);
+          } catch (e) {
+            saveRes = { ok: false, error: String((e && e.message) || e) };
+          }
+          try { await chrome.storage.local.set({ "mc.debug.lastSync": { at: Date.now(), ...saveRes } }); } catch (_e) {}
+          if (saveRes && saveRes.ok) {
+            clearOpStatus(
+              saveRes.failed
+                ? `Saved ${saveRes.added}/${saveRes.total} to "${target.name}". ${saveRes.failed} need a manual add.`
+                : `Saved ${saveRes.added} item${saveRes.added === 1 ? "" : "s"} to your Amazon list.`
+            );
+          } else {
+            setOpStatus("Couldn't save to Amazon", (saveRes && saveRes.error) || "Try again.");
+          }
+          sendResponse(saveRes || { ok: false, error: "No result." });
+          break;
+        }
+
+        case "MC_LIST_AMAZON_LISTS": {
+          // Read the user's Amazon wish lists for the popup dashboard.
+          const lists = await listAmazonLists(msg.host);
+          sendResponse({ ok: true, lists });
+          break;
+        }
+
+        case "MC_GET_AMAZON_LIST": {
+          if (!msg.listId) {
+            sendResponse({ ok: false, error: "Missing list id." });
+            break;
+          }
+          const list = await readAmazonList(
+            msg.listId,
+            msg.host,
+            msg.forceRefresh === true
+          );
+          sendResponse({ ok: true, list });
+          break;
+        }
+
+        case "MC_IMPORT_AMAZON_LIST": {
+          // Pull an existing Amazon list into a new local cart (cross-device
+          // recall). Tier-gated like any other new-cart creation.
+          if (!msg.listId) {
+            sendResponse({ ok: false, error: "Missing list id." });
+            break;
+          }
+          const ent = await readEntitlement();
+          const gate = canCreateSavedCart(await readCarts(), ent);
+          if (!gate.allowed) {
+            sendResponse({ ok: false, ...gate, error: gate.reason });
+            break;
+          }
+          const imported = await importAmazonListToCart(msg.listId, msg.host);
+          if (!imported.items.length) {
+            sendResponse({ ok: false, error: "That list has no items we could read." });
+            break;
+          }
+          const carts = await readCarts();
+          const newCart = {
+            id: makeId(),
+            name: imported.name || "Imported list",
+            host: imported.host,
+            savedAt: new Date().toISOString(),
+            lastUsedAt: Date.now(),
+            items: imported.items,
+            amazonListId: msg.listId,
+            amazonListUrl: amazonListUrl(imported.host, msg.listId),
+            syncedAt: Date.now(),
+          };
+          carts.unshift(newCart);
+          await writeCarts(carts);
+          sendResponse({ ok: true, cart: newCart, count: newCart.items.length });
+          break;
+        }
+
         default:
           sendResponse({ ok: false, error: "Unknown message: " + msg.type });
       }
@@ -4336,4 +5276,3 @@ function normalizeUrlForWait(url) {
     return String(url || "").replace(/#.*$/, "").replace(/\/$/, "");
   }
 }
-

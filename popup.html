@@ -148,7 +148,7 @@
       </div>
     </header>
 
-    <section class="mc-save-block">
+    <section class="mc-save-block" hidden>
       <label for="mc-name" class="mc-label">Save current Amazon cart as</label>
       <div class="mc-save-row">
         <input
@@ -248,25 +248,21 @@
       </div>
 
       <div class="mc-list-header">
-        <h2>Saved carts</h2>
+        <h2>Amazon Lists</h2>
         <span id="mc-list-count" class="mc-count">0</span>
         <div class="mc-list-header-actions">
           <button
-            id="mc-create-new"
+            id="mc-amazon-lists-refresh"
             class="mc-btn mc-btn-ghost mc-btn-sm"
             type="button"
-            title="Create a new empty saved cart"
+            title="Refresh your Amazon wish lists"
           >
-            Create new
+            Refresh
           </button>
-          <button
-            id="mc-combine"
-            class="mc-btn mc-btn-ghost mc-btn-sm"
-            type="button"
-            title="Merge two carts into one"
-          >
-            Merge Carts
-          </button>
+        </div>
+        <div hidden>
+          <button id="mc-create-new" type="button"></button>
+          <button id="mc-combine" type="button"></button>
         </div>
       </div>
       <div id="mc-combine-bar" class="mc-combine-bar" hidden>
@@ -287,10 +283,12 @@
           Cancel
         </button>
       </div>
+      <p id="mc-amazon-lists-status" class="mc-amazon-lists-status">
+        Loading your Amazon lists…
+      </p>
       <ul id="mc-list" class="mc-list" aria-live="polite"></ul>
       <p id="mc-empty" class="mc-empty" hidden>
-        No saved carts yet. Open your Amazon cart, give it a name above, and hit
-        Save.
+        No Amazon lists found. Make sure you are signed in to Amazon.
       </p>
     </section>
 
@@ -402,6 +400,7 @@
             <span class="mc-item-count"></span>
           </div>
           <div class="mc-item-meta"></div>
+          <div class="mc-item-sync" hidden></div>
           <div class="mc-item-thumbs"></div>
         </div>
         <div class="mc-item-actions">
@@ -413,12 +412,52 @@
             Switch to This Cart
           </button>
           <button
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            data-action="save-to-list"
+            title="Save this cart as an Amazon wish list so it syncs across devices"
+          >
+            Save to Amazon List
+          </button>
+          <button
             class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
             data-action="delete"
             title="Delete entire cart"
           >
             Delete
           </button>
+        </div>
+      </li>
+    </template>
+
+    <template id="mc-amazon-list-template">
+      <li class="mc-item mc-amazon-list-card">
+        <div class="mc-item-main">
+          <div class="mc-item-name-row">
+            <button
+              class="mc-item-name mc-amazon-list-name"
+              data-action="toggle-amazon-list"
+              type="button"
+              aria-expanded="false"
+            ></button>
+            <span class="mc-item-count">View items</span>
+          </div>
+          <div class="mc-item-meta mc-amazon-list-meta"></div>
+          <p class="mc-amazon-list-load-status" hidden></p>
+          <div class="mc-item-thumbs" hidden></div>
+        </div>
+        <div class="mc-item-actions mc-amazon-list-actions" hidden>
+          <button
+            class="mc-btn mc-btn-primary mc-btn-sm"
+            data-action="load-amazon-list-cart"
+            type="button"
+          >
+            Add All to Amazon Cart
+          </button>
+          <a
+            class="mc-btn mc-btn-ghost mc-btn-sm mc-amazon-list-open"
+            target="_blank"
+            rel="noopener"
+          >View on Amazon</a>
         </div>
       </li>
     </template>
