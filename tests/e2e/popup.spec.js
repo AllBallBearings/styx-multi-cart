@@ -28,6 +28,15 @@ const amazonLists = [
         image: "",
         url: "https://www.amazon.com/dp/B000LIST02",
       },
+      {
+        asin: "B000GONE01",
+        title: "Discontinued item",
+        quantity: 1,
+        image: "",
+        url: "https://www.amazon.com/dp/B000GONE01",
+        unavailable: true,
+        unavailableReason: "This item is no longer available",
+      },
     ],
   },
   {
@@ -69,8 +78,14 @@ test.describe("popup — Amazon list dashboard", () => {
     await card.locator('[data-action="toggle-amazon-list"]').click();
 
     await expect(card.locator(".mc-item-thumbs")).toBeVisible();
-    await expect(card.locator(".mc-thumb")).toHaveCount(2);
-    await expect(card.locator(".mc-item-count")).toHaveText("2 items · 3 qty");
+    await expect(card.locator(".mc-thumb")).toHaveCount(3);
+    await expect(card.locator(".mc-thumb-unavailable")).toHaveCount(1);
+    await expect(card.locator(".mc-item-count")).toHaveText(
+      "3 items · 4 qty · 1 unavailable"
+    );
+    await expect(card.locator('[data-action="load-amazon-list-cart"]')).toHaveText(
+      "Add 2 Available to Cart"
+    );
     await expect(card.locator(".mc-amazon-list-actions")).toBeVisible();
 
     const log = await page.evaluate(() => window.__mcMessageLog);
@@ -85,7 +100,7 @@ test.describe("popup — Amazon list dashboard", () => {
     const toggle = card.locator('[data-action="toggle-amazon-list"]');
 
     await toggle.click();
-    await expect(card.locator(".mc-thumb")).toHaveCount(2);
+    await expect(card.locator(".mc-thumb")).toHaveCount(3);
     await toggle.click();
     await expect(card.locator(".mc-item-thumbs")).toBeHidden();
     await toggle.click();
@@ -104,6 +119,9 @@ test.describe("popup — Amazon list dashboard", () => {
     await card.locator('[data-action="load-amazon-list-cart"]').click();
 
     await expect(page.locator("#mc-confirm-title")).toHaveText("Add this list to your cart?");
+    await expect(page.locator("#mc-confirm-body")).toContainText(
+      "1 unavailable item will be skipped"
+    );
     await page.locator("#mc-confirm-ok").click();
 
     await expect.poll(async () =>
@@ -115,6 +133,7 @@ test.describe("popup — Amazon list dashboard", () => {
       window.__mcMessageLog.find((entry) => entry.type === "MC_WISHLIST_ADD_ALL")
     );
     expect(message.items).toHaveLength(2);
+    expect(message.items.some((item) => item.unavailable)).toBe(false);
     expect(message.host).toBe("www.amazon.com");
   });
 
@@ -135,5 +154,20 @@ test.describe("popup — Amazon list dashboard", () => {
         window.__mcMessageLog.filter((message) => message.type === "MC_LIST_AMAZON_LISTS").length
       )
     ).toBe(2);
+  });
+
+  test("Clear Amazon Cart remains accessible and sends MC_CLEAR_CURRENT", async ({ popup }) => {
+    const page = await popup({ amazonLists });
+    const clear = page.locator("#mc-clear");
+    await expect(clear).toBeVisible();
+    await clear.click();
+    await expect(page.locator("#mc-confirm-title")).toHaveText("Clear Amazon cart?");
+    await page.locator("#mc-confirm-ok").click();
+
+    await expect.poll(async () =>
+      page.evaluate(() =>
+        window.__mcMessageLog.filter((message) => message.type === "MC_CLEAR_CURRENT").length
+      )
+    ).toBe(1);
   });
 });

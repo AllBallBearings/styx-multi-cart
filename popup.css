@@ -119,6 +119,11 @@ html[data-surface="sidepanel"] body {
   font-size: 12px;
 }
 
+/* Anchor the floated side-panel toolbar (.mc-header) to the panel content. */
+html[data-surface="sidepanel"] body {
+  position: relative;
+}
+
 body.mc-move-modal-open {
   min-height: 560px;
 }
@@ -144,21 +149,27 @@ html[data-surface="sidepanel"] .mc-header {
   padding: 12px;
 }
 
-/* Chrome's native side-panel header already shows the "Styx Multi-Cart" title
-   + close, so we hide our own brand. Rather than waste a whole empty row on
-   two buttons, float the settings + theme icons up onto the "Save current
-   Amazon cart as" label line. The label reserves matching height + right
-   padding so nothing overlaps. */
+/* Chrome's native side-panel header already shows the extension title, so
+   hide the duplicate brand and keep settings/theme in a compact toolbar row.
+   This row must participate in layout: the old absolute positioning overlapped
+   the Amazon Lists header after the local-cart save block was removed. */
+/* Chrome's native side-panel already shows the extension title, so the brand
+   is hidden. Float the settings/theme toolbar out of flow and up onto the
+   "Amazon Lists" header row (top-right) so the panel doesn't open with an empty
+   band of whitespace above the list. Anchored to body (position: relative
+   below); scrolls with content. */
 html[data-surface="sidepanel"] .mc-header {
   position: absolute;
   top: 10px;
   right: 12px;
-  z-index: 20;
+  left: auto;
+  width: auto;
   justify-content: flex-end;
   gap: 8px;
   padding: 0;
-  border-bottom: 0;
-  background: transparent;
+  border-bottom: none;
+  background: none;
+  z-index: 20;
 }
 
 html[data-surface="sidepanel"] .mc-brand {
@@ -167,18 +178,6 @@ html[data-surface="sidepanel"] .mc-brand {
 
 html[data-surface="sidepanel"] .mc-header-actions {
   gap: 8px;
-}
-
-html[data-surface="sidepanel"] .mc-save-block {
-  padding-top: 12px;
-}
-
-html[data-surface="sidepanel"] .mc-label {
-  display: flex;
-  align-items: center;
-  min-height: 30px;
-  margin-bottom: 8px;
-  padding-right: 76px;
 }
 
 /* ---- Theme toggle -------------------------------------------------------- */
@@ -644,6 +643,29 @@ html[data-surface="panel"] .mc-item-thumb-more {
   display: flex;
 }
 
+.mc-thumb-unavailable {
+  opacity: 0.58;
+  filter: grayscale(0.85);
+  border-style: dashed;
+}
+
+.mc-thumb-unavailable-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--mc-danger-soft);
+  border: 1px solid var(--mc-danger);
+  color: var(--mc-danger);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 13px;
+  white-space: nowrap;
+}
+
 .mc-thumb-remove {
   position: absolute;
   top: -8px;
@@ -897,6 +919,33 @@ button.mc-thumb-qty:focus-visible {
 
 .mc-list-header-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Side panel floats the settings/theme toolbar into the top-right corner
+   (see .mc-header override). Reserve room so the list-header's own actions
+   (Refresh / Clear) never slide under those icons on a widened panel. */
+html[data-surface="sidepanel"] .mc-list-header {
+  padding-right: 76px;
+}
+
+@media (max-width: 360px) {
+  .mc-list-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .mc-list-header-actions {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  /* Actions drop to their own row here, so the icon clearance isn't needed. */
+  html[data-surface="sidepanel"] .mc-list-header {
+    padding-right: 0;
+  }
 }
 
 .mc-btn-active {

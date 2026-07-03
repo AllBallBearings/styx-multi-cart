@@ -1109,7 +1109,6 @@ importScripts("ExtPay.js");
         // Legacy bulk add page — these are the most likely hits on /gp/aws/cart/add.html
         "input[name='add']",
         "input[name='submit.add']",
-        "input[name='proceedToCheckout']",
         "form[action*='cart/add' i] input[type='submit']",
         "form[action*='cart/add' i] button[type='submit']",
         "form[action*='cart' i] input[type='submit']",
@@ -1117,19 +1116,78 @@ importScripts("ExtPay.js");
         "form[action*='handle-buy-box' i] input[type='submit']",
         // Value-based — works even when name/id are unusual
         "input[type='submit'][value*='Add' i][value*='Cart' i]",
-        "input.a-button-input[value*='Add' i][value*='Cart' i]",
-        // Last-resort generic submit (use with extreme care; isVisible filters)
-        "input.a-button-input"
+        "input.a-button-input[value*='Add' i][value*='Cart' i]"
       ];
+      const labelsFor = (el) => {
+        const labels = [
+          el && el.value,
+          el && el.textContent,
+          el && el.getAttribute && el.getAttribute("aria-label")
+        ];
+        try {
+          const labelledBy = el && el.getAttribute && el.getAttribute("aria-labelledby");
+          if (labelledBy) {
+            for (const id of labelledBy.split(/\s+/)) {
+              const labelEl = document.getElementById(id);
+              if (labelEl) labels.push(labelEl.textContent);
+            }
+          }
+          const wrap = el && el.closest && el.closest(".a-button");
+          const visibleLabel = wrap && wrap.querySelector(".a-button-text");
+          if (visibleLabel) labels.push(visibleLabel.textContent);
+        } catch (_e) {
+        }
+        return labels.filter(Boolean).map((label) => String(label).trim().replace(/\s+/g, " ").toLowerCase());
+      };
+      const looksLikeAddToCart = (el) => labelsFor(el).some(
+        (label) => label === "add to cart" || label === "add to shopping cart" || label.startsWith("add") && label.includes("cart") && label.length < 40
+      );
+      const looksLikeGoToCart = (el) => labelsFor(el).some(
+        (label) => label === "go to cart" || label === "view cart"
+      );
+      const hasRenderedBulkItems = () => {
+        const requested = /* @__PURE__ */ new Set();
+        try {
+          const params = new URLSearchParams(location.search || "");
+          for (const [key, value] of params.entries()) {
+            if (/^ASIN\.\d+$/i.test(key) && /^[A-Z0-9]{10}$/i.test(value || "")) {
+              requested.add(String(value).toUpperCase());
+            }
+          }
+        } catch (_e) {
+        }
+        const bodyText = (document.body && (document.body.innerText || document.body.textContent) || "").replace(/\s+/g, " ");
+        if (/your (?:amazon )?cart is empty|your shopping cart is empty/i.test(bodyText)) {
+          return false;
+        }
+        const candidates = document.querySelectorAll(
+          "[data-asin], input[name^='ASIN.'], a[href*='/dp/'], a[href*='/gp/product/'], a[href*='/gp/aw/d/']"
+        );
+        for (const el of candidates) {
+          const values = [
+            el.getAttribute && el.getAttribute("data-asin"),
+            el.value,
+            el.getAttribute && el.getAttribute("href")
+          ].filter(Boolean);
+          for (const raw of values) {
+            const text = String(raw).toUpperCase();
+            if (requested.size) {
+              for (const asin of requested) {
+                if (text.includes(asin)) return true;
+              }
+            } else if (/\b[A-Z0-9]{10}\b/.test(text)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
       const findByText = () => {
         const cands = document.querySelectorAll(
           "input[type='submit'], button, .a-button-text, span.a-button-text"
         );
         for (const el of cands) {
-          const label = (el.value || el.textContent || el.getAttribute("aria-label") || "").trim().toLowerCase();
-          if (!label) continue;
-          const looksLikeAddToCart = label === "add to cart" || label === "add to shopping cart" || label.startsWith("add") && label.includes("cart") && label.length < 40;
-          if (!looksLikeAddToCart) continue;
+          if (!looksLikeAddToCart(el)) continue;
           let clickable = el;
           if (el.classList && el.classList.contains("a-button-text")) {
             const wrap = el.closest(".a-button");
@@ -1144,10 +1202,12 @@ importScripts("ExtPay.js");
       };
       const findButton = () => {
         for (const sel of SELECTORS) {
-          const el = document.querySelector(sel);
-          if (el && isVisible(el)) {
-            console.log("[Styx Multi-Cart] confirm button matched selector:", sel);
-            return el;
+          const matches = document.querySelectorAll(sel);
+          for (const el of matches) {
+            if (isVisible(el) && looksLikeAddToCart(el)) {
+              console.log("[Styx Multi-Cart] confirm button matched selector:", sel);
+              return el;
+            }
           }
         }
         const byText = findByText();
@@ -1155,7 +1215,50 @@ importScripts("ExtPay.js");
           console.log("[Styx Multi-Cart] confirm button matched via text fallback");
           return byText;
         }
+        if (/\/gp\/aws\/cart\/add\.html/i.test(location.pathname || "")) {
+          const goToCart = findGoToCartButton();
+          if (goToCart) {
+            if (!hasRenderedBulkItems()) {
+              console.warn(
+                "[Styx Multi-Cart] Go To Cart found, but Amazon rendered no requested products"
+              );
+              return { emptyBulkPage: true };
+            }
+            console.log("[Styx Multi-Cart] bulk confirm matched Go To Cart variant");
+            return { button: goToCart };
+          }
+        }
         return null;
+      };
+      const findGoToCartButton = () => {
+        const cands = document.querySelectorAll(
+          "input[type='submit'], button, a, .a-button-text, span.a-button-text"
+        );
+        for (const el of cands) {
+          if (!looksLikeGoToCart(el)) continue;
+          let clickable = el;
+          if (el.classList && el.classList.contains("a-button-text")) {
+            const wrap = el.closest(".a-button");
+            const inp = wrap && wrap.querySelector("input, button, a");
+            if (inp) clickable = inp;
+          }
+          if (isVisible(clickable) || isVisible(el)) return clickable;
+        }
+        return null;
+      };
+      const relabelGoToCart = (btn) => {
+        const replacement = "Add All to Amazon Cart";
+        try {
+          const wrap = btn.closest && btn.closest(".a-button");
+          const visibleLabel = btn.classList && btn.classList.contains("a-button-text") && btn || wrap && wrap.querySelector(".a-button-text");
+          if (visibleLabel) {
+            visibleLabel.textContent = replacement;
+          } else if (btn.tagName === "BUTTON" || btn.tagName === "A") {
+            btn.textContent = replacement;
+          }
+          btn.setAttribute("aria-label", replacement);
+        } catch (_e) {
+        }
       };
       const applyOverlayRing = (btn) => {
         let target = btn;
@@ -1199,11 +1302,25 @@ importScripts("ExtPay.js");
       };
       const deadline = Date.now() + 1e4;
       const tick = () => {
-        const btn = findButton();
+        const found = findButton();
+        if (found && found.emptyBulkPage) {
+          resolve({
+            ok: false,
+            emptyBulkPage: true,
+            error: "Amazon rendered no products on the bulk-add page"
+          });
+          return;
+        }
+        const btn = found && found.button ? found.button : found;
         if (btn) {
           try {
+            const goToCartVariant = looksLikeGoToCart(btn);
+            if (goToCartVariant) relabelGoToCart(btn);
             applyOverlayRing(btn);
-            resolve({ ok: true });
+            resolve({
+              ok: true,
+              confirmLabel: goToCartVariant ? "Add All to Amazon Cart" : "Add To Cart"
+            });
           } catch (e) {
             console.error("[Styx Multi-Cart] applyOverlayRing failed:", e);
             resolve({ ok: false, error: String(e) });
@@ -1368,8 +1485,27 @@ importScripts("ExtPay.js");
           func: pageHighlightBulkConfirm
         });
         const hr = hlRes && hlRes[0] && hlRes[0].result;
+        if (hr && hr.emptyBulkPage) {
+          dinfo(
+            `[Styx Multi-Cart] bulk chunk ${c + 1} rendered no products; switching directly to per-item restore.`
+          );
+          await showStatus(
+            helperTab.id,
+            "Amazon couldn't prepare these items in bulk \u2014 adding them one at a time\u2026",
+            "loading"
+          );
+          return {
+            ok: false,
+            error: hr.error || "Amazon rejected the bulk-add items",
+            host,
+            helperTabId: helperTab && helperTab.id,
+            missing: allItems,
+            bulkRejectedItems: true
+          };
+        }
         if (hr && hr.ok) {
-          const chunkPrompt = chunks.length > 1 ? `Click the highlighted "Add To Cart" to confirm batch ${c + 1} of ${chunks.length} (${chunk.length} items)` : `Click the highlighted "Add To Cart" to add ${chunk.length} item${chunk.length === 1 ? "" : "s"} to your Amazon cart`;
+          const confirmLabel = hr.confirmLabel || "Add To Cart";
+          const chunkPrompt = chunks.length > 1 ? `Click the highlighted "${confirmLabel}" to confirm batch ${c + 1} of ${chunks.length} (${chunk.length} items)` : `Click the highlighted "${confirmLabel}" to add ${chunk.length} item${chunk.length === 1 ? "" : "s"} to your Amazon cart`;
           setOpStatus(`Restoring ${cartLabel}`, `Waiting for your confirmation\u2026`);
           await showStatus(helperTab.id, chunkPrompt, "loading");
           const confirmRes = await waitForUserBulkConfirm(helperTab.id);
@@ -1604,6 +1740,54 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             await chrome.tabs.update(helperTab.id, { url: productUrl(item), active: true });
             await waitForTabReload(helperTab.id, 2e4);
           }
+          const availabilityResult = await chrome.scripting.executeScript({
+            target: { tabId: helperTab.id },
+            func: pageClassifyProductAvailability
+          });
+          let availability = availabilityResult && availabilityResult[0] && availabilityResult[0].result;
+          if (availability && availability.available === false) {
+            const reason = availability.reason || "Product is unavailable";
+            failed++;
+            failures.push({
+              asin: item.asin,
+              title: item.title || "",
+              reason,
+              unavailable: true
+            });
+            const raw = item.title || item.asin || "item";
+            const shortTitle = raw.length > 30 ? raw.slice(0, 28) + "\u2026" : raw;
+            setOpStatus(
+              `Restoring ${cartLabel}`,
+              `Skipping unavailable item ${i + 1} of ${items.length}: ${shortTitle}`
+            );
+            await showStatus(
+              helperTab.id,
+              `Unavailable \u2014 skipped ${shortTitle}`,
+              "error"
+            );
+            if (onProgress) onProgress({ done: i + 1, total: items.length });
+            await sleep(350);
+            continue;
+          }
+          if (availability && availability.needsUserChoice === true) {
+            const choice = await waitForUserProductFormatChoice(
+              helperTab.id,
+              item
+            );
+            if (!choice.ok) {
+              const reason = choice.reason || "A purchasable format was not selected";
+              failed++;
+              failures.push({
+                asin: item.asin,
+                title: item.title || "",
+                reason,
+                needsUserChoice: true
+              });
+              if (onProgress) onProgress({ done: i + 1, total: items.length });
+              continue;
+            }
+            availability = choice.availability || { available: true };
+          }
           {
             const raw = item.title || item.asin || "";
             const shortTitle = raw.length > 30 ? raw.slice(0, 28) + "\u2026" : raw;
@@ -1792,7 +1976,9 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
   }
   async function wishlistAddAllToCart(items, host) {
     try {
-      const cleanItems = (items || []).filter((it) => it && it.asin);
+      const cleanItems = (items || []).filter(
+        (it) => it && it.asin && it.unavailable !== true
+      );
       if (!cleanItems.length) return;
       const target = {
         items: cleanItems,
@@ -1854,6 +2040,74 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     } catch (_e) {
       return false;
     }
+  }
+  async function waitForUserProductFormatChoice(tabId, item) {
+    await chrome.tabs.update(tabId, { active: true });
+    const raw = item && item.title || "this item";
+    const shortTitle = raw.length > 60 ? raw.slice(0, 58) + "\u2026" : raw;
+    setOpStatus(
+      "Amazon needs a format choice",
+      `Choose a cartable format for "${shortTitle}" to continue adding the rest.`
+    );
+    let promptTheme = null;
+    try {
+      const settings = await readSettings();
+      promptTheme = settings.theme || null;
+    } catch (_e) {
+    }
+    let answer = "skip";
+    try {
+      const promptResult = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pagePromptChoice,
+        args: [
+          "Choose a format on Amazon",
+          `The saved format of "${shortTitle}" cannot be added to the cart. Choose another format or edition on this page that offers Add to Cart. Styx will resume automatically.`,
+          [
+            { label: "Choose a format", value: "choose", style: "primary" },
+            { label: "Skip this item", value: "skip", style: "ghost" }
+          ],
+          promptTheme
+        ]
+      });
+      answer = promptResult && promptResult[0] && promptResult[0].result || "skip";
+    } catch (_e) {
+      return { ok: false, reason: "Could not show the format picker prompt" };
+    }
+    if (answer !== "choose") {
+      return { ok: false, reason: "Skipped because the saved format is unavailable" };
+    }
+    await showStatus(
+      tabId,
+      `Choose a format for "${shortTitle}" that shows Add to Cart \u2014 Styx will resume automatically`,
+      "loading"
+    );
+    const deadline = Date.now() + 10 * 60 * 1e3;
+    while (Date.now() < deadline) {
+      await sleep(1e3);
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (!tab) return { ok: false, reason: "Amazon tab was closed" };
+        if (tab.status === "loading") continue;
+        const result = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageClassifyProductAvailability
+        });
+        const availability = result && result[0] && result[0].result;
+        if (availability && availability.available === false) {
+          return {
+            ok: false,
+            reason: availability.reason || "The selected format is unavailable",
+            availability
+          };
+        }
+        if (!availability || availability.needsUserChoice !== true) {
+          return { ok: true, availability: availability || { available: true } };
+        }
+      } catch (_e) {
+      }
+    }
+    return { ok: false, reason: "No cartable format was selected within 10 minutes" };
   }
   async function waitForUserUpsellChoice(tabId, item, host) {
     await chrome.tabs.update(tabId, { active: true });
@@ -1920,6 +2174,55 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
   }
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  function pageClassifyProductAvailability() {
+    try {
+      const bodyText = (document.body && (document.body.innerText || document.body.textContent) || "").replace(/\s+/g, " ").trim();
+      const title = String(document.title || "").trim();
+      const combined = `${title} ${bodyText}`.toLowerCase();
+      if (/sorry[,\s]*we\s+couldn['’]?t\s+find\s+that\s+page/i.test(combined) || combined.includes("the web address you entered is not a functioning page")) {
+        return { available: false, reason: "Product page no longer exists" };
+      }
+      const availabilityEl = document.querySelector(
+        "#availability, #outOfStock, [id^='availability'], [data-feature-name='availability']"
+      );
+      const availabilityText = (availabilityEl && (availabilityEl.innerText || availabilityEl.textContent) || "").replace(/\s+/g, " ").trim();
+      if (availabilityText && /currently unavailable|no longer available|not available for purchase|item is unavailable/i.test(
+        availabilityText
+      )) {
+        return {
+          available: false,
+          reason: availabilityText || "Product is currently unavailable"
+        };
+      }
+      const addToCartButton = document.querySelector(
+        "#add-to-cart-button, input[name='submit.add-to-cart'], input[name='submit.addToCart'], button[name='submit.add-to-cart']"
+      );
+      const hasUsableAddToCart = Boolean(
+        addToCartButton && !addToCartButton.disabled && addToCartButton.getAttribute("aria-disabled") !== "true" && addToCartButton.getAttribute("aria-hidden") !== "true"
+      );
+      const formatRegion = document.querySelector(
+        "#tmmSwatches, #tmmSwatches_feature_div, #formats, #mediaTabs_tabSet, [data-feature-name='tmmSwatches']"
+      );
+      if (formatRegion && !hasUsableAddToCart) {
+        const formatText = (formatRegion.innerText || formatRegion.textContent || "").replace(/\s+/g, " ").trim();
+        const formatControls = formatRegion.querySelectorAll(
+          "a[href*='/dp/'], a[href*='/gp/product/'], button, input[type='radio']"
+        );
+        if (formatControls.length >= 2 && /kindle|hardcover|paperback|audiobook|audio\s*cd|mp3\s*cd|mass market|spiral|format|edition/i.test(
+          formatText
+        )) {
+          return {
+            available: true,
+            needsUserChoice: true,
+            reason: "The saved format is unavailable; choose another format"
+          };
+        }
+      }
+      return { available: true };
+    } catch (e) {
+      return { available: true, warning: String(e && e.message || e) };
+    }
   }
   function pageAddToCart(qty) {
     return new Promise((resolve) => {
@@ -2357,7 +2660,9 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       price: "",
       image: it.image || "",
       url: it.url || `https://${host}/dp/${it.asin}`,
-      variantLabel: ""
+      variantLabel: "",
+      unavailable: it.unavailable === true,
+      unavailableReason: it.unavailableReason || ""
     }));
     const value = { host, name: data.name || "Amazon list", listId, url, items };
     amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
@@ -2641,7 +2946,19 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
           let image = "";
           const img = li.querySelector("img");
           if (img) image = img.currentSrc || img.src || "";
-          items.push({ asin, title, quantity: qty, url: location.origin + "/dp/" + asin, image });
+          const rowText = (li.innerText || li.textContent || "").replace(/\s+/g, " ").trim();
+          const unavailableMatch = rowText.match(
+            /(?:this item is )?(?:currently unavailable|no longer available|not available for purchase|item is unavailable)/i
+          );
+          items.push({
+            asin,
+            title,
+            quantity: qty,
+            url: location.origin + "/dp/" + asin,
+            image,
+            unavailable: !!unavailableMatch,
+            unavailableReason: unavailableMatch ? unavailableMatch[0] : ""
+          });
         });
         window.scrollTo(0, startY);
         return { name, items };
@@ -3424,9 +3741,12 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_WISHLIST_ADD_ALL": {
-            const items = Array.isArray(msg.items) ? msg.items.filter((it) => it && it.asin) : [];
+            const items = Array.isArray(msg.items) ? msg.items.filter((it) => it && it.asin && it.unavailable !== true) : [];
             if (!items.length) {
-              sendResponse({ ok: false, error: "No items found on this wishlist." });
+              sendResponse({
+                ok: false,
+                error: "No available items were found on this wishlist."
+              });
               break;
             }
             sendResponse({ ok: true, started: true, total: items.length });

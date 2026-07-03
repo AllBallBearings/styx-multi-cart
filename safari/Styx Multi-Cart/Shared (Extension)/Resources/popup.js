@@ -474,6 +474,18 @@
     ph.textContent = (item.title || item.asin || "?").slice(0, 16);
     tile.appendChild(ph);
 
+    if (item.unavailable === true) {
+      tile.classList.add("mc-thumb-unavailable");
+      tile.title = `${item.title || item.asin || "Item"} — ${
+        item.unavailableReason || "unavailable"
+      }`;
+      const badge = document.createElement("span");
+      badge.className = "mc-thumb-unavailable-badge";
+      badge.textContent = "Unavailable";
+      tile.appendChild(badge);
+      return tile;
+    }
+
     if (locked) {
       // Read-only carts: no controls, but keep the count visible.
       const qty = document.createElement("span");
@@ -892,7 +904,7 @@
     const ok = await confirmDialog({
       title: "Clear Amazon cart?",
       message: "Are you sure you want to clear your current Amazon cart?",
-      okLabel: "Clear cart",
+      okLabel: "Clear Amazon Cart",
       destructive: true,
     });
     if (!ok) return;
@@ -1538,18 +1550,30 @@
 
   function updateAmazonListCard(card, list) {
     const items = list.items || [];
+    const availableItems = items.filter((item) => item.unavailable !== true);
+    const unavailableCount = items.length - availableItems.length;
     const totalQty = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
     const count = card.querySelector(".mc-item-count");
-    count.textContent = `${items.length} item${items.length === 1 ? "" : "s"} · ${totalQty} qty`;
+    count.textContent =
+      `${items.length} item${items.length === 1 ? "" : "s"} · ${totalQty} qty` +
+      (unavailableCount
+        ? ` · ${unavailableCount} unavailable`
+        : "");
     const status = card.querySelector(".mc-amazon-list-load-status");
     status.hidden = true;
     status.textContent = "";
     renderCartThumbs(card.querySelector(".mc-item-thumbs"), list);
     const addAll = card.querySelector('[data-action="load-amazon-list-cart"]');
-    addAll.disabled = items.length === 0;
-    addAll.title = items.length
-      ? `Add all ${items.length} list items to your active Amazon cart`
-      : "This list has no readable items";
+    addAll.disabled = availableItems.length === 0;
+    addAll.textContent =
+      availableItems.length === 0
+        ? "No Available Items"
+        : unavailableCount
+          ? `Add ${availableItems.length} Available to Cart`
+          : "Add All to Amazon Cart";
+    addAll.title = availableItems.length
+      ? `Add ${availableItems.length} available list item${availableItems.length === 1 ? "" : "s"} to your active Amazon cart`
+      : "This list has no available items";
   }
 
   async function ensureAmazonListItems(card, forceRefresh = false) {
@@ -1680,21 +1704,31 @@
 
       const list = await ensureAmazonListItems(li);
       if (!list || !list.items.length) return;
+      const availableItems = list.items.filter((item) => item.unavailable !== true);
+      const unavailableCount = list.items.length - availableItems.length;
+      if (!availableItems.length) {
+        toast("This list has no available items to add.", "error");
+        return;
+      }
       const name = li.querySelector(".mc-amazon-list-name").textContent.trim();
       const ok = await confirmDialog({
         title: "Add this list to your cart?",
-        message: `Add all ${list.items.length} items from "${name}" to your active Amazon cart? Existing cart items will stay.`,
+        message:
+          `Add ${availableItems.length} available item${availableItems.length === 1 ? "" : "s"} from "${name}" to your active Amazon cart? Existing cart items will stay.` +
+          (unavailableCount
+            ? ` ${unavailableCount} unavailable item${unavailableCount === 1 ? "" : "s"} will be skipped.`
+            : ""),
         okLabel: "Add all",
       });
       if (!ok) return;
       await withLoading(btn, async () => {
         const res = await send({
           type: "MC_WISHLIST_ADD_ALL",
-          items: list.items,
+          items: availableItems,
           host: list.host || li.dataset.host,
         });
         if (res.ok) {
-          toast(`Adding ${list.items.length} item${list.items.length === 1 ? "" : "s"} to your Amazon cart…`);
+          toast(`Adding ${availableItems.length} item${availableItems.length === 1 ? "" : "s"} to your Amazon cart…`);
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
         } else {
           toast(res.error || "Could not add this list to your cart.", "error");

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -23,6 +23,12 @@ function extractFunction(name) {
 
 const pageScrapeAmazonLists = new Function(
   `${extractFunction("pageScrapeAmazonLists")}; return pageScrapeAmazonLists;`
+)();
+const pageScrapeSingleList = new Function(
+  `${extractFunction("pageScrapeSingleList")}; return pageScrapeSingleList;`
+)();
+const pageClassifyProductAvailability = new Function(
+  `${extractFunction("pageClassifyProductAvailability")}; return pageClassifyProductAvailability;`
 )();
 
 describe("pageScrapeAmazonLists", () => {
@@ -66,6 +72,131 @@ describe("pageScrapeAmazonLists", () => {
     } finally {
       globalThis.document = priorDocument;
       globalThis.location = priorLocation;
+      dom.window.close();
+    }
+  });
+});
+
+describe("Amazon list item availability", () => {
+  it("marks explicitly unavailable wishlist rows", async () => {
+    vi.useFakeTimers();
+    const dom = new JSDOM(
+      `
+        <h1 id="profile-list-name">Wish List</h1>
+        <ul id="g-items">
+          <li data-id="row-1">
+            <a id="itemName_1" href="/dp/B000GOOD01">Available product</a>
+          </li>
+          <li data-id="row-2">
+            <a id="itemName_2" href="/dp/B000GONE01">Deleted product</a>
+            <span>This item is no longer available</span>
+          </li>
+        </ul>
+      `,
+      { url: "https://www.amazon.com/hz/wishlist/ls/3ABCXYZ123" }
+    );
+    dom.window.scrollTo = () => {};
+    const priorWindow = globalThis.window;
+    const priorDocument = globalThis.document;
+    const priorLocation = globalThis.location;
+    globalThis.window = dom.window;
+    globalThis.document = dom.window.document;
+    globalThis.location = dom.window.location;
+    try {
+      const pending = pageScrapeSingleList();
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(result.items).toHaveLength(2);
+      expect(result.items[0]).toMatchObject({
+        asin: "B000GOOD01",
+        unavailable: false,
+      });
+      expect(result.items[1]).toMatchObject({
+        asin: "B000GONE01",
+        unavailable: true,
+        unavailableReason: "This item is no longer available",
+      });
+    } finally {
+      vi.useRealTimers();
+      globalThis.window = priorWindow;
+      globalThis.document = priorDocument;
+      globalThis.location = priorLocation;
+      dom.window.close();
+    }
+  });
+
+  it("recognizes Amazon's missing-page and unavailable-product messages", () => {
+    const cases = [
+      {
+        html: "<body><h1>SORRY</h1><p>we couldn't find that page</p></body>",
+        title: "Amazon.com",
+        reason: "Product page no longer exists",
+      },
+      {
+        html: '<body><div id="availability">Currently unavailable.</div></body>',
+        title: "Product",
+        reason: "Currently unavailable.",
+      },
+    ];
+    const priorDocument = globalThis.document;
+    for (const sample of cases) {
+      const dom = new JSDOM(sample.html);
+      Object.defineProperty(dom.window.document, "title", {
+        configurable: true,
+        value: sample.title,
+      });
+      globalThis.document = dom.window.document;
+      expect(pageClassifyProductAvailability()).toMatchObject({
+        available: false,
+        reason: sample.reason,
+      });
+      dom.window.close();
+    }
+    globalThis.document = priorDocument;
+  });
+
+  it("asks for a format choice when the saved book edition has no cart offer", () => {
+    const dom = new JSDOM(`
+      <body>
+        <div id="tmmSwatches">
+          <a href="/dp/B001KINDLE">Kindle $12.99</a>
+          <a href="/dp/B001AUDIO">Audiobook $0.00</a>
+          <a href="/dp/B001PAPER">Paperback $16.48</a>
+          <span>MP3 CD — Out of Print—Limited Availability</span>
+        </div>
+        <button>Add to Auto Buy</button>
+      </body>
+    `);
+    const priorDocument = globalThis.document;
+    globalThis.document = dom.window.document;
+    try {
+      expect(pageClassifyProductAvailability()).toMatchObject({
+        available: true,
+        needsUserChoice: true,
+        reason: "The saved format is unavailable; choose another format",
+      });
+    } finally {
+      globalThis.document = priorDocument;
+      dom.window.close();
+    }
+  });
+
+  it("does not ask for a format choice when the selected edition has Add to Cart", () => {
+    const dom = new JSDOM(`
+      <body>
+        <div id="tmmSwatches">
+          <a href="/dp/B001KINDLE">Kindle</a>
+          <a href="/dp/B001PAPER">Paperback</a>
+        </div>
+        <input id="add-to-cart-button" value="Add to Cart">
+      </body>
+    `);
+    const priorDocument = globalThis.document;
+    globalThis.document = dom.window.document;
+    try {
+      expect(pageClassifyProductAvailability()).toEqual({ available: true });
+    } finally {
+      globalThis.document = priorDocument;
       dom.window.close();
     }
   });
