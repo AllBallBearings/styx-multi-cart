@@ -1563,16 +1563,13 @@
     status.hidden = true;
     status.textContent = "";
     renderCartThumbs(card.querySelector(".mc-item-thumbs"), list);
+    // Icon-only button (arrow → cart); the label lives in the tooltip.
     const addAll = card.querySelector('[data-action="load-amazon-list-cart"]');
     addAll.disabled = availableItems.length === 0;
-    addAll.textContent =
-      availableItems.length === 0
-        ? "No Available Items"
-        : unavailableCount
-          ? `Add ${availableItems.length} Available to Cart`
-          : "Add All to Amazon Cart";
     addAll.title = availableItems.length
-      ? `Add ${availableItems.length} available list item${availableItems.length === 1 ? "" : "s"} to your active Amazon cart`
+      ? unavailableCount
+        ? `Add ${availableItems.length} available item${availableItems.length === 1 ? "" : "s"} to your Amazon cart`
+        : "Add All to Amazon Cart"
       : "This list has no available items";
   }
 
@@ -1686,9 +1683,24 @@
       const btn = e.target.closest(
         'button[data-action="toggle-amazon-list"], button[data-action="load-amazon-list-cart"]'
       );
-      if (!btn) return;
-      const li = btn.closest("li.mc-amazon-list-card");
+      const li = (btn || e.target).closest("li.mc-amazon-list-card");
       if (!li) return;
+
+      // Click anywhere on the card body toggles expand/collapse — but not on
+      // the View-on-Amazon link, the add-all icon, or item-tile controls.
+      if (!btn) {
+        if (e.target.closest("a, button, .mc-item-thumbs, .mc-qty-pop")) return;
+        const toggle = li.querySelector('[data-action="toggle-amazon-list"]');
+        const isExpanded = toggle.getAttribute("aria-expanded") === "true";
+        if (isExpanded) {
+          setAmazonListExpanded(li, false);
+          return;
+        }
+        setAmazonListExpanded(li, true);
+        await withLoading(toggle, () => ensureAmazonListItems(li));
+        return;
+      }
+
       const action = btn.dataset.action;
 
       if (action === "toggle-amazon-list") {

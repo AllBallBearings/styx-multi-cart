@@ -1955,7 +1955,65 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
 
 /* ---- Amazon list dashboard cards -------------------------------------- */
 .mc-amazon-list-card {
+  position: relative;
+  cursor: pointer;
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* Card body reads as one clickable target; keep the name row clear of the
+   top-right add-all icon. */
+.mc-amazon-list-card .mc-item-name-row {
+  justify-content: flex-start;
+  gap: 6px;
+  padding-right: 72px;
+}
+
+.mc-amazon-list-card .mc-amazon-list-meta {
+  padding-right: 72px;
+}
+
+/* Arrow → cart icon, pinned top-right. Tooltip carries the label. */
+.mc-amazon-list-topright {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc-amazon-list-addall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--mc-radius-sm);
+  border: 1px solid transparent;
+  background: var(--mc-accent);
+  color: #000;
+  cursor: pointer;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.mc-amazon-list-addall:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.mc-amazon-list-addall:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-amazon-list-addall:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mc-amazon-list-addall svg {
+  display: block;
 }
 
 .mc-amazon-list-card.mc-amazon-list-expanded {
@@ -2002,8 +2060,42 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
   padding-top: 2px;
 }
 
+/* Footer holds the "View on Amazon" icon button — left-aligned. */
+.mc-amazon-list-card .mc-amazon-list-actions {
+  justify-content: flex-start;
+}
+
 .mc-amazon-list-card .mc-amazon-list-actions > * {
-  flex: 1 1 140px;
+  flex: 0 0 auto;
   min-width: 0;
   text-decoration: none;
+}
+
+/* Small white icon button (list glyph) → opens the list on Amazon. */
+.mc-amazon-list-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--mc-radius-sm);
+  border: 1px solid var(--mc-line);
+  background: #fff;
+  color: #131a22;
+  cursor: pointer;
+  transition: filter 120ms ease, background 120ms ease;
+}
+
+.mc-amazon-list-open:hover {
+  filter: brightness(0.94);
+}
+
+.mc-amazon-list-open:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-amazon-list-open svg {
+  display: block;
 }
