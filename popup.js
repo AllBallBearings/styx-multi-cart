@@ -76,7 +76,9 @@
   const $qtyPop = document.getElementById("mc-qty-pop");
   const $qtyPopVal = $qtyPop.querySelector(".mc-qty-pop-val");
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
+  const $relabelToggle = document.getElementById("mc-relabel-toggle");
   const $sidepanelToggle = document.getElementById("mc-sidepanel-toggle");
+  const $gotoCarts = document.getElementById("mc-goto-carts");
   const $displaySection = document.getElementById(
     "mc-settings-display-section"
   );
@@ -779,6 +781,51 @@
       toast(res.error || "Could not save setting", "error");
     }
   });
+
+  // ---- Settings: rename Amazon lists to "carts" --------------------------
+
+  async function loadRelabelSetting() {
+    if (!$relabelToggle) return;
+    const res = await send({ type: "MC_GET_RELABEL" });
+    if (res && res.ok) $relabelToggle.checked = res.enabled !== false;
+  }
+
+  if ($relabelToggle) {
+    $relabelToggle.addEventListener("change", async () => {
+      const enabled = $relabelToggle.checked;
+      const res = await send({ type: "MC_SET_RELABEL", enabled });
+      if (!res || !res.ok) {
+        $relabelToggle.checked = !enabled; // revert on failure
+        toast((res && res.error) || "Could not save setting", "error");
+        return;
+      }
+      toast(
+        enabled
+          ? "Amazon lists now show as your Styx carts."
+          : "Amazon lists left as-is."
+      );
+    });
+  }
+
+  // ---- "Go to Carts": open the Amazon lists page -------------------------
+
+  if ($gotoCarts) {
+    $gotoCarts.addEventListener("click", async () => {
+      let host = "www.amazon.com";
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.url) {
+          const u = new URL(tab.url);
+          if (/(^|\.)amazon\./i.test(u.hostname)) host = u.hostname;
+        }
+      } catch (_e) { /* default host is fine */ }
+      try {
+        await chrome.tabs.create({ url: `https://${host}/hz/wishlist/ls` });
+      } catch (_e) {
+        toast("Couldn't open your carts", "error");
+      }
+    });
+  }
 
   // ---- Settings: open as side panel vs popup (Chrome only) ---------------
   //
@@ -2619,6 +2666,7 @@
     loadDebugPanelVisibility();
     refresh();
     loadInterceptSetting();
+    loadRelabelSetting();
     loadSurfaceSetting();
     // Fire-and-forget: ask the background to re-sync entitlement from
     // ExtensionPay. If the user just returned from a successful checkout,

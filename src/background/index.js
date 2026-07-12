@@ -137,6 +137,10 @@ const DEFAULT_ENTITLEMENT = Object.freeze({
 // merge with defaults so old stored shapes never block a launch.
 const DEFAULT_SETTINGS = {
   interceptAtc: true,
+  // Relabel Amazon's wish-list surfaces as Styx "carts" ("Your Lists" →
+  // "Your Styx Carts", custom list names "List" → "Cart"). On by default;
+  // read by observer.js, which reverts live when toggled off.
+  relabelListsAsCarts: true,
   // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
   // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
   // is unavailable (e.g. Safari), which always uses the popup.
@@ -866,6 +870,18 @@ function clearOpStatus(doneTitle = "Done") {
     // Only null it out if it hasn't been replaced by a new operation.
     if (_opStatus && !_opStatus.active) _opStatus = null;
   }, 5000);
+}
+
+/**
+ * Fire-and-forget message to a specific tab's content script. Used to drive
+ * the on-page Styx toast during long list-save operations. Swallows errors
+ * (tab closed / navigated / no listener) — progress UI is best-effort.
+ */
+function notifyTab(tabId, payload) {
+  if (tabId == null) return;
+  try {
+    chrome.tabs.sendMessage(tabId, payload, () => void chrome.runtime.lastError);
+  } catch (_e) { /* tab gone — non-fatal */ }
 }
 
 /** Open (or focus) the floating status window. Non-blocking — call without await. */
@@ -3856,86 +3872,65 @@ async function importAmazonListToCart(listId, preferredHost) {
   return readAmazonList(listId, preferredHost);
 }
 
-/** Create a new wish list named `name`; returns { listId, listUrl }. */
-async function createAmazonList(host, name) {
-  const url = `https://${host}${AMAZON_LISTS_PATH}`;
-  return await runInAmazonTab(
-    url,
-    async (tabId) => {
-      let listId = null;
-
-      // Fast path: POST the confirmed create endpoint from the page context.
-      try {
-        const a = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: pageCreateListFetch,
-          args: [name],
-        });
-        const ar = a && a[0] && a[0].result;
-        if (ar && ar.ok && ar.listId) listId = ar.listId;
-      } catch (_e) { /* fall through to the DOM popover */ }
-
-      // Fallback: drive the create popover form by hand.
-      if (!listId) {
-        try {
-          const c = await chrome.scripting.executeScript({
-            target: { tabId },
-            func: pageCreateList,
-            args: [name],
-          });
-          const cr = c && c[0] && c[0].result;
-          if (cr && cr.ok) {
-            await waitForTabReload(tabId, 15000).catch(() => {});
-            await sleep(1200);
-          }
-        } catch (_e) { /* the list may still have been created; resolve below */ }
-      }
-
-      // Resolve the id by matching the name on a fresh lists page. Covers both
-      // a fast-path response we couldn't parse and the DOM fallback.
-      if (!listId) {
-        await chrome.tabs.update(tabId, { url }).catch(() => {});
-        await waitForTabReload(tabId, 12000).catch(() => {});
-        await sleep(600);
-        const f = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: pageFindListByName,
-          args: [name],
-        });
-        const fr = f && f[0] && f[0].result;
-        if (fr && fr.listId) listId = fr.listId;
-      }
-
-      if (listId) return { listId, listUrl: amazonListUrl(host, listId) };
-      throw new Error(
-        "Couldn't create the Amazon list (or read its id back). Open Your Lists and try Save again."
-      );
-    },
-    { keepOpen: false, timeoutMs: 15000 }
-  );
-}
-
 /**
- * Fast path: add every ASIN to a list from a single product page via the
- * confirmed additemtolist endpoint. Returns { added, failures }.
+ * Create a new wish list named `name` by driving the create-and-add modal on
+ * the FIRST item's product page. This is the only create path Amazon accepts
+ * from script (validated live 2026-07-10/11):
+ *   - lists-page create modal: Create click + form.submit() both dead-end
+ *     ("Page Not Found") — trusted-only.
+ *   - PDP chooser → "Create a List" modal: fully synthetic-drivable; its
+ *     Create fires POST /hz/wishlist/create/newlist (with asin) → 200, so the
+ *     list is created AND the PDP's item is added in one step.
+ * Returns { listId, listUrl, firstItemAdded: true } or throws.
  */
-async function addItemsToList(host, listId, asins) {
-  if (!asins.length) return { added: 0, failures: [] };
-  const url = `https://${host}/dp/${asins[0]}`;
-  return await runInAmazonTab(
+async function createAmazonListFromPdp(host, name, firstAsin) {
+  const url = `https://${host}/dp/${String(firstAsin).toUpperCase()}`;
+  const res = await runInAmazonTab(
     url,
     async (tabId) => {
       const r = await chrome.scripting.executeScript({
         target: { tabId },
-        func: pageAddItemsToList,
-        args: [listId, asins],
+        func: pageCreateListAndAdd,
+        args: [name],
       });
-      const rr = r && r[0] && r[0].result;
-      console.log("[Styx list-sync] addItems →", rr);
-      if (!rr) return { added: 0, failures: asins.map((a) => ({ asin: a, error: "no result" })) };
-      return { added: rr.added || 0, failures: rr.failures || [], diag: rr.diag };
+      return (r && r[0] && r[0].result) || { ok: false, error: "no result from pageCreateListAndAdd" };
     },
-    { timeoutMs: 20000 }
+    { keepOpen: false, timeoutMs: 40000 }
+  );
+  console.log("[Styx list-sync] createListFromPdp →", res);
+  try {
+    await chrome.storage.local.set({ "mc.debug.lastCreateList": { at: Date.now(), via: "pdp-create-and-add", ...res } });
+  } catch (_e) { /* non-fatal */ }
+  if (!res.ok) {
+    throw new Error("Couldn't create the Amazon list: " + (res.error || "the create form couldn't be driven."));
+  }
+  // The confirmation usually carries a View List link with the new id. If it
+  // didn't, resolve the id by name from the lists index (read-only, reliable).
+  let listId = res.listId || null;
+  if (!listId) listId = await findAmazonListIdByName(host, name);
+  if (!listId) {
+    throw new Error(
+      'List "' + name + '" was created (first item added) but its id could not be read back. Open Your Lists and re-run Save to link it.'
+    );
+  }
+  return { listId, listUrl: amazonListUrl(host, listId), firstItemAdded: true };
+}
+
+/** Resolve a list id by exact name from the Your Lists index page. */
+async function findAmazonListIdByName(host, name) {
+  const url = `https://${host}${AMAZON_LISTS_PATH}`;
+  return await runInAmazonTab(
+    url,
+    async (tabId) => {
+      const f = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pageFindListByName,
+        args: [name],
+      });
+      const fr = f && f[0] && f[0].result;
+      return (fr && fr.listId) || null;
+    },
+    { keepOpen: false, timeoutMs: 15000 }
   );
 }
 
@@ -3984,57 +3979,60 @@ async function setListQuantities(host, listId, items) {
  * add every item, set quantities, then stamp the link onto the cart. Tolerant
  * of partial failure — reports added/failed counts.
  */
-async function saveCartToAmazonList(cart) {
+async function saveCartToAmazonList(cart, opts = {}) {
   const host = cart.host || "www.amazon.com";
   const items = (cart.items || []).filter((it) => it && it.asin);
   if (!items.length) return { ok: false, error: "This cart has no items to save." };
 
   const label = cart.name ? `"${cart.name}"` : "cart";
-  setOpStatus(`Saving ${label} to Amazon`, "Preparing your list…");
+  // Progress fans out to both the floating status window and (when the caller
+  // supplies a tab) an on-page Styx toast on the initiating tab.
+  const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
+  const report = (detail, extra = {}) => {
+    setOpStatus(`Saving ${label} to Amazon`, detail);
+    notifyTab(progressTabId, { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra });
+  };
+  report("Preparing your list…");
 
   // 1. Ensure a target list exists (reuse a prior link if it still exists).
+  //    A brand-new list is created from the FIRST item's product page via the
+  //    chooser's create-and-add modal — the only scriptable create path — so
+  //    creating the list also adds item #1.
+  const asins = items.map((it) => String(it.asin).toUpperCase());
+  const total = items.length;
+  let added = 0;
+  let failures = [];
+  let startIdx = 0;
   let listId = cart.amazonListId || null;
   if (listId && !(await amazonListExists(host, listId).catch(() => false))) {
     listId = null; // the linked list was deleted on Amazon — recreate it.
   }
   if (!listId) {
-    const created = await createAmazonList(host, cart.name || "Styx cart");
+    report("Creating your list…", { done: 0, total });
+    const created = await createAmazonListFromPdp(host, cart.name || "Styx cart", asins[0]);
     listId = created.listId;
+    if (created.firstItemAdded) {
+      added++;
+      startIdx = 1;
+    }
   }
   const listUrl = amazonListUrl(host, listId);
-  console.log("[Styx list-sync] target listId =", listId, "host =", host, "items =", items.length);
+  console.log("[Styx list-sync] target listId =", listId, "host =", host, "items =", total);
 
-  // 2. Add items. Fast path: one product tab fires a POST per ASIN to the
-  //    confirmed additemtolist endpoint. Stragglers fall back to the per-item
-  //    DOM driver.
-  const asins = items.map((it) => String(it.asin).toUpperCase());
-  let added = 0;
-  let failures = [];
-  let batchDiag = null;
-  setOpStatus(`Saving ${label} to Amazon`, `Adding ${asins.length} item${asins.length === 1 ? "" : "s"}…`);
-  try {
-    const batch = await addItemsToList(host, listId, asins);
-    added = batch.added || 0;
-    failures = batch.failures || [];
-    batchDiag = batch.diag || null;
-  } catch (e) {
-    failures = asins.map((a) => ({ asin: a, error: String((e && e.message) || e) }));
-  }
-
-  // Fallback for anything the batch missed: per-item DOM "Add to List".
-  if (failures.length) {
-    const retry = failures;
-    failures = [];
-    for (let i = 0; i < retry.length; i++) {
-      const asin = retry[i].asin;
-      setOpStatus(`Saving ${label} to Amazon`, `Retrying item ${i + 1} of ${retry.length}…`);
-      try {
-        const r = await addItemToList(host, listId, asin);
-        if (r && r.ok) added++;
-        else failures.push({ asin, error: (r && r.error) || "add failed" });
-      } catch (e) {
-        failures.push({ asin, error: String((e && e.message) || e) });
-      }
+  // 2. Add the remaining items by driving Amazon's own Add-to-List chooser on
+  //    each item's product page. Validated 2026-07-10: synthetic clicks drive
+  //    the chooser end-to-end, while the raw additemtolist fetch 403s from
+  //    extension code but succeeds when fired by Amazon's own row handler.
+  //    One tab per item; slow but it's the only write path Amazon accepts.
+  for (let i = startIdx; i < asins.length; i++) {
+    const asin = asins[i];
+    report(`Adding item ${i + 1} of ${total}…`, { done: i, total });
+    try {
+      const r = await addItemToList(host, listId, asin);
+      if (r && r.ok) added++;
+      else failures.push({ asin, error: (r && r.error) || "add failed" });
+    } catch (e) {
+      failures.push({ asin, error: String((e && e.message) || e) });
     }
   }
 
@@ -4057,12 +4055,10 @@ async function saveCartToAmazonList(cart) {
   const firstFail = failures[0];
   const reason =
     added === 0
-      ? (batchDiag && batchDiag.tokenFound === false
-          ? "No CSRF token found on the product page. "
-          : "") + (firstFail ? "First error: " + firstFail.error : "Nothing was added.")
+      ? (firstFail ? "First error: " + firstFail.error : "Nothing was added.")
       : "";
   console.log("[Styx list-sync] saveCart done", {
-    listId, added, total: items.length, failed: failures.length, batchDiag, reason,
+    listId, added, total: items.length, failed: failures.length, reason,
   });
 
   return {
@@ -4073,7 +4069,6 @@ async function saveCartToAmazonList(cart) {
     failed: failures.length,
     total: items.length,
     failures,
-    diag: batchDiag,
     error: added === 0 ? reason : undefined,
   };
 }
@@ -4231,164 +4226,103 @@ function pageScrapeSingleList() {
 }
 
 /**
- * Fast path: create a list via the confirmed endpoint, no DOM.
- * Confirmed via network capture:
- *   1. GET  /hz/wishlist/create?isPopover=1&createIngressName=DESKTOP_LIST_OF_LIST
- *           → HTML fragment carrying the anti-csrftoken-a2z + sid.
- *   2. POST /hz/wishlist/create/newlist
- *           body listName, sid, vendorId=website.wishlist.profile,
- *                privacyStatus=PRIVATE, listType=WishList, isJson=true
- * Returns { ok, listId?, status?, tokenFound, snippet?, error? }.
+ * Create a list (and add THIS page's product to it) by driving the PDP
+ * chooser's "Create a List" modal. Validated live 2026-07-10/11:
+ *   - synthetic caret click opens the multi-list chooser
+ *   - synthetic click on #atwl-dd-create-list opens the create modal
+ *   - fill input[name="list-name"] + synthetic click on the Create submit
+ *     (aria-labelledby="lists-desktop-create-list-label"; Cancel renders
+ *     FIRST in DOM, so never generic-match a submit) fires Amazon's own
+ *     POST /hz/wishlist/create/newlist (with asin) → 200: list created AND
+ *     this item added.
+ * NOTE: the modal is position:fixed, so offsetParent is null on its
+ * elements — test visibility with getBoundingClientRect(), never offsetParent.
+ * Returns { ok, listId?, confirmed, error? }.
  */
-function pageCreateListFetch(name) {
+function pageCreateListAndAdd(name) {
   return (async () => {
-    const out = { ok: false, tokenFound: false };
-    const TOK = /anti-csrftoken-a2z["'\s:=]+["']?([A-Za-z0-9+/=_-]{16,})/i;
-    try {
-      const pop = await fetch(
-        "/hz/wishlist/create?isPopover=1&createIngressName=DESKTOP_LIST_OF_LIST&_=" + Date.now(),
-        { headers: { accept: "text/html,*/*", "x-requested-with": "XMLHttpRequest" }, credentials: "include" }
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const visible = (el) => !!(el && el.getBoundingClientRect().width > 0);
+    const idsOnPage = () =>
+      new Set(
+        [...document.querySelectorAll('a[href*="/wishlist/ls/"]')]
+          .map((a) => ((a.getAttribute("href") || "").match(/\/wishlist\/ls\/([A-Z0-9]{8,})/i) || [])[1])
+          .filter(Boolean)
       );
-      const popHtml = await pop.text();
-      const tokM = popHtml.match(TOK) || document.documentElement.innerHTML.match(TOK);
-      const token = tokM ? tokM[1] : null;
-      out.tokenFound = !!token;
-      if (!token) { out.error = "no create token in popover"; return out; }
-      const sidM =
-        popHtml.match(/name="sid"[^>]*value="([^"]+)"/i) ||
-        popHtml.match(/(\d{3}-\d{7}-\d{7})/) ||
-        document.cookie.match(/session-id=([\d-]+)/);
-      const sid = sidM ? sidM[1] : null;
-      const body = new URLSearchParams({
-        listName: name,
-        vendorId: "website.wishlist.profile",
-        privacyStatus: "PRIVATE",
-        listType: "WishList",
-        isJson: "true",
-      });
-      if (sid) body.set("sid", sid);
-      const resp = await fetch("/hz/wishlist/create/newlist", {
-        method: "POST",
-        headers: {
-          "anti-csrftoken-a2z": token,
-          "content-type": "application/x-www-form-urlencoded",
-          "x-requested-with": "XMLHttpRequest",
-          accept: "*/*",
-        },
-        body: body.toString(),
-        credentials: "include",
-      });
-      out.status = resp.status;
-      const text = await resp.text();
-      out.snippet = text.slice(0, 300);
-      let listId = null;
-      try {
-        const j = JSON.parse(text);
-        listId =
-          j.listExternalId || j.externalId || j.listId || j.list_id || j.id ||
-          (j.list && (j.list.listId || j.list.externalId || j.list.id)) ||
-          (j.data && (j.data.listId || j.data.externalId || j.data.id)) ||
-          null;
-      } catch (_e) { /* not JSON — fall through to regex */ }
-      if (!listId) {
-        const idM =
-          text.match(/"(?:listExternalId|externalId|listId)"\s*:\s*"([A-Z0-9]+)"/i) ||
-          text.match(/\/hz\/wishlist\/ls\/([A-Z0-9]+)/i);
-        if (idM) listId = idM[1];
+    try {
+      // 1. Open the chooser (may already be open from a retry).
+      let createLink = document.getElementById("atwl-dd-create-list");
+      if (!visible(createLink)) {
+        const caret =
+          document.getElementById("add-to-wishlist-button") ||
+          document.querySelector("#wishlistButtonStack .a-button-splitdropdown input") ||
+          document.getElementById("wishListDropDown");
+        if (!caret) return { ok: false, error: "Add-to-List dropdown not found on this page." };
+        caret.click();
+        for (let i = 0; i < 20; i++) {
+          await sleep(250);
+          createLink = document.getElementById("atwl-dd-create-list");
+          if (visible(createLink)) break;
+        }
       }
-      if (resp.ok && listId) { out.ok = true; out.listId = listId; }
-      else out.error = "no listId in create response (status " + resp.status + ")";
-      return out;
+      if (!visible(createLink)) return { ok: false, error: "Create-a-List entry not found in the chooser." };
+
+      const preIds = idsOnPage();
+
+      // 2. Open the create modal and name the list.
+      createLink.click();
+      let input = null;
+      for (let i = 0; i < 24; i++) {
+        await sleep(250);
+        input = document.querySelector('input#list-name, input[name="list-name"]');
+        if (visible(input)) break;
+      }
+      if (!visible(input)) return { ok: false, error: "Create-list form did not appear." };
+      // Let Amazon's a-declarative bind the modal's handlers before we drive
+      // it — clicking Create before binding silently no-ops (seen live).
+      await sleep(800);
+      input.focus();
+      input.value = name;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+
+      // 3. Click the real Create control (never the Cancel that precedes it).
+      //    Retry the click: if the handler wasn't bound yet the modal stays
+      //    open with no confirmation, and a later click lands (seen live).
+      const scope = input.form || document;
+      const create = scope.querySelector(
+        'input[type="submit"][aria-labelledby="lists-desktop-create-list-label"], ' +
+          '.create-list-create-button input[type="submit"], ' +
+          '.create-list-create-button [type="submit"]'
+      );
+      if (!create) return { ok: false, error: "Create button not found in the create-list form." };
+
+      // 4. Confirmation: "1 item added to <name>" plus a View List link whose
+      //    href carries the NEW list id (absent from the pre-click set).
+      let confirmed = false;
+      for (let attempt = 0; attempt < 3 && !confirmed; attempt++) {
+        create.click();
+        for (let i = 0; i < 10; i++) {
+          await sleep(400);
+          if (/item added to/i.test(document.body.innerText || "")) { confirmed = true; break; }
+          // Modal gone without a toast — assume the submit landed and move on.
+          if (!visible(input)) break;
+        }
+        if (!confirmed && !visible(input)) break;
+      }
+      let listId = null;
+      for (let i = 0; i < 8 && !listId; i++) {
+        for (const id of idsOnPage()) {
+          if (!preIds.has(id)) { listId = id; break; }
+        }
+        if (!listId) await sleep(400);
+      }
+      if (!confirmed && !listId) return { ok: false, error: "No confirmation after clicking Create." };
+      return { ok: true, listId, confirmed };
     } catch (e) {
-      out.error = String((e && e.message) || e);
-      return out;
+      return { ok: false, error: String((e && e.message) || e) };
     }
   })();
-}
-
-/**
- * Open + submit Amazon's Create-a-List form. Returns { ok, error? }.
- *
- * Confirmed via network capture: the "#createList" control opens a popover
- * whose form is fetched by XHR (GET /hz/wishlist/create?isPopover=1), so the
- * name input appears asynchronously — we poll for it rather than wait a fixed
- * delay. Submitting the real form carries Amazon's CSRF token for us.
- */
-function pageCreateList(name) {
-  return new Promise((resolve) => {
-    const q = (sels) => {
-      for (const s of sels) {
-        const el = document.querySelector(s);
-        if (el) return el;
-      }
-      return null;
-    };
-    const vis = (el) => !!(el && el.offsetParent !== null);
-    const findInput = () =>
-      q([
-        "input#list-name",
-        'input[name="listName"]',
-        'input[name="wl-list-name"]',
-        'input[name="newListName"]',
-        'input[aria-label*="List name" i]',
-        'input[placeholder*="List name" i]',
-        '.a-popover-wrapper input[type="text"]',
-        '.a-popover input[type="text"]',
-      ]);
-    const findSubmit = (input) =>
-      q([
-        "#submit-create-list",
-        'input[name="submit.create-list"]',
-        'button[name="submit.create-list"]',
-        "span#submit-create-list input",
-        '.a-popover-wrapper [type="submit"]',
-        '.a-popover [type="submit"]',
-        'button[type="submit"][aria-label*="Create" i]',
-        'input[type="submit"][aria-label*="Create" i]',
-      ]) ||
-      (input && input.form &&
-        input.form.querySelector('button[type="submit"], input[type="submit"]'));
-    try {
-      const trigger = q([
-        "#createList",
-        "#wl-redesign-create-list",
-        'a[data-csa-c-content-id="create-list"]',
-        'button[aria-label*="Create a List" i]',
-        'a[aria-label*="Create a List" i]',
-      ]);
-      if (!trigger) {
-        resolve({ ok: false, error: "Create-a-List trigger (#createList) not found." });
-        return;
-      }
-      trigger.click();
-      // The form loads into an a-popover via XHR — poll up to ~6s for it.
-      let tries = 0;
-      const timer = setInterval(() => {
-        const input = findInput();
-        if (input && vis(input)) {
-          clearInterval(timer);
-          input.focus();
-          input.value = name;
-          input.dispatchEvent(new Event("input", { bubbles: true }));
-          input.dispatchEvent(new Event("change", { bubbles: true }));
-          const submit = findSubmit(input);
-          if (!submit) {
-            resolve({ ok: false, error: "Create-a-List submit button not found in popover." });
-            return;
-          }
-          submit.click();
-          resolve({ ok: true });
-          return;
-        }
-        if (++tries > 40) {
-          clearInterval(timer);
-          resolve({ ok: false, error: "Create-a-List form (popover) didn't appear." });
-        }
-      }, 150);
-    } catch (e) {
-      resolve({ ok: false, error: String((e && e.message) || e) });
-    }
-  });
 }
 
 /** Find a list id by exact name, or off the current URL after a create. */
@@ -4415,129 +4349,63 @@ function pageFindListByName(name) {
 }
 
 /**
- * Fast path: add many ASINs to a list with one POST each, all from a single
- * product page (same-origin, cookies + CSRF auto). Returns { ok, added, failures }.
+ * Drive a product page's "Add to List" dropdown to add to a specific list.
  *
- * Confirmed via network capture:
- *   POST /hz/wishlist/additemtolist
- *   header anti-csrftoken-a2z
- *   body   asin, vendorId=website.wishlist.detail.add, listExternalId=<listId>,
- *          listType=wishlist, isAjax=1   (no quantity — add is always qty 1)
- * Runs on a /dp/<asin> page because that's where the wishlist widget embeds a
- * token valid for this endpoint. One token is reused for the batch; failures
- * are reported per-asin so the caller can fall back to the DOM driver.
+ * Validated live (2026-07-10): a SYNTHETIC click on the split-button caret
+ * opens the multi-list chooser (the old trusted-click gate is gone), and a
+ * synthetic click on the chooser row `#atwl-list-name-<listId>` fires
+ * Amazon's own POST /hz/wishlist/additemtolist → 200 and the item lands.
+ * The same POST fired directly via fetch from an extension context returns
+ * 403, so DOM-driving Amazon's handler is the only working write path.
  */
-function pageAddItemsToList(listId, asins) {
+function pageAddToList(listId) {
   return (async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    const findToken = () => {
-      const inp = document.querySelector('input[name="anti-csrftoken-a2z"]');
-      if (inp && inp.value) return inp.value;
-      const html = document.documentElement.innerHTML;
-      const m = html.match(/anti-csrftoken-a2z["'\\\s:=]+([A-Za-z0-9+/=_-]{16,})/i);
-      return m ? m[1] : null;
-    };
-    const token = findToken();
-    const diag = { tokenFound: !!token, listId, firstStatus: null, firstSnippet: null };
-    if (!token) {
-      return { ok: false, error: "no csrf token", added: 0, failures: (asins || []).map((a) => ({ asin: a, error: "no token" })), diag };
-    }
-    // A 200 doesn't mean the item landed — Amazon returns 200 with an error
-    // body when the token/list/session is bad. Treat those as failures.
-    const looksRejected = (text) =>
-      /ap\/signin|\/signin|captcha|"?(?:isError|error)"?\s*:\s*(?:true|")|not\s+authorized|unauthorized|invalid|"?success"?\s*:\s*false/i.test(
-        text || ""
-      );
-    let added = 0;
-    const failures = [];
-    for (let i = 0; i < asins.length; i++) {
-      const asin = asins[i];
-      const body = new URLSearchParams({
-        asin,
-        vendorId: "website.wishlist.detail.add",
-        listExternalId: listId,
-        listType: "wishlist",
-        isAjax: "1",
-      });
-      try {
-        const resp = await fetch("/hz/wishlist/additemtolist", {
-          method: "POST",
-          headers: {
-            "anti-csrftoken-a2z": token,
-            "content-type": "application/x-www-form-urlencoded",
-            "x-requested-with": "XMLHttpRequest",
-            accept: "*/*",
-          },
-          body: body.toString(),
-          credentials: "include",
-        });
-        const text = await resp.text().catch(() => "");
-        if (i === 0) { diag.firstStatus = resp.status; diag.firstSnippet = (text || "").slice(0, 300); }
-        if (!resp.ok) failures.push({ asin, error: "HTTP " + resp.status });
-        else if (looksRejected(text)) failures.push({ asin, error: "rejected: " + (text || "").slice(0, 120) });
-        else added++;
-      } catch (e) {
-        failures.push({ asin, error: String((e && e.message) || e) });
-      }
-      await sleep(350); // gentle pacing — Amazon runs bot detection here
-    }
-    return { ok: true, added, failures, diag };
-  })();
-}
-
-/** Drive a product page's "Add to List" to add to a specific list. */
-function pageAddToList(listId) {
-  return new Promise((resolve) => {
-    const q = (sels, root) => {
-      root = root || document;
-      for (const s of sels) {
-        const el = root.querySelector(s);
-        if (el) return el;
-      }
-      return null;
+    const rowSel = "#atwl-list-name-" + listId;
+    const findRow = () => {
+      const el = document.querySelector(rowSel);
+      return el && el.getBoundingClientRect().width > 0 ? el : null;
     };
     try {
-      const trigger = q([
-        "#add-to-wishlist-button",
-        "#add-to-wishlist-button-submit",
-        "#wishListMainButton",
-        'input[name="submit.add-to-registry.wishlist"]',
-        'a[id*="add-to-wishlist"]',
-        'span[id*="wishlist"] a',
-      ]);
-      if (!trigger) {
-        resolve({ ok: false, error: "Add to List button not found on this page." });
-        return;
+      // The chooser may already be open (e.g. a retry on the same tab).
+      let row = findRow();
+      if (!row) {
+        const caret =
+          document.getElementById("add-to-wishlist-button") ||
+          document.querySelector(
+            "#wishlistButtonStack .a-button-splitdropdown input"
+          ) ||
+          document.getElementById("wishListDropDown");
+        if (!caret) {
+          return { ok: false, error: "Add-to-List dropdown not found on this page." };
+        }
+        caret.click();
+        for (let i = 0; i < 20 && !(row = findRow()); i++) await sleep(250);
       }
-      trigger.click();
-      // Wait for the list picker, then choose our list.
-      setTimeout(() => {
-        const target = document.querySelector(
-          'a[href*="' + listId + '"], [data-id="' + listId + '"], ' +
-            '[data-wl-list-id="' + listId + '"], input[value="' + listId + '"]'
-        );
-        if (target && target.tagName === "INPUT") {
-          target.checked = true;
-          const form = target.form;
-          const submit =
-            form && form.querySelector('button[type="submit"], input[type="submit"]');
-          if (submit) {
-            submit.click();
-            resolve({ ok: true });
-            return;
-          }
+      if (!row) {
+        return {
+          ok: false,
+          error: "List " + listId + " not found in the Add-to-List menu.",
+        };
+      }
+      row.click();
+      // Success signal: Amazon pops an "item added to <list>" confirmation.
+      // Treat the click as the add either way — the row handler is Amazon's —
+      // but report whether we saw the confirmation.
+      let confirmed = false;
+      for (let i = 0; i < 16; i++) {
+        await sleep(250);
+        const t = document.body.innerText || "";
+        if (/item added to|already in your|added to your list/i.test(t)) {
+          confirmed = true;
+          break;
         }
-        if (target) {
-          target.click();
-          resolve({ ok: true });
-          return;
-        }
-        resolve({ ok: false, error: "Target list not found in the Add-to-List menu." });
-      }, 900);
+      }
+      return { ok: true, confirmed };
     } catch (e) {
-      resolve({ ok: false, error: String((e && e.message) || e) });
+      return { ok: false, error: String((e && e.message) || e) };
     }
-  });
+  })();
 }
 
 /** Best-effort: set desired quantities on list rows from an asin->qty map. */
@@ -5295,6 +5163,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
+        case "MC_GET_RELABEL": {
+          const settings = await readSettings();
+          sendResponse({ ok: true, enabled: settings.relabelListsAsCarts !== false });
+          break;
+        }
+
+        case "MC_SET_RELABEL": {
+          const next = await writeSettings({ relabelListsAsCarts: !!msg.enabled });
+          sendResponse({ ok: true, enabled: next.relabelListsAsCarts !== false });
+          break;
+        }
+
         case "MC_GET_UI_SURFACE": {
           const settings = await readSettings();
           const supported = !!(
@@ -5474,6 +5354,75 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             setOpStatus("Couldn't save to Amazon", (saveRes && saveRes.error) || "Try again.");
           }
           sendResponse(saveRes || { ok: false, error: "No result." });
+          break;
+        }
+
+        case "MC_SAVE_LIVE_CART_TO_LIST": {
+          // Save the LIVE Amazon cart straight into a NEW Amazon wish list —
+          // no Styx saved cart in between. Fired by the on-page cart button.
+          // Progress is reported as an on-page Styx toast on the INITIATING
+          // tab (via notifyTab), and on success that same tab is navigated to
+          // the finished list — so the whole flow begins and ends on the cart
+          // tab the user clicked from. The per-item driver tabs open/close in
+          // the background. Reuses the saveCartToAmazonList driver.
+          const cartTabId = (_sender && _sender.tab && _sender.tab.id) || null;
+          let liveCart;
+          try {
+            liveCart = await scrapeCartInBackground(msg.host);
+          } catch (scrapeErr) {
+            sendResponse({
+              ok: false,
+              error: (scrapeErr && scrapeErr.message) || "Could not read the Amazon cart page.",
+            });
+            break;
+          }
+          if (!liveCart.items || !liveCart.items.length) {
+            sendResponse({ ok: false, error: "Your Amazon cart looks empty — nothing to save." });
+            break;
+          }
+          const liveListName = (msg.name && String(msg.name).trim()) || "Amazon cart";
+          // No cart.id → saveCartToAmazonList creates a new list and skips the
+          // saved-cart link persistence, so nothing lands in the Styx panel.
+          let liveSaveRes;
+          try {
+            liveSaveRes = await saveCartToAmazonList(
+              { host: liveCart.host, name: liveListName, items: liveCart.items },
+              { progressTabId: cartTabId }
+            );
+          } catch (e) {
+            liveSaveRes = { ok: false, error: String((e && e.message) || e) };
+          }
+          try { await chrome.storage.local.set({ "mc.debug.lastSync": { at: Date.now(), ...liveSaveRes } }); } catch (_e) {}
+          if (liveSaveRes && liveSaveRes.ok) {
+            clearOpStatus(
+              liveSaveRes.failed
+                ? `Saved ${liveSaveRes.added}/${liveSaveRes.total} to "${liveListName}". ${liveSaveRes.failed} need a manual add.`
+                : `Saved ${liveSaveRes.added} item${liveSaveRes.added === 1 ? "" : "s"} to your new Amazon list.`
+            );
+            // Land the user on their new list — in the SAME tab they started
+            // from. Falls back to a fresh tab if that tab is gone.
+            if (liveSaveRes.listUrl) {
+              notifyTab(cartTabId, {
+                type: "MC_LIST_SAVE_PROGRESS",
+                detail: "Done — opening your list…",
+                done: liveSaveRes.total,
+                total: liveSaveRes.total,
+              });
+              let navigated = false;
+              if (cartTabId != null) {
+                try {
+                  await chrome.tabs.update(cartTabId, { url: liveSaveRes.listUrl, active: true });
+                  navigated = true;
+                } catch (_e) { /* tab gone — fall back below */ }
+              }
+              if (!navigated) {
+                try { await chrome.tabs.create({ url: liveSaveRes.listUrl, active: true }); } catch (_e) {}
+              }
+            }
+          } else {
+            setOpStatus("Couldn't save to Amazon", (liveSaveRes && liveSaveRes.error) || "Try again.");
+          }
+          sendResponse(liveSaveRes || { ok: false, error: "No result." });
           break;
         }
 

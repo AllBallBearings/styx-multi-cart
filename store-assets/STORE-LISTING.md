@@ -6,13 +6,13 @@ Paste these into the Chrome Web Store Developer Dashboard listing form. Keep the
 ---
 
 ## Name
-Styx Multi-Cart — Amazon lists & carts
+Styx Multi-Cart — Amazon carts from your lists
 
 ## Short description (max 132 chars)
-Every Amazon list in one panel — open it and send to your cart in one click. Plus bulk add, a bold Add-to-List button & 1-click clear.
+Turn your Amazon lists into reusable carts. Send any cart to your Amazon cart in one click, or save your cart into a new one.
 
-> 131 chars. Alt (shorter):
-> `All your Amazon lists in one panel. Send any list to your cart in one click — plus bulk add & one-click Clear Cart.` (114)
+> 121 chars. Alt (shorter):
+> `Your Amazon lists, reimagined as reusable carts — move items in and out of your Amazon cart in one click.` (104)
 
 ## Category
 Shopping
@@ -21,35 +21,33 @@ Shopping
 
 ## Detailed description
 
-**Your Amazon lists, finally usable. Turn any wish list into a cart in one click — and build lists as fast as you add to cart.**
+**Your Amazon lists, reimagined as reusable carts. Build as many as you want, and move items between them and your Amazon cart in a single click.**
 
-Amazon buries your lists and gives you a single cart. Styx Multi-Cart puts every list in one panel and makes moving items in and out of your cart effortless.
+Amazon gives you one cart and buries your lists. Styx Multi-Cart repurposes those wish lists into flexible, reusable **carts** — and relabels Amazon's own Lists page to match — so you can shop the way you actually think.
 
 **What it does**
 
-📋 **All your Amazon lists in one place** — every wish list and registry shows up right in the Styx side panel. Open any list, see what's inside, and send items straight to your Amazon cart.
+🛒 **All your carts in one panel** — every Amazon list shows up as a cart in the Styx side panel, and a **Go to Carts** button jumps you straight to them on Amazon. Styx even renames Amazon's "Your Lists" page to **Your Styx Carts** and adds "Cart" to each of your list names (toggle it off anytime).
 
-⚡ **Send a whole list to your cart in one click** — the **Send All to Amazon Cart** button on any Amazon list page moves everything into your cart at once. Unavailable or out-of-stock items are skipped automatically, and for books it asks which edition or format you actually want.
+⚡ **Send a whole cart to your Amazon cart** — the **Send All to Amazon Cart** button loads an entire cart into your Amazon cart at once. Out-of-stock items are skipped automatically, and for books it asks which edition or format you want.
 
-⭐ **Build lists as easily as you add to cart** — Styx moves Amazon's **Add to List** button up right next to **Add to Cart** and gives it a bold, can't-miss color. Saving a product to any of your lists is now one obvious click.
+💾 **Save your Amazon cart into a new cart** — one click on the Amazon cart page saves everything in your cart into a brand-new cart, so you can empty your cart and shop something else without losing a thing.
 
-🧹 **Clear your Amazon cart in one click** — empty your live cart instantly to start a fresh shopping session. Your lists and saved carts stay untouched.
+⭐ **Save to a Cart while you browse** — Styx puts a bold **Save to a Cart** button right next to **Add to Cart** on every product page, so filling a cart is as easy as buying.
 
-🔁 **Save & switch named carts** — snapshot your current Amazon cart under any name ("Birthday gifts," "Office supplies") and swap between them whenever you like.
+🧹 **Clear your Amazon cart in one click** — empty your live cart instantly for a fresh session. Your carts stay untouched.
 
-🧩 **Combine carts** — merge multiple carts into one.
-
-🌍 **Access anywhere** — because your lists live in your Amazon account, they follow you across every device you sign in on.
+🌍 **Synced across your devices** — your carts are backed by your Amazon account, so they follow you everywhere you sign in.
 
 🌗 **Light & dark mode.**
 
-🔒 **Private by design** — saved carts live in your browser's local storage. No accounts, no external servers, no tracking.
+🔒 **Private by design** — Styx works entirely between your browser and Amazon. No external servers, no tracking.
 
-**Free to use.** Premium unlocks up to 20 saved carts.
+**Free to use.**
 
 Works on Chrome, Edge, Brave, Arc, Opera, Vivaldi and other Chromium browsers. A Safari version is also available.
 
 ---
 
 ## Notes for reviewer / permissions justification
-Accesses `amazon.com` pages to read your lists and cart and to add/remove items on your behalf. All saved-cart data is stored locally (`chrome.storage.local`); nothing is sent to external servers.
+Accesses `amazon.com` pages to read your lists and cart and to add/remove items on your behalf (for example, sending a cart to your Amazon cart or saving your cart into a new list). Settings are stored locally (`chrome.storage.local`); nothing is sent to external servers.

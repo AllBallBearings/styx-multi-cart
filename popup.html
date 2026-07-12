@@ -240,9 +240,17 @@
       </div>
 
       <div class="mc-list-header">
-        <h2>Amazon Lists</h2>
+        <h2>Your Carts</h2>
         <span id="mc-list-count" class="mc-count">0</span>
         <div class="mc-list-header-actions">
+          <button
+            id="mc-goto-carts"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+            title="Open your carts on Amazon"
+          >
+            Go to Carts
+          </button>
           <button
             id="mc-amazon-lists-refresh"
             class="mc-btn mc-btn-ghost mc-btn-sm"
@@ -882,6 +890,21 @@
       <div class="mc-modal-backdrop" data-action="settings-close"></div>
       <div class="mc-modal-card">
         <h3 id="mc-settings-title" class="mc-modal-title">Settings</h3>
+
+        <div class="mc-settings-section">
+          <h4 class="mc-settings-heading">Amazon</h4>
+          <label class="mc-toggle">
+            <input id="mc-relabel-toggle" type="checkbox" />
+            <span class="mc-toggle-label">
+              Rename Amazon lists to “carts”
+              <span class="mc-toggle-sub">
+                On relabels Amazon’s Lists page as “Your Styx Carts” and adds
+                “Cart” to each of your list names (e.g. “Jared’s List” → “Jared’s
+                List Cart”). Off leaves Amazon untouched.
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div
           id="mc-settings-display-section"
