@@ -119,6 +119,11 @@ html[data-surface="sidepanel"] body {
   font-size: 12px;
 }
 
+/* Anchor the floated side-panel toolbar (.mc-header) to the panel content. */
+html[data-surface="sidepanel"] body {
+  position: relative;
+}
+
 body.mc-move-modal-open {
   min-height: 560px;
 }
@@ -144,21 +149,27 @@ html[data-surface="sidepanel"] .mc-header {
   padding: 12px;
 }
 
-/* Chrome's native side-panel header already shows the "Styx Multi-Cart" title
-   + close, so we hide our own brand. Rather than waste a whole empty row on
-   two buttons, float the settings + theme icons up onto the "Save current
-   Amazon cart as" label line. The label reserves matching height + right
-   padding so nothing overlaps. */
+/* Chrome's native side-panel header already shows the extension title, so
+   hide the duplicate brand and keep settings/theme in a compact toolbar row.
+   This row must participate in layout: the old absolute positioning overlapped
+   the Amazon Lists header after the local-cart save block was removed. */
+/* Chrome's native side-panel already shows the extension title, so the brand
+   is hidden. Float the settings/theme toolbar out of flow and up onto the
+   "Amazon Lists" header row (top-right) so the panel doesn't open with an empty
+   band of whitespace above the list. Anchored to body (position: relative
+   below); scrolls with content. */
 html[data-surface="sidepanel"] .mc-header {
   position: absolute;
   top: 10px;
   right: 12px;
-  z-index: 20;
+  left: auto;
+  width: auto;
   justify-content: flex-end;
   gap: 8px;
   padding: 0;
-  border-bottom: 0;
-  background: transparent;
+  border-bottom: none;
+  background: none;
+  z-index: 20;
 }
 
 html[data-surface="sidepanel"] .mc-brand {
@@ -167,18 +178,6 @@ html[data-surface="sidepanel"] .mc-brand {
 
 html[data-surface="sidepanel"] .mc-header-actions {
   gap: 8px;
-}
-
-html[data-surface="sidepanel"] .mc-save-block {
-  padding-top: 12px;
-}
-
-html[data-surface="sidepanel"] .mc-label {
-  display: flex;
-  align-items: center;
-  min-height: 30px;
-  margin-bottom: 8px;
-  padding-right: 76px;
 }
 
 /* ---- Theme toggle -------------------------------------------------------- */
@@ -644,6 +643,29 @@ html[data-surface="panel"] .mc-item-thumb-more {
   display: flex;
 }
 
+.mc-thumb-unavailable {
+  opacity: 0.58;
+  filter: grayscale(0.85);
+  border-style: dashed;
+}
+
+.mc-thumb-unavailable-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  z-index: 3;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--mc-danger-soft);
+  border: 1px solid var(--mc-danger);
+  color: var(--mc-danger);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 13px;
+  white-space: nowrap;
+}
+
 .mc-thumb-remove {
   position: absolute;
   top: -8px;
@@ -897,6 +919,33 @@ button.mc-thumb-qty:focus-visible {
 
 .mc-list-header-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Side panel floats the settings/theme toolbar into the top-right corner
+   (see .mc-header override). Reserve room so the list-header's own actions
+   (Refresh / Clear) never slide under those icons on a widened panel. */
+html[data-surface="sidepanel"] .mc-list-header {
+  padding-right: 76px;
+}
+
+@media (max-width: 360px) {
+  .mc-list-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .mc-list-header-actions {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  /* Actions drop to their own row here, so the icon clearance isn't needed. */
+  html[data-surface="sidepanel"] .mc-list-header {
+    padding-right: 0;
+  }
 }
 
 .mc-btn-active {
@@ -1814,4 +1863,239 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
   font-size: 11px;
   color: var(--mc-fg-muted);
   line-height: 1.3;
+}
+
+/* ---- Amazon-list sync (cart card) ------------------------------------- */
+.mc-item-sync {
+  font-size: 11px;
+  color: var(--mc-fg-muted);
+  margin-top: 2px;
+}
+.mc-sync-ok {
+  color: var(--mc-success);
+  font-weight: 600;
+}
+.mc-sync-link {
+  color: var(--mc-link);
+  text-decoration: none;
+}
+.mc-sync-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- Your Amazon Lists (discovery panel) ------------------------------ */
+.mc-amazon-lists {
+  margin: 10px 0 4px;
+  border: 1px solid var(--mc-line);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-bg-soft);
+}
+.mc-amazon-lists-toggle {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mc-fg);
+  list-style: none;
+}
+.mc-amazon-lists-toggle::-webkit-details-marker {
+  display: none;
+}
+.mc-amazon-lists-hint {
+  font-weight: 400;
+  color: var(--mc-fg-muted);
+}
+.mc-amazon-lists-body {
+  padding: 0 12px 12px;
+}
+.mc-amazon-lists-status {
+  font-size: 12px;
+  color: var(--mc-fg-muted);
+  margin: 8px 0 0;
+}
+.mc-amazon-lists-ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-amazon-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--mc-line);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-bg);
+}
+.mc-amazon-list-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mc-amazon-list-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mc-link);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mc-amazon-list-name:hover {
+  text-decoration: underline;
+}
+.mc-amazon-list-meta {
+  font-size: 11px;
+  color: var(--mc-fg-muted);
+}
+
+/* ---- Amazon list dashboard cards -------------------------------------- */
+.mc-amazon-list-card {
+  position: relative;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* Card body reads as one clickable target; keep the name row clear of the
+   top-right add-all icon. */
+.mc-amazon-list-card .mc-item-name-row {
+  justify-content: flex-start;
+  gap: 6px;
+  padding-right: 72px;
+}
+
+.mc-amazon-list-card .mc-amazon-list-meta {
+  padding-right: 72px;
+}
+
+/* Arrow → cart icon, pinned top-right. Tooltip carries the label. */
+.mc-amazon-list-topright {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mc-amazon-list-addall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--mc-radius-sm);
+  border: 1px solid transparent;
+  background: var(--mc-accent);
+  color: #000;
+  cursor: pointer;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.mc-amazon-list-addall:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.mc-amazon-list-addall:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-amazon-list-addall:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mc-amazon-list-addall svg {
+  display: block;
+}
+
+.mc-amazon-list-card.mc-amazon-list-expanded {
+  border-color: var(--mc-line-strong);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.1);
+}
+
+.mc-amazon-list-card .mc-amazon-list-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--mc-fg);
+  cursor: pointer;
+  white-space: normal;
+  overflow: visible;
+}
+
+.mc-amazon-list-card .mc-amazon-list-name::before {
+  content: "›";
+  display: inline-block;
+  color: var(--mc-accent);
+  font-size: 18px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.mc-amazon-list-card
+  .mc-amazon-list-name[aria-expanded="true"]::before {
+  transform: rotate(90deg);
+}
+
+.mc-amazon-list-load-status {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: var(--mc-fg-muted);
+}
+
+.mc-amazon-list-load-status.mc-amazon-list-load-error {
+  color: var(--mc-danger);
+}
+
+.mc-amazon-list-card .mc-amazon-list-actions {
+  padding-top: 2px;
+}
+
+/* Footer holds the "View on Amazon" icon button — left-aligned. */
+.mc-amazon-list-card .mc-amazon-list-actions {
+  justify-content: flex-start;
+}
+
+.mc-amazon-list-card .mc-amazon-list-actions > * {
+  flex: 0 0 auto;
+  min-width: 0;
+  text-decoration: none;
+}
+
+/* Small white icon button (list glyph) → opens the list on Amazon. */
+.mc-amazon-list-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--mc-radius-sm);
+  border: 1px solid var(--mc-line);
+  background: #fff;
+  color: #131a22;
+  cursor: pointer;
+  transition: filter 120ms ease, background 120ms ease;
+}
+
+.mc-amazon-list-open:hover {
+  filter: brightness(0.94);
+}
+
+.mc-amazon-list-open:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
+}
+
+.mc-amazon-list-open svg {
+  display: block;
 }

@@ -183,6 +183,10 @@ importScripts("ExtPay.js");
   });
   var DEFAULT_SETTINGS = {
     interceptAtc: true,
+    // Relabel Amazon's wish-list surfaces as Styx "carts" ("Your Lists" →
+    // "Your Styx Carts", custom list names "List" → "Cart"). On by default;
+    // read by observer.js, which reverts live when toggled off.
+    relabelListsAsCarts: true,
     // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
     // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
     // is unavailable (e.g. Safari), which always uses the popup.
@@ -200,6 +204,12 @@ importScripts("ExtPay.js");
         const sa = Number(c.savedAt);
         c.lastUsedAt = Number.isFinite(sa) ? sa : 0;
       }
+    }
+    for (const c of carts) {
+      if (!c || typeof c !== "object") continue;
+      if (!("amazonListId" in c)) c.amazonListId = null;
+      if (!("amazonListUrl" in c)) c.amazonListUrl = null;
+      if (!("syncedAt" in c)) c.syncedAt = null;
     }
     return carts;
   }
@@ -659,6 +669,13 @@ importScripts("ExtPay.js");
       if (_opStatus && !_opStatus.active) _opStatus = null;
     }, 5e3);
   }
+  function notifyTab(tabId, payload) {
+    if (tabId == null) return;
+    try {
+      chrome.tabs.sendMessage(tabId, payload, () => void chrome.runtime.lastError);
+    } catch (_e) {
+    }
+  }
   async function openStatusWindow() {
     if (IS_SAFARI) return;
     if (_statusWindowId !== null) {
@@ -732,6 +749,11 @@ importScripts("ExtPay.js");
   }
   function isAmazonUrl(url) {
     return /(^|\.)amazon\.[a-z.]+\//i.test(url || "");
+  }
+  function amazonListUrl(host, listId) {
+    const h = normalizeAmazonHost(host);
+    const full = h.startsWith("amazon.") ? `www.${h}` : h;
+    return `https://${full}/hz/wishlist/ls/${listId}`;
   }
   async function inferAmazonHost() {
     const [active] = await chrome.tabs.query({
@@ -1098,7 +1120,6 @@ importScripts("ExtPay.js");
         // Legacy bulk add page — these are the most likely hits on /gp/aws/cart/add.html
         "input[name='add']",
         "input[name='submit.add']",
-        "input[name='proceedToCheckout']",
         "form[action*='cart/add' i] input[type='submit']",
         "form[action*='cart/add' i] button[type='submit']",
         "form[action*='cart' i] input[type='submit']",
@@ -1106,19 +1127,78 @@ importScripts("ExtPay.js");
         "form[action*='handle-buy-box' i] input[type='submit']",
         // Value-based — works even when name/id are unusual
         "input[type='submit'][value*='Add' i][value*='Cart' i]",
-        "input.a-button-input[value*='Add' i][value*='Cart' i]",
-        // Last-resort generic submit (use with extreme care; isVisible filters)
-        "input.a-button-input"
+        "input.a-button-input[value*='Add' i][value*='Cart' i]"
       ];
+      const labelsFor = (el) => {
+        const labels = [
+          el && el.value,
+          el && el.textContent,
+          el && el.getAttribute && el.getAttribute("aria-label")
+        ];
+        try {
+          const labelledBy = el && el.getAttribute && el.getAttribute("aria-labelledby");
+          if (labelledBy) {
+            for (const id of labelledBy.split(/\s+/)) {
+              const labelEl = document.getElementById(id);
+              if (labelEl) labels.push(labelEl.textContent);
+            }
+          }
+          const wrap = el && el.closest && el.closest(".a-button");
+          const visibleLabel = wrap && wrap.querySelector(".a-button-text");
+          if (visibleLabel) labels.push(visibleLabel.textContent);
+        } catch (_e) {
+        }
+        return labels.filter(Boolean).map((label) => String(label).trim().replace(/\s+/g, " ").toLowerCase());
+      };
+      const looksLikeAddToCart = (el) => labelsFor(el).some(
+        (label) => label === "add to cart" || label === "add to shopping cart" || label.startsWith("add") && label.includes("cart") && label.length < 40
+      );
+      const looksLikeGoToCart = (el) => labelsFor(el).some(
+        (label) => label === "go to cart" || label === "view cart"
+      );
+      const hasRenderedBulkItems = () => {
+        const requested = /* @__PURE__ */ new Set();
+        try {
+          const params = new URLSearchParams(location.search || "");
+          for (const [key, value] of params.entries()) {
+            if (/^ASIN\.\d+$/i.test(key) && /^[A-Z0-9]{10}$/i.test(value || "")) {
+              requested.add(String(value).toUpperCase());
+            }
+          }
+        } catch (_e) {
+        }
+        const bodyText = (document.body && (document.body.innerText || document.body.textContent) || "").replace(/\s+/g, " ");
+        if (/your (?:amazon )?cart is empty|your shopping cart is empty/i.test(bodyText)) {
+          return false;
+        }
+        const candidates = document.querySelectorAll(
+          "[data-asin], input[name^='ASIN.'], a[href*='/dp/'], a[href*='/gp/product/'], a[href*='/gp/aw/d/']"
+        );
+        for (const el of candidates) {
+          const values = [
+            el.getAttribute && el.getAttribute("data-asin"),
+            el.value,
+            el.getAttribute && el.getAttribute("href")
+          ].filter(Boolean);
+          for (const raw of values) {
+            const text = String(raw).toUpperCase();
+            if (requested.size) {
+              for (const asin of requested) {
+                if (text.includes(asin)) return true;
+              }
+            } else if (/\b[A-Z0-9]{10}\b/.test(text)) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
       const findByText = () => {
         const cands = document.querySelectorAll(
           "input[type='submit'], button, .a-button-text, span.a-button-text"
         );
         for (const el of cands) {
-          const label = (el.value || el.textContent || el.getAttribute("aria-label") || "").trim().toLowerCase();
-          if (!label) continue;
-          const looksLikeAddToCart = label === "add to cart" || label === "add to shopping cart" || label.startsWith("add") && label.includes("cart") && label.length < 40;
-          if (!looksLikeAddToCart) continue;
+          if (!looksLikeAddToCart(el)) continue;
           let clickable = el;
           if (el.classList && el.classList.contains("a-button-text")) {
             const wrap = el.closest(".a-button");
@@ -1133,10 +1213,12 @@ importScripts("ExtPay.js");
       };
       const findButton = () => {
         for (const sel of SELECTORS) {
-          const el = document.querySelector(sel);
-          if (el && isVisible(el)) {
-            console.log("[Styx Multi-Cart] confirm button matched selector:", sel);
-            return el;
+          const matches = document.querySelectorAll(sel);
+          for (const el of matches) {
+            if (isVisible(el) && looksLikeAddToCart(el)) {
+              console.log("[Styx Multi-Cart] confirm button matched selector:", sel);
+              return el;
+            }
           }
         }
         const byText = findByText();
@@ -1144,7 +1226,50 @@ importScripts("ExtPay.js");
           console.log("[Styx Multi-Cart] confirm button matched via text fallback");
           return byText;
         }
+        if (/\/gp\/aws\/cart\/add\.html/i.test(location.pathname || "")) {
+          const goToCart = findGoToCartButton();
+          if (goToCart) {
+            if (!hasRenderedBulkItems()) {
+              console.warn(
+                "[Styx Multi-Cart] Go To Cart found, but Amazon rendered no requested products"
+              );
+              return { emptyBulkPage: true };
+            }
+            console.log("[Styx Multi-Cart] bulk confirm matched Go To Cart variant");
+            return { button: goToCart };
+          }
+        }
         return null;
+      };
+      const findGoToCartButton = () => {
+        const cands = document.querySelectorAll(
+          "input[type='submit'], button, a, .a-button-text, span.a-button-text"
+        );
+        for (const el of cands) {
+          if (!looksLikeGoToCart(el)) continue;
+          let clickable = el;
+          if (el.classList && el.classList.contains("a-button-text")) {
+            const wrap = el.closest(".a-button");
+            const inp = wrap && wrap.querySelector("input, button, a");
+            if (inp) clickable = inp;
+          }
+          if (isVisible(clickable) || isVisible(el)) return clickable;
+        }
+        return null;
+      };
+      const relabelGoToCart = (btn) => {
+        const replacement = "Add All to Amazon Cart";
+        try {
+          const wrap = btn.closest && btn.closest(".a-button");
+          const visibleLabel = btn.classList && btn.classList.contains("a-button-text") && btn || wrap && wrap.querySelector(".a-button-text");
+          if (visibleLabel) {
+            visibleLabel.textContent = replacement;
+          } else if (btn.tagName === "BUTTON" || btn.tagName === "A") {
+            btn.textContent = replacement;
+          }
+          btn.setAttribute("aria-label", replacement);
+        } catch (_e) {
+        }
       };
       const applyOverlayRing = (btn) => {
         let target = btn;
@@ -1188,11 +1313,25 @@ importScripts("ExtPay.js");
       };
       const deadline = Date.now() + 1e4;
       const tick = () => {
-        const btn = findButton();
+        const found = findButton();
+        if (found && found.emptyBulkPage) {
+          resolve({
+            ok: false,
+            emptyBulkPage: true,
+            error: "Amazon rendered no products on the bulk-add page"
+          });
+          return;
+        }
+        const btn = found && found.button ? found.button : found;
         if (btn) {
           try {
+            const goToCartVariant = looksLikeGoToCart(btn);
+            if (goToCartVariant) relabelGoToCart(btn);
             applyOverlayRing(btn);
-            resolve({ ok: true });
+            resolve({
+              ok: true,
+              confirmLabel: goToCartVariant ? "Add All to Amazon Cart" : "Add To Cart"
+            });
           } catch (e) {
             console.error("[Styx Multi-Cart] applyOverlayRing failed:", e);
             resolve({ ok: false, error: String(e) });
@@ -1357,8 +1496,27 @@ importScripts("ExtPay.js");
           func: pageHighlightBulkConfirm
         });
         const hr = hlRes && hlRes[0] && hlRes[0].result;
+        if (hr && hr.emptyBulkPage) {
+          dinfo(
+            `[Styx Multi-Cart] bulk chunk ${c + 1} rendered no products; switching directly to per-item restore.`
+          );
+          await showStatus(
+            helperTab.id,
+            "Amazon couldn't prepare these items in bulk \u2014 adding them one at a time\u2026",
+            "loading"
+          );
+          return {
+            ok: false,
+            error: hr.error || "Amazon rejected the bulk-add items",
+            host,
+            helperTabId: helperTab && helperTab.id,
+            missing: allItems,
+            bulkRejectedItems: true
+          };
+        }
         if (hr && hr.ok) {
-          const chunkPrompt = chunks.length > 1 ? `Click the highlighted "Add To Cart" to confirm batch ${c + 1} of ${chunks.length} (${chunk.length} items)` : `Click the highlighted "Add To Cart" to add ${chunk.length} item${chunk.length === 1 ? "" : "s"} to your Amazon cart`;
+          const confirmLabel = hr.confirmLabel || "Add To Cart";
+          const chunkPrompt = chunks.length > 1 ? `Click the highlighted "${confirmLabel}" to confirm batch ${c + 1} of ${chunks.length} (${chunk.length} items)` : `Click the highlighted "${confirmLabel}" to add ${chunk.length} item${chunk.length === 1 ? "" : "s"} to your Amazon cart`;
           setOpStatus(`Restoring ${cartLabel}`, `Waiting for your confirmation\u2026`);
           await showStatus(helperTab.id, chunkPrompt, "loading");
           const confirmRes = await waitForUserBulkConfirm(helperTab.id);
@@ -1593,6 +1751,54 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             await chrome.tabs.update(helperTab.id, { url: productUrl(item), active: true });
             await waitForTabReload(helperTab.id, 2e4);
           }
+          const availabilityResult = await chrome.scripting.executeScript({
+            target: { tabId: helperTab.id },
+            func: pageClassifyProductAvailability
+          });
+          let availability = availabilityResult && availabilityResult[0] && availabilityResult[0].result;
+          if (availability && availability.available === false) {
+            const reason = availability.reason || "Product is unavailable";
+            failed++;
+            failures.push({
+              asin: item.asin,
+              title: item.title || "",
+              reason,
+              unavailable: true
+            });
+            const raw = item.title || item.asin || "item";
+            const shortTitle = raw.length > 30 ? raw.slice(0, 28) + "\u2026" : raw;
+            setOpStatus(
+              `Restoring ${cartLabel}`,
+              `Skipping unavailable item ${i + 1} of ${items.length}: ${shortTitle}`
+            );
+            await showStatus(
+              helperTab.id,
+              `Unavailable \u2014 skipped ${shortTitle}`,
+              "error"
+            );
+            if (onProgress) onProgress({ done: i + 1, total: items.length });
+            await sleep(350);
+            continue;
+          }
+          if (availability && availability.needsUserChoice === true) {
+            const choice = await waitForUserProductFormatChoice(
+              helperTab.id,
+              item
+            );
+            if (!choice.ok) {
+              const reason = choice.reason || "A purchasable format was not selected";
+              failed++;
+              failures.push({
+                asin: item.asin,
+                title: item.title || "",
+                reason,
+                needsUserChoice: true
+              });
+              if (onProgress) onProgress({ done: i + 1, total: items.length });
+              continue;
+            }
+            availability = choice.availability || { available: true };
+          }
           {
             const raw = item.title || item.asin || "";
             const shortTitle = raw.length > 30 ? raw.slice(0, 28) + "\u2026" : raw;
@@ -1781,7 +1987,9 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
   }
   async function wishlistAddAllToCart(items, host) {
     try {
-      const cleanItems = (items || []).filter((it) => it && it.asin);
+      const cleanItems = (items || []).filter(
+        (it) => it && it.asin && it.unavailable !== true
+      );
       if (!cleanItems.length) return;
       const target = {
         items: cleanItems,
@@ -1843,6 +2051,74 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     } catch (_e) {
       return false;
     }
+  }
+  async function waitForUserProductFormatChoice(tabId, item) {
+    await chrome.tabs.update(tabId, { active: true });
+    const raw = item && item.title || "this item";
+    const shortTitle = raw.length > 60 ? raw.slice(0, 58) + "\u2026" : raw;
+    setOpStatus(
+      "Amazon needs a format choice",
+      `Choose a cartable format for "${shortTitle}" to continue adding the rest.`
+    );
+    let promptTheme = null;
+    try {
+      const settings = await readSettings();
+      promptTheme = settings.theme || null;
+    } catch (_e) {
+    }
+    let answer = "skip";
+    try {
+      const promptResult = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: pagePromptChoice,
+        args: [
+          "Choose a format on Amazon",
+          `The saved format of "${shortTitle}" cannot be added to the cart. Choose another format or edition on this page that offers Add to Cart. Styx will resume automatically.`,
+          [
+            { label: "Choose a format", value: "choose", style: "primary" },
+            { label: "Skip this item", value: "skip", style: "ghost" }
+          ],
+          promptTheme
+        ]
+      });
+      answer = promptResult && promptResult[0] && promptResult[0].result || "skip";
+    } catch (_e) {
+      return { ok: false, reason: "Could not show the format picker prompt" };
+    }
+    if (answer !== "choose") {
+      return { ok: false, reason: "Skipped because the saved format is unavailable" };
+    }
+    await showStatus(
+      tabId,
+      `Choose a format for "${shortTitle}" that shows Add to Cart \u2014 Styx will resume automatically`,
+      "loading"
+    );
+    const deadline = Date.now() + 10 * 60 * 1e3;
+    while (Date.now() < deadline) {
+      await sleep(1e3);
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        if (!tab) return { ok: false, reason: "Amazon tab was closed" };
+        if (tab.status === "loading") continue;
+        const result = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageClassifyProductAvailability
+        });
+        const availability = result && result[0] && result[0].result;
+        if (availability && availability.available === false) {
+          return {
+            ok: false,
+            reason: availability.reason || "The selected format is unavailable",
+            availability
+          };
+        }
+        if (!availability || availability.needsUserChoice !== true) {
+          return { ok: true, availability: availability || { available: true } };
+        }
+      } catch (_e) {
+      }
+    }
+    return { ok: false, reason: "No cartable format was selected within 10 minutes" };
   }
   async function waitForUserUpsellChoice(tabId, item, host) {
     await chrome.tabs.update(tabId, { active: true });
@@ -1909,6 +2185,55 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
   }
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  function pageClassifyProductAvailability() {
+    try {
+      const bodyText = (document.body && (document.body.innerText || document.body.textContent) || "").replace(/\s+/g, " ").trim();
+      const title = String(document.title || "").trim();
+      const combined = `${title} ${bodyText}`.toLowerCase();
+      if (/sorry[,\s]*we\s+couldn['’]?t\s+find\s+that\s+page/i.test(combined) || combined.includes("the web address you entered is not a functioning page")) {
+        return { available: false, reason: "Product page no longer exists" };
+      }
+      const availabilityEl = document.querySelector(
+        "#availability, #outOfStock, [id^='availability'], [data-feature-name='availability']"
+      );
+      const availabilityText = (availabilityEl && (availabilityEl.innerText || availabilityEl.textContent) || "").replace(/\s+/g, " ").trim();
+      if (availabilityText && /currently unavailable|no longer available|not available for purchase|item is unavailable/i.test(
+        availabilityText
+      )) {
+        return {
+          available: false,
+          reason: availabilityText || "Product is currently unavailable"
+        };
+      }
+      const addToCartButton = document.querySelector(
+        "#add-to-cart-button, input[name='submit.add-to-cart'], input[name='submit.addToCart'], button[name='submit.add-to-cart']"
+      );
+      const hasUsableAddToCart = Boolean(
+        addToCartButton && !addToCartButton.disabled && addToCartButton.getAttribute("aria-disabled") !== "true" && addToCartButton.getAttribute("aria-hidden") !== "true"
+      );
+      const formatRegion = document.querySelector(
+        "#tmmSwatches, #tmmSwatches_feature_div, #formats, #mediaTabs_tabSet, [data-feature-name='tmmSwatches']"
+      );
+      if (formatRegion && !hasUsableAddToCart) {
+        const formatText = (formatRegion.innerText || formatRegion.textContent || "").replace(/\s+/g, " ").trim();
+        const formatControls = formatRegion.querySelectorAll(
+          "a[href*='/dp/'], a[href*='/gp/product/'], button, input[type='radio']"
+        );
+        if (formatControls.length >= 2 && /kindle|hardcover|paperback|audiobook|audio\s*cd|mp3\s*cd|mass market|spiral|format|edition/i.test(
+          formatText
+        )) {
+          return {
+            available: true,
+            needsUserChoice: true,
+            reason: "The saved format is unavailable; choose another format"
+          };
+        }
+      }
+      return { available: true };
+    } catch (e) {
+      return { available: true, warning: String(e && e.message || e) };
+    }
   }
   function pageAddToCart(qty) {
     return new Promise((resolve) => {
@@ -2275,6 +2600,516 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       };
     }
   }
+  var AMAZON_LISTS_PATH = "/hz/wishlist/ls";
+  var AMAZON_LIST_READ_CACHE_MS = 5 * 60 * 1e3;
+  var amazonListReadCache = /* @__PURE__ */ new Map();
+  async function runInAmazonTab(url, fn, { timeoutMs = 2e4, keepOpen = false } = {}) {
+    const tab = await chrome.tabs.create({ url, active: false });
+    try {
+      await waitForTabReload(tab.id, timeoutMs);
+      return await fn(tab.id, tab);
+    } finally {
+      if (!keepOpen) {
+        try {
+          await chrome.tabs.remove(tab.id);
+        } catch (_e) {
+        }
+      }
+    }
+  }
+  async function listAmazonLists(preferredHost) {
+    const host = preferredHost || await inferAmazonHost();
+    const url = `https://${host}${AMAZON_LISTS_PATH}`;
+    const data = await runInAmazonTab(
+      url,
+      async (tabId) => {
+        const res = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageScrapeAmazonLists
+        });
+        return res && res[0] && res[0].result || { lists: [] };
+      },
+      { timeoutMs: 12e3 }
+    );
+    if (data.error) throw new Error(data.error);
+    return (data.lists || []).map((l) => ({
+      listId: l.listId,
+      name: l.name,
+      count: l.count,
+      url: l.listId ? amazonListUrl(host, l.listId) : l.url
+    }));
+  }
+  async function amazonListExists(host, listId) {
+    const lists = await listAmazonLists(host).catch(() => []);
+    return lists.some((l) => l.listId === listId);
+  }
+  async function readAmazonList(listId, preferredHost, forceRefresh = false) {
+    const host = preferredHost || await inferAmazonHost();
+    const cacheKey = `${host}:${listId}`;
+    const cached = amazonListReadCache.get(cacheKey);
+    if (!forceRefresh && cached && Date.now() - cached.cachedAt < AMAZON_LIST_READ_CACHE_MS) {
+      return cached.value;
+    }
+    const url = amazonListUrl(host, listId);
+    const data = await runInAmazonTab(
+      url,
+      async (tabId) => {
+        await sleep(900);
+        const res = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageScrapeSingleList
+        });
+        return res && res[0] && res[0].result || { items: [] };
+      },
+      { timeoutMs: 15e3 }
+    );
+    if (data.error) throw new Error(data.error);
+    const items = (data.items || []).filter((it) => it && it.asin).map((it) => ({
+      asin: String(it.asin).toUpperCase(),
+      title: it.title || "(untitled)",
+      quantity: Math.max(1, Math.min(99, Number(it.quantity) || 1)),
+      price: "",
+      image: it.image || "",
+      url: it.url || `https://${host}/dp/${it.asin}`,
+      variantLabel: "",
+      unavailable: it.unavailable === true,
+      unavailableReason: it.unavailableReason || ""
+    }));
+    const value = { host, name: data.name || "Amazon list", listId, url, items };
+    amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+    return value;
+  }
+  async function importAmazonListToCart(listId, preferredHost) {
+    return readAmazonList(listId, preferredHost);
+  }
+  async function createAmazonListFromPdp(host, name, firstAsin) {
+    const url = `https://${host}/dp/${String(firstAsin).toUpperCase()}`;
+    const res = await runInAmazonTab(
+      url,
+      async (tabId) => {
+        const r = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageCreateListAndAdd,
+          args: [name]
+        });
+        return r && r[0] && r[0].result || { ok: false, error: "no result from pageCreateListAndAdd" };
+      },
+      { keepOpen: false, timeoutMs: 4e4 }
+    );
+    console.log("[Styx list-sync] createListFromPdp \u2192", res);
+    try {
+      await chrome.storage.local.set({ "mc.debug.lastCreateList": { at: Date.now(), via: "pdp-create-and-add", ...res } });
+    } catch (_e) {
+    }
+    if (!res.ok) {
+      throw new Error("Couldn't create the Amazon list: " + (res.error || "the create form couldn't be driven."));
+    }
+    let listId = res.listId || null;
+    if (!listId) listId = await findAmazonListIdByName(host, name);
+    if (!listId) {
+      throw new Error(
+        'List "' + name + '" was created (first item added) but its id could not be read back. Open Your Lists and re-run Save to link it.'
+      );
+    }
+    return { listId, listUrl: amazonListUrl(host, listId), firstItemAdded: true };
+  }
+  async function findAmazonListIdByName(host, name) {
+    const url = `https://${host}${AMAZON_LISTS_PATH}`;
+    return await runInAmazonTab(
+      url,
+      async (tabId) => {
+        const f = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageFindListByName,
+          args: [name]
+        });
+        const fr = f && f[0] && f[0].result;
+        return fr && fr.listId || null;
+      },
+      { keepOpen: false, timeoutMs: 15e3 }
+    );
+  }
+  async function addItemToList(host, listId, asin) {
+    const url = `https://${host}/dp/${String(asin).toUpperCase()}`;
+    return await runInAmazonTab(
+      url,
+      async (tabId) => {
+        const r = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageAddToList,
+          args: [listId]
+        });
+        return r && r[0] && r[0].result || { ok: false, error: "no result" };
+      },
+      { timeoutMs: 15e3 }
+    );
+  }
+  async function setListQuantities(host, listId, items) {
+    const map = {};
+    for (const it of items) {
+      const q = Math.max(1, Math.min(99, Number(it.quantity) || 1));
+      if (q > 1) map[String(it.asin).toUpperCase()] = q;
+    }
+    if (!Object.keys(map).length) return;
+    const url = amazonListUrl(host, listId);
+    await runInAmazonTab(
+      url,
+      async (tabId) => {
+        await sleep(900);
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageSetListQuantities,
+          args: [map]
+        });
+      },
+      { timeoutMs: 15e3 }
+    );
+  }
+  async function saveCartToAmazonList(cart, opts = {}) {
+    const host = cart.host || "www.amazon.com";
+    const items = (cart.items || []).filter((it) => it && it.asin);
+    if (!items.length) return { ok: false, error: "This cart has no items to save." };
+    const label = cart.name ? `"${cart.name}"` : "cart";
+    const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
+    const report = (detail, extra = {}) => {
+      setOpStatus(`Saving ${label} to Amazon`, detail);
+      notifyTab(progressTabId, { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra });
+    };
+    report("Preparing your list\u2026");
+    const asins = items.map((it) => String(it.asin).toUpperCase());
+    const total = items.length;
+    let added = 0;
+    let failures = [];
+    let startIdx = 0;
+    let listId = cart.amazonListId || null;
+    if (listId && !await amazonListExists(host, listId).catch(() => false)) {
+      listId = null;
+    }
+    if (!listId) {
+      report("Creating your list\u2026", { done: 0, total });
+      const created = await createAmazonListFromPdp(host, cart.name || "Styx cart", asins[0]);
+      listId = created.listId;
+      if (created.firstItemAdded) {
+        added++;
+        startIdx = 1;
+      }
+    }
+    const listUrl = amazonListUrl(host, listId);
+    console.log("[Styx list-sync] target listId =", listId, "host =", host, "items =", total);
+    for (let i = startIdx; i < asins.length; i++) {
+      const asin = asins[i];
+      report(`Adding item ${i + 1} of ${total}\u2026`, { done: i, total });
+      try {
+        const r = await addItemToList(host, listId, asin);
+        if (r && r.ok) added++;
+        else failures.push({ asin, error: r && r.error || "add failed" });
+      } catch (e) {
+        failures.push({ asin, error: String(e && e.message || e) });
+      }
+    }
+    try {
+      await setListQuantities(host, listId, items);
+    } catch (_e) {
+    }
+    const carts = await readCarts();
+    const target = carts.find((c) => c.id === cart.id);
+    if (target) {
+      target.amazonListId = listId;
+      target.amazonListUrl = listUrl;
+      if (added > 0) target.syncedAt = Date.now();
+      await writeCarts(carts);
+    }
+    const firstFail = failures[0];
+    const reason = added === 0 ? firstFail ? "First error: " + firstFail.error : "Nothing was added." : "";
+    console.log("[Styx list-sync] saveCart done", {
+      listId,
+      added,
+      total: items.length,
+      failed: failures.length,
+      reason
+    });
+    return {
+      ok: added > 0,
+      listId,
+      listUrl,
+      added,
+      failed: failures.length,
+      total: items.length,
+      failures,
+      error: added === 0 ? reason : void 0
+    };
+  }
+  function pageScrapeAmazonLists() {
+    try {
+      const out = [];
+      const seen = /* @__PURE__ */ new Set();
+      const anchors = document.querySelectorAll(
+        'a[href*="/wishlist/ls/"], a[href*="/registry/wishlist/"]'
+      );
+      anchors.forEach((a) => {
+        const href = a.getAttribute("href") || "";
+        const m = href.match(/\/hz\/wishlist\/ls\/([A-Z0-9]{7,})(?:[/?#]|$)/i) || href.match(/\/gp\/registry\/wishlist\/([A-Z0-9]{7,})(?:[/?#]|$)/i);
+        const id = m ? m[1].toUpperCase() : null;
+        if (!id || seen.has(id)) return;
+        const titleEl = a.querySelector(
+          "[data-list-name], .wl-list-entry-title, .a-size-base-plus, .a-text-bold"
+        );
+        let name = (a.getAttribute("data-list-name") || titleEl && (titleEl.getAttribute("data-list-name") || titleEl.textContent) || a.textContent || "").trim().replace(/\s+/g, " ");
+        for (let i = 0; i < 3; i++) {
+          name = name.replace(/\s+(?:Default List|Public|Private|Shared)\s*$/i, "").trim();
+        }
+        if (!name || name.length > 120) return;
+        seen.add(id);
+        out.push({
+          listId: id,
+          name,
+          url: location.origin + "/hz/wishlist/ls/" + id,
+          count: null
+        });
+      });
+      return { lists: out };
+    } catch (e) {
+      return { lists: [], error: String(e && e.message || e) };
+    }
+  }
+  function pageScrapeSingleList() {
+    return (async () => {
+      const sleep2 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const startY = window.scrollY;
+      try {
+        let stablePasses = 0;
+        let lastHeight = 0;
+        for (let pass = 0; pass < 20 && stablePasses < 3; pass++) {
+          const height = Math.max(
+            document.body ? document.body.scrollHeight : 0,
+            document.documentElement ? document.documentElement.scrollHeight : 0
+          );
+          window.scrollTo(0, height);
+          await sleep2(250);
+          const nextHeight = Math.max(
+            document.body ? document.body.scrollHeight : 0,
+            document.documentElement ? document.documentElement.scrollHeight : 0
+          );
+          stablePasses = nextHeight <= lastHeight ? stablePasses + 1 : 0;
+          lastHeight = nextHeight;
+        }
+        const nameEl = document.getElementById("profile-list-name");
+        const name = nameEl ? (nameEl.textContent || "").trim() : "";
+        const items = [];
+        const seen = /* @__PURE__ */ new Set();
+        const lis = document.querySelectorAll(
+          "ul#g-items li[data-id], ol#g-items li[data-id], #g-items li[data-itemid], li.g-item-sortable, li[data-id][data-itemid]"
+        );
+        lis.forEach((li) => {
+          const link = li.querySelector(
+            'a[href*="/dp/"], a[href*="/gp/product/"], a[href*="/gp/aw/d/"]'
+          );
+          let asin = null;
+          if (link) {
+            const m = (link.getAttribute("href") || "").match(
+              /\/(?:dp|gp\/product|gp\/aw\/d)\/([A-Z0-9]{10})/i
+            );
+            asin = m ? m[1].toUpperCase() : null;
+          }
+          if (!asin || seen.has(asin)) return;
+          seen.add(asin);
+          let title = "";
+          const tEl = li.querySelector('[id^="itemName_"]') || link;
+          if (tEl) {
+            title = (tEl.getAttribute("title") || tEl.textContent || "").trim().replace(/\s+/g, " ").slice(0, 200);
+          }
+          let qty = 1;
+          const qEl = li.querySelector('[id^="itemRequested_"]');
+          if (qEl) {
+            const n = parseInt(String(qEl.textContent || "").replace(/\D+/g, ""), 10);
+            if (n > 0) qty = Math.min(n, 99);
+          }
+          let image = "";
+          const img = li.querySelector("img");
+          if (img) image = img.currentSrc || img.src || "";
+          const rowText = (li.innerText || li.textContent || "").replace(/\s+/g, " ").trim();
+          const unavailableMatch = rowText.match(
+            /(?:this item is )?(?:currently unavailable|no longer available|not available for purchase|item is unavailable)/i
+          );
+          items.push({
+            asin,
+            title,
+            quantity: qty,
+            url: location.origin + "/dp/" + asin,
+            image,
+            unavailable: !!unavailableMatch,
+            unavailableReason: unavailableMatch ? unavailableMatch[0] : ""
+          });
+        });
+        window.scrollTo(0, startY);
+        return { name, items };
+      } catch (e) {
+        window.scrollTo(0, startY);
+        return { name: "", items: [], error: String(e && e.message || e) };
+      }
+    })();
+  }
+  function pageCreateListAndAdd(name) {
+    return (async () => {
+      const sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
+      const visible = (el) => !!(el && el.getBoundingClientRect().width > 0);
+      const idsOnPage = () => new Set(
+        [...document.querySelectorAll('a[href*="/wishlist/ls/"]')].map((a) => ((a.getAttribute("href") || "").match(/\/wishlist\/ls\/([A-Z0-9]{8,})/i) || [])[1]).filter(Boolean)
+      );
+      try {
+        let createLink = document.getElementById("atwl-dd-create-list");
+        if (!visible(createLink)) {
+          const caret = document.getElementById("add-to-wishlist-button") || document.querySelector("#wishlistButtonStack .a-button-splitdropdown input") || document.getElementById("wishListDropDown");
+          if (!caret) return { ok: false, error: "Add-to-List dropdown not found on this page." };
+          caret.click();
+          for (let i = 0; i < 20; i++) {
+            await sleep2(250);
+            createLink = document.getElementById("atwl-dd-create-list");
+            if (visible(createLink)) break;
+          }
+        }
+        if (!visible(createLink)) return { ok: false, error: "Create-a-List entry not found in the chooser." };
+        const preIds = idsOnPage();
+        createLink.click();
+        let input = null;
+        for (let i = 0; i < 24; i++) {
+          await sleep2(250);
+          input = document.querySelector('input#list-name, input[name="list-name"]');
+          if (visible(input)) break;
+        }
+        if (!visible(input)) return { ok: false, error: "Create-list form did not appear." };
+        await sleep2(800);
+        input.focus();
+        input.value = name;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        const scope = input.form || document;
+        const create = scope.querySelector(
+          'input[type="submit"][aria-labelledby="lists-desktop-create-list-label"], .create-list-create-button input[type="submit"], .create-list-create-button [type="submit"]'
+        );
+        if (!create) return { ok: false, error: "Create button not found in the create-list form." };
+        let confirmed = false;
+        for (let attempt = 0; attempt < 3 && !confirmed; attempt++) {
+          create.click();
+          for (let i = 0; i < 10; i++) {
+            await sleep2(400);
+            if (/item added to/i.test(document.body.innerText || "")) {
+              confirmed = true;
+              break;
+            }
+            if (!visible(input)) break;
+          }
+          if (!confirmed && !visible(input)) break;
+        }
+        let listId = null;
+        for (let i = 0; i < 8 && !listId; i++) {
+          for (const id of idsOnPage()) {
+            if (!preIds.has(id)) {
+              listId = id;
+              break;
+            }
+          }
+          if (!listId) await sleep2(400);
+        }
+        if (!confirmed && !listId) return { ok: false, error: "No confirmation after clicking Create." };
+        return { ok: true, listId, confirmed };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message || e) };
+      }
+    })();
+  }
+  function pageFindListByName(name) {
+    try {
+      const here = location.pathname.match(/\/hz\/wishlist\/ls\/([A-Z0-9]+)/i);
+      if (here) return { listId: here[1] };
+      const want = String(name || "").trim().toLowerCase();
+      const anchors = document.querySelectorAll(
+        'a[href*="/wishlist/ls/"], a[href*="/registry/wishlist/"]'
+      );
+      for (const a of anchors) {
+        const m = (a.getAttribute("href") || "").match(
+          /\/(?:hz\/wishlist|gp\/registry\/wishlist)\/(?:ls\/)?([A-Z0-9]+)/i
+        );
+        if (!m) continue;
+        const t = (a.textContent || "").trim().toLowerCase();
+        if (t && t === want) return { listId: m[1] };
+      }
+      return { listId: null };
+    } catch (e) {
+      return { listId: null, error: String(e && e.message || e) };
+    }
+  }
+  function pageAddToList(listId) {
+    return (async () => {
+      const sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
+      const rowSel = "#atwl-list-name-" + listId;
+      const findRow = () => {
+        const el = document.querySelector(rowSel);
+        return el && el.getBoundingClientRect().width > 0 ? el : null;
+      };
+      try {
+        let row = findRow();
+        if (!row) {
+          const caret = document.getElementById("add-to-wishlist-button") || document.querySelector(
+            "#wishlistButtonStack .a-button-splitdropdown input"
+          ) || document.getElementById("wishListDropDown");
+          if (!caret) {
+            return { ok: false, error: "Add-to-List dropdown not found on this page." };
+          }
+          caret.click();
+          for (let i = 0; i < 20 && !(row = findRow()); i++) await sleep2(250);
+        }
+        if (!row) {
+          return {
+            ok: false,
+            error: "List " + listId + " not found in the Add-to-List menu."
+          };
+        }
+        row.click();
+        let confirmed = false;
+        for (let i = 0; i < 16; i++) {
+          await sleep2(250);
+          const t = document.body.innerText || "";
+          if (/item added to|already in your|added to your list/i.test(t)) {
+            confirmed = true;
+            break;
+          }
+        }
+        return { ok: true, confirmed };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message || e) };
+      }
+    })();
+  }
+  function pageSetListQuantities(map) {
+    try {
+      const lis = document.querySelectorAll(
+        "#g-items li[data-id], #g-items li[data-itemid]"
+      );
+      let set = 0;
+      lis.forEach((li) => {
+        const link = li.querySelector('a[href*="/dp/"]');
+        if (!link) return;
+        const m = (link.getAttribute("href") || "").match(/\/dp\/([A-Z0-9]{10})/i);
+        if (!m) return;
+        const want = map[m[1].toUpperCase()];
+        if (!want) return;
+        const input = li.querySelector(
+          'input[name^="quantity"], input[id^="itemRequested"], input[type="number"]'
+        );
+        if (input) {
+          input.value = String(want);
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          set++;
+        }
+      });
+      return { ok: true, set };
+    } catch (e) {
+      return { ok: false, error: String(e && e.message || e) };
+    }
+  }
+  console.log("[Styx] background loaded", (/* @__PURE__ */ new Date()).toISOString());
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg || typeof msg !== "object") return false;
     (async () => {
@@ -2758,9 +3593,12 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_WISHLIST_ADD_ALL": {
-            const items = Array.isArray(msg.items) ? msg.items.filter((it) => it && it.asin) : [];
+            const items = Array.isArray(msg.items) ? msg.items.filter((it) => it && it.asin && it.unavailable !== true) : [];
             if (!items.length) {
-              sendResponse({ ok: false, error: "No items found on this wishlist." });
+              sendResponse({
+                ok: false,
+                error: "No available items were found on this wishlist."
+              });
               break;
             }
             sendResponse({ ok: true, started: true, total: items.length });
@@ -2844,6 +3682,16 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
           case "MC_SET_INTERCEPT": {
             const next = await writeSettings({ interceptAtc: !!msg.enabled });
             sendResponse({ ok: true, enabled: !!next.interceptAtc });
+            break;
+          }
+          case "MC_GET_RELABEL": {
+            const settings = await readSettings();
+            sendResponse({ ok: true, enabled: settings.relabelListsAsCarts !== false });
+            break;
+          }
+          case "MC_SET_RELABEL": {
+            const next = await writeSettings({ relabelListsAsCarts: !!msg.enabled });
+            sendResponse({ ok: true, enabled: next.relabelListsAsCarts !== false });
             break;
           }
           case "MC_GET_UI_SURFACE": {
@@ -2957,6 +3805,159 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             target.lastUsedAt = Date.now();
             await writeCarts(carts);
             sendResponse({ ok: true, action, cartName: target.name, itemCount: target.items.length });
+            break;
+          }
+          case "MC_SAVE_CART_TO_LIST": {
+            console.log("[Styx list-sync] MC_SAVE_CART_TO_LIST received, cartId =", msg.cartId);
+            const carts = await readCarts();
+            const target = carts.find((c) => c.id === msg.cartId);
+            if (!target) {
+              sendResponse({ ok: false, error: "Cart not found." });
+              break;
+            }
+            if (!(target.items && target.items.length)) {
+              sendResponse({ ok: false, error: "This cart has no items to save." });
+              break;
+            }
+            const ent = await readEntitlement();
+            const gate = canEditCart(target.id, carts, ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+            setOpStatus(`Saving "${target.name || "cart"}" to Amazon`, "Starting\u2026");
+            openStatusWindow();
+            let saveRes;
+            try {
+              saveRes = await saveCartToAmazonList(target);
+            } catch (e) {
+              saveRes = { ok: false, error: String(e && e.message || e) };
+            }
+            try {
+              await chrome.storage.local.set({ "mc.debug.lastSync": { at: Date.now(), ...saveRes } });
+            } catch (_e) {
+            }
+            if (saveRes && saveRes.ok) {
+              clearOpStatus(
+                saveRes.failed ? `Saved ${saveRes.added}/${saveRes.total} to "${target.name}". ${saveRes.failed} need a manual add.` : `Saved ${saveRes.added} item${saveRes.added === 1 ? "" : "s"} to your Amazon list.`
+              );
+            } else {
+              setOpStatus("Couldn't save to Amazon", saveRes && saveRes.error || "Try again.");
+            }
+            sendResponse(saveRes || { ok: false, error: "No result." });
+            break;
+          }
+          case "MC_SAVE_LIVE_CART_TO_LIST": {
+            const cartTabId = _sender && _sender.tab && _sender.tab.id || null;
+            let liveCart;
+            try {
+              liveCart = await scrapeCartInBackground(msg.host);
+            } catch (scrapeErr) {
+              sendResponse({
+                ok: false,
+                error: scrapeErr && scrapeErr.message || "Could not read the Amazon cart page."
+              });
+              break;
+            }
+            if (!liveCart.items || !liveCart.items.length) {
+              sendResponse({ ok: false, error: "Your Amazon cart looks empty \u2014 nothing to save." });
+              break;
+            }
+            const liveListName = msg.name && String(msg.name).trim() || "Amazon cart";
+            let liveSaveRes;
+            try {
+              liveSaveRes = await saveCartToAmazonList(
+                { host: liveCart.host, name: liveListName, items: liveCart.items },
+                { progressTabId: cartTabId }
+              );
+            } catch (e) {
+              liveSaveRes = { ok: false, error: String(e && e.message || e) };
+            }
+            try {
+              await chrome.storage.local.set({ "mc.debug.lastSync": { at: Date.now(), ...liveSaveRes } });
+            } catch (_e) {
+            }
+            if (liveSaveRes && liveSaveRes.ok) {
+              clearOpStatus(
+                liveSaveRes.failed ? `Saved ${liveSaveRes.added}/${liveSaveRes.total} to "${liveListName}". ${liveSaveRes.failed} need a manual add.` : `Saved ${liveSaveRes.added} item${liveSaveRes.added === 1 ? "" : "s"} to your new Amazon list.`
+              );
+              if (liveSaveRes.listUrl) {
+                notifyTab(cartTabId, {
+                  type: "MC_LIST_SAVE_PROGRESS",
+                  detail: "Done \u2014 opening your list\u2026",
+                  done: liveSaveRes.total,
+                  total: liveSaveRes.total
+                });
+                let navigated = false;
+                if (cartTabId != null) {
+                  try {
+                    await chrome.tabs.update(cartTabId, { url: liveSaveRes.listUrl, active: true });
+                    navigated = true;
+                  } catch (_e) {
+                  }
+                }
+                if (!navigated) {
+                  try {
+                    await chrome.tabs.create({ url: liveSaveRes.listUrl, active: true });
+                  } catch (_e) {
+                  }
+                }
+              }
+            } else {
+              setOpStatus("Couldn't save to Amazon", liveSaveRes && liveSaveRes.error || "Try again.");
+            }
+            sendResponse(liveSaveRes || { ok: false, error: "No result." });
+            break;
+          }
+          case "MC_LIST_AMAZON_LISTS": {
+            const lists = await listAmazonLists(msg.host);
+            sendResponse({ ok: true, lists });
+            break;
+          }
+          case "MC_GET_AMAZON_LIST": {
+            if (!msg.listId) {
+              sendResponse({ ok: false, error: "Missing list id." });
+              break;
+            }
+            const list = await readAmazonList(
+              msg.listId,
+              msg.host,
+              msg.forceRefresh === true
+            );
+            sendResponse({ ok: true, list });
+            break;
+          }
+          case "MC_IMPORT_AMAZON_LIST": {
+            if (!msg.listId) {
+              sendResponse({ ok: false, error: "Missing list id." });
+              break;
+            }
+            const ent = await readEntitlement();
+            const gate = canCreateSavedCart(await readCarts(), ent);
+            if (!gate.allowed) {
+              sendResponse({ ok: false, ...gate, error: gate.reason });
+              break;
+            }
+            const imported = await importAmazonListToCart(msg.listId, msg.host);
+            if (!imported.items.length) {
+              sendResponse({ ok: false, error: "That list has no items we could read." });
+              break;
+            }
+            const carts = await readCarts();
+            const newCart = {
+              id: makeId(),
+              name: imported.name || "Imported list",
+              host: imported.host,
+              savedAt: (/* @__PURE__ */ new Date()).toISOString(),
+              lastUsedAt: Date.now(),
+              items: imported.items,
+              amazonListId: msg.listId,
+              amazonListUrl: amazonListUrl(imported.host, msg.listId),
+              syncedAt: Date.now()
+            };
+            carts.unshift(newCart);
+            await writeCarts(carts);
+            sendResponse({ ok: true, cart: newCart, count: newCart.items.length });
             break;
           }
           default:

@@ -34,6 +34,6 @@ Optional (defer until after initial launch):
 ## Promo tile spec
 
 - 440×280 PNG, sRGB, no transparency.
-- Brand: navy (#0b1a2b or similar) gradient, Styx logo on left, tagline "Multiple carts. One click." on right.
+- Brand: navy (#0b1a2b or similar) gradient, Styx logo on left, tagline "All your lists. One click to cart." on right.
 - Keep critical content inside a 400×240 safe area (some browsers crop edges).
 - Avoid screenshots or UI mockups inside the tile — Google rejects tiles that look like screenshots.

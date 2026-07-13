@@ -1022,6 +1022,11 @@
         if (next && typeof next === "object") {
           _settingsCache = Object.assign({}, _settingsCache, next);
           applyPickerTheme(document.getElementById(PICKER_ID));
+          // Apply or undo the "Lists → Carts" rebrand live on the lists page.
+          if (isWishlistPage()) {
+            if (relabelEnabled()) relabelStyxCarts();
+            else revertStyxCarts();
+          }
         }
       }
       if (changes["mc.carts.v1"]) {
@@ -1379,6 +1384,16 @@
         font-size: 20px; line-height: 1;
       }
       #${PICKER_ID} .styx-pk-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      #${PICKER_ID} .styx-pk-brand {
+        display: flex; align-items: center; gap: 7px;
+        padding: 9px 40px 8px 14px;
+      }
+      #${PICKER_ID} .styx-pk-brand-logo {
+        width: 18px; height: 18px; flex-shrink: 0; border-radius: 4px;
+      }
+      #${PICKER_ID} .styx-pk-brand-name {
+        font-size: 12px; font-weight: 700; letter-spacing: 0.01em; color: #f3efe6;
+      }
       #${PICKER_ID} .styx-pk-header {
         display: flex; gap: 12px; padding: 14px 40px 12px 14px;
         border-bottom: 1px solid #2a3038;
@@ -1400,7 +1415,7 @@
       #${PICKER_ID} .styx-pk-prompt {
         padding: 10px 14px 6px; font-size: 11px;
         text-transform: uppercase; letter-spacing: 0.06em;
-        color: #8a93a0; font-weight: 700;
+        color: #ff9900; font-weight: 700;
       }
       #${PICKER_ID} .styx-pk-list {
         list-style: none; margin: 0; padding: 3px 10px 10px;
@@ -1627,6 +1642,7 @@
         background: #f7f3ec;
         border-color: #e0d9cc;
       }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-brand-name,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-title,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-name,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-upgrade-title,
@@ -1635,7 +1651,6 @@
         color: #131a22;
       }
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-sub,
-      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-prompt,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-count,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-upgrade-period,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-create-sub {
@@ -1967,6 +1982,10 @@
       <div class="styx-pk-backdrop" data-styx-action="cancel"></div>
       <div class="styx-pk-modal" role="document">
         <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+        <div class="styx-pk-brand">
+          <svg class="styx-pk-brand-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131a22"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/></g><circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/></g><circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/></g><circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
+          <span class="styx-pk-brand-name">Styx Multi-Cart</span>
+        </div>
         <div class="styx-pk-header">
           ${thumbHtml}
           <div class="styx-pk-meta">
@@ -2079,6 +2098,624 @@
     });
   }
 
+  // ---- Amazon wishlist "Send All to Amazon Cart" -------------------------
+
+  const STYX_WL_BTN_ID = "styx-wishlist-add-all";
+  const STYX_WL_LABEL = "Send All to Amazon Cart";
+
+  function isWishlistPage() {
+    return /\/hz\/wishlist\//i.test(location.pathname);
+  }
+
+  // Scrape every rendered wishlist item. Amazon lazy-loads items on scroll,
+  // so this captures whatever is currently in the DOM at click time.
+  function scrapeWishlistItems() {
+    const seen = new Set();
+    const out = [];
+    const lis = document.querySelectorAll(
+      "ul#g-items li[data-id], ol#g-items li[data-id], " +
+        "#g-items li[data-itemid], li.g-item-sortable, li[data-id][data-itemid]"
+    );
+    lis.forEach((li) => {
+      let asin = null;
+      const link = li.querySelector(
+        'a[href*="/dp/"], a[href*="/gp/product/"], a[href*="/gp/aw/d/"]'
+      );
+      if (link) asin = findAsinInUrl(link.getAttribute("href"));
+      if (!asin) asin = findAsinFromButton(li);
+      if (!asin || seen.has(asin)) return;
+      seen.add(asin);
+
+      let title = "";
+      const nameEl = li.querySelector('[id^="itemName_"]') || link;
+      if (nameEl) {
+        title = (nameEl.getAttribute("title") || nameEl.textContent || "")
+          .trim()
+          .replace(/\s+/g, " ")
+          .slice(0, 200);
+      }
+
+      let qty = 1;
+      const qEl = li.querySelector('[id^="itemRequested_"]');
+      if (qEl) {
+        const n = parseInt(String(qEl.textContent || "").replace(/\D+/g, ""), 10);
+        if (n > 0) qty = Math.min(n, 99);
+      }
+
+      out.push({
+        asin,
+        title,
+        quantity: qty,
+        url: `https://${location.hostname}/dp/${asin}`,
+      });
+    });
+    return out;
+  }
+
+  function setWishlistBtnLabel(btn, text) {
+    const label = btn.querySelector(".a-button-text");
+    if (label) label.textContent = text;
+  }
+
+  function injectWishlistButton() {
+    if (document.getElementById(STYX_WL_BTN_ID)) return true;
+    const title = document.getElementById("profile-list-name");
+    if (!title || !title.parentNode) return false;
+
+    const spacer = document.createElement("span");
+    spacer.className = "a-letter-space";
+
+    const btn = document.createElement("span");
+    btn.id = STYX_WL_BTN_ID;
+    btn.className = "a-button a-button-primary";
+    btn.style.marginLeft = "12px";
+    btn.style.verticalAlign = "middle";
+    btn.innerHTML =
+      '<span class="a-button-inner">' +
+      '<a class="a-button-text" role="button" href="#" style="white-space:nowrap;">' +
+      STYX_WL_LABEL +
+      "</a></span>";
+
+    // Insert "<spacer><button>" right after the list title.
+    title.parentNode.insertBefore(btn, title.nextSibling);
+    title.parentNode.insertBefore(spacer, btn);
+
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.dataset.busy === "1") return;
+
+      const items = scrapeWishlistItems();
+      if (!items.length) {
+        setWishlistBtnLabel(btn, "No items found");
+        setTimeout(() => setWishlistBtnLabel(btn, STYX_WL_LABEL), 2000);
+        return;
+      }
+
+      btn.dataset.busy = "1";
+      btn.classList.add("a-button-disabled");
+      setWishlistBtnLabel(btn, `Adding ${items.length}…`);
+
+      const res = await sendRequest({
+        type: "MC_WISHLIST_ADD_ALL",
+        items,
+        host: location.hostname,
+      });
+
+      if (!res || !res.ok) {
+        setWishlistBtnLabel(btn, (res && res.error) || "Try again");
+        btn.dataset.busy = "";
+        btn.classList.remove("a-button-disabled");
+        setTimeout(() => setWishlistBtnLabel(btn, STYX_WL_LABEL), 2500);
+        return;
+      }
+
+      // Background drives the confirm flow in a helper tab (often THIS tab,
+      // which then navigates away). Reset the button in case it survives.
+      setWishlistBtnLabel(btn, `Sending ${items.length} to cart…`);
+      setTimeout(() => {
+        btn.dataset.busy = "";
+        btn.classList.remove("a-button-disabled");
+        setWishlistBtnLabel(btn, STYX_WL_LABEL);
+      }, 5000);
+    });
+
+    dlog("[Styx ATC] wishlist Send-All button injected");
+    return true;
+  }
+
+  function initWishlist() {
+    if (injectWishlistButton()) return;
+    // The list title can render after document_idle (hydration / soft nav).
+    // Watch the DOM briefly and inject as soon as it appears.
+    let tries = 0;
+    const mo = new MutationObserver(() => {
+      if (injectWishlistButton() || ++tries > 40) mo.disconnect();
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => mo.disconnect(), 20000);
+  }
+
+  // ---- Rebrand: Amazon "Lists" → "Styx Carts" -----------------------------
+  //
+  // Styx repurposes Amazon wish lists as reusable "carts". To reflect that on
+  // Amazon's own surfaces, we relabel (text only, no behavior change):
+  //   • the "Your Lists" page heading → "Your Styx Carts"
+  //   • each CUSTOM list's name: the word "List" → "Cart" (case-preserving)
+  // Amazon's system defaults keep their real names so their special behavior
+  // stays recognizable — we never touch "Wish List" or "Alexa List".
+
+  const STYX_CART_RELABEL_FLAG = "styxCartRelabeled";
+  const STYX_CART_ORIG_ATTR = "data-styx-cart-orig";
+
+  // Append " Cart" to every list name that doesn't already contain "cart".
+  // Non-destructive: the original name stays readable, so even Amazon's
+  // defaults keep their identity ("Wish List" → "Wish List Cart", "Mila Wish
+  // List" → "Mila Wish List Cart"). Names already carrying "cart" ("Cart Jul
+  // 11") are left untouched, which also makes this idempotent.
+  function rebrandListName(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return null;
+    if (/cart/i.test(trimmed)) return null; // already a "cart"
+    return trimmed + " Cart";
+  }
+
+  function relabelEnabled() {
+    return _settingsCache.relabelListsAsCarts !== false;
+  }
+
+  // Relabel a single text-bearing node, stashing the original so we can both
+  // avoid double-processing AND revert cleanly when the toggle is turned off.
+  function relabelNode(el, transform) {
+    if (!el || el.dataset[STYX_CART_RELABEL_FLAG] === "1") return;
+    const original = (el.textContent || "").trim();
+    const next = transform(original);
+    if (next && next !== original) {
+      el.setAttribute(STYX_CART_ORIG_ATTR, original);
+      el.textContent = next;
+      el.dataset[STYX_CART_RELABEL_FLAG] = "1";
+      el.title = next;
+    }
+  }
+
+  function relabelStyxCarts() {
+    if (!relabelEnabled()) return;
+    // 1. Page heading: the active "Your Lists" tab.
+    document
+      .querySelectorAll(".a-tab-heading a, .a-tab-heading span")
+      .forEach((el) => {
+        if ((el.textContent || "").trim() === "Your Lists") {
+          relabelNode(el, () => "Your Styx Carts");
+        }
+      });
+
+    // 2. Sidebar list names (index + detail pages).
+    document
+      .querySelectorAll('[id^="wl-list-entry-title-"]')
+      .forEach((el) => relabelNode(el, rebrandListName));
+
+    // 3. The open list's detail heading.
+    const detail = document.getElementById("profile-list-name");
+    if (detail) relabelNode(detail, rebrandListName);
+  }
+
+  // Undo every relabel we applied (used when the setting is toggled off live).
+  function revertStyxCarts() {
+    document
+      .querySelectorAll("[" + STYX_CART_ORIG_ATTR + "]")
+      .forEach((el) => {
+        el.textContent = el.getAttribute(STYX_CART_ORIG_ATTR) || el.textContent;
+        el.removeAttribute(STYX_CART_ORIG_ATTR);
+        delete el.dataset[STYX_CART_RELABEL_FLAG];
+        el.removeAttribute("title");
+      });
+  }
+
+  function initStyxCartRelabel() {
+    relabelStyxCarts();
+    // Amazon hydrates the lists UI after load and re-renders on soft nav; keep
+    // a debounced, idempotent pass running scoped to the lists container.
+    const root =
+      document.getElementById("wishlist-page") ||
+      document.getElementById("a-page") ||
+      document.documentElement;
+    let timer = 0;
+    const mo = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        relabelStyxCarts();
+      }, 200);
+    });
+    mo.observe(root, { childList: true, subtree: true });
+  }
+
+  // ---- Cart page: "Save cart to a new list" → new Amazon wish list --------
+  //
+  // On the Amazon Shopping Cart page, drop a button in the buybox that saves
+  // everything currently in the cart into a brand-new Amazon wish list. The
+  // background (MC_SAVE_LIVE_CART_TO_LIST) scrapes the cart (reusing THIS tab),
+  // creates the list, and adds the items via the same driver the popup uses
+  // for saved carts. Nothing is stored as a Styx saved cart — it goes straight
+  // to Amazon. The button names the list and shows status.
+
+  const STYX_SAVE_CART_BTN_ID = "styx-save-cart";
+  const STYX_SAVE_CART_LABEL = "Save cart to a new list";
+  const STYX_SAVE_CART_STYLE_ID = "styx-save-cart-style";
+
+  // ---- Shared Styx button branding ---------------------------------------
+  // One visual language for every Styx-owned action button (cart page + PDP):
+  // dark navy fill (matches the toolbar-icon tile), white bold label, and the
+  // orange Styx cart mark. Kept in sync so the two buttons read as one system.
+  const STYX_BTN_BG = "linear-gradient(180deg,#1f2d3d,#131a22)";
+  const STYX_BTN_BORDER = "rgba(255,153,0,.55)";
+  const STYX_BTN_RADIUS = "8px";
+  const STYX_ORANGE = "#ff9900";
+
+  // Orange Styx shopping-cart glyph. `cls` lets each caller size/position it.
+  function STYX_MARK_SVG(cls) {
+    return (
+      '<svg class="' + cls + '" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="' + STYX_ORANGE + '" stroke-width="2" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M2.5 3.5h2.2l2.2 11.1a1.3 1.3 0 0 0 1.28 1.05h8.3a1.3 1.3 0 0 0 1.27-1.02L20.8 7.5H6"/>' +
+      '<circle cx="9" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/></svg>'
+    );
+  }
+  // URL-encoded form of the same mark for CSS ::before backgrounds (PDP button,
+  // whose DOM belongs to Amazon so we can't inject a child node cleanly).
+  const STYX_MARK_URI =
+    "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff9900'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2.5%203.5h2.2l2.2%2011.1a1.3%201.3%200%200%200%201.28%201.05h8.3a1.3%201.3%200%200%200%201.27-1.02L20.8%207.5H6'/%3E%3Ccircle%20cx='9'%20cy='20'%20r='1.5'/%3E%3Ccircle%20cx='17.5'%20cy='20'%20r='1.5'/%3E%3C/svg%3E";
+
+  // ---- Styx progress toast (on-page, for long list-save operations) -------
+  const STYX_TOAST_ID = "styx-progress-toast";
+  let _styxToastHideTimer = 0;
+
+  function ensureStyxToastStyle() {
+    if (document.getElementById("styx-toast-style")) return;
+    const style = document.createElement("style");
+    style.id = "styx-toast-style";
+    style.textContent = `
+      #${STYX_TOAST_ID} {
+        position: fixed; top: 22px; left: 50%; z-index: 2147483000;
+        display: flex; align-items: center; gap: 11px;
+        max-width: 360px; padding: 13px 15px;
+        border-radius: 12px; border: 1px solid ${STYX_BTN_BORDER};
+        border-left: 4px solid ${STYX_ORANGE};
+        background: ${STYX_BTN_BG}; color: #fff;
+        font: 500 13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+        box-shadow: 0 8px 28px rgba(0,0,0,.4);
+        opacity: 0; transform: translate(-50%, -8px);
+        transition: opacity 160ms ease, transform 160ms ease;
+      }
+      #${STYX_TOAST_ID}.styx-toast-in { opacity: 1; transform: translate(-50%, 0); }
+      #${STYX_TOAST_ID} .styx-toast-spin {
+        width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
+        border: 2px solid rgba(255,153,0,.3); border-top-color: ${STYX_ORANGE};
+        animation: styx-toast-spin 720ms linear infinite;
+      }
+      #${STYX_TOAST_ID}.styx-toast-done .styx-toast-spin,
+      #${STYX_TOAST_ID}.styx-toast-error .styx-toast-spin { display: none; }
+      #${STYX_TOAST_ID} .styx-toast-mark { width: 20px; height: 20px; flex: 0 0 auto; display: none; }
+      #${STYX_TOAST_ID}.styx-toast-done .styx-toast-mark { display: block; }
+      #${STYX_TOAST_ID} .styx-toast-body { min-width: 0; }
+      #${STYX_TOAST_ID} .styx-toast-title { font-weight: 700; }
+      #${STYX_TOAST_ID} .styx-toast-detail { color: #c9d4e0; margin-top: 2px; }
+      #${STYX_TOAST_ID}.styx-toast-error { border-left-color: #e06565; }
+      @keyframes styx-toast-spin { to { transform: rotate(360deg); } }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function showStyxToast(detail) {
+    ensureStyxToastStyle();
+    if (_styxToastHideTimer) { clearTimeout(_styxToastHideTimer); _styxToastHideTimer = 0; }
+    let el = document.getElementById(STYX_TOAST_ID);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = STYX_TOAST_ID;
+      el.setAttribute("role", "status");
+      el.innerHTML =
+        '<div class="styx-toast-spin"></div>' +
+        STYX_MARK_SVG("styx-toast-mark") +
+        '<div class="styx-toast-body">' +
+        '<div class="styx-toast-title">Building your Amazon list</div>' +
+        '<div class="styx-toast-detail"></div></div>';
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add("styx-toast-in"));
+    }
+    el.classList.remove("styx-toast-done", "styx-toast-error");
+    setStyxToastDetail(detail);
+    return el;
+  }
+
+  function setStyxToastDetail(detail) {
+    const el = document.getElementById(STYX_TOAST_ID);
+    if (!el) return;
+    const d = el.querySelector(".styx-toast-detail");
+    if (d) d.textContent = detail || "";
+  }
+
+  function finishStyxToast(kind, title, detail, hideAfter) {
+    const el = showStyxToast(detail);
+    el.classList.add(kind === "error" ? "styx-toast-error" : "styx-toast-done");
+    const t = el.querySelector(".styx-toast-title");
+    if (t && title) t.textContent = title;
+    setStyxToastDetail(detail);
+    _styxToastHideTimer = setTimeout(() => dismissStyxToast(), hideAfter || 4000);
+  }
+
+  function dismissStyxToast() {
+    const el = document.getElementById(STYX_TOAST_ID);
+    if (!el) return;
+    el.classList.remove("styx-toast-in");
+    setTimeout(() => { try { el.remove(); } catch (_e) {} }, 220);
+  }
+
+  // Background pushes progress here during a cart→list save.
+  try {
+    chrome.runtime.onMessage.addListener((m) => {
+      if (m && m.type === "MC_LIST_SAVE_PROGRESS") {
+        showStyxToast(m.detail || "Working…");
+      }
+    });
+  } catch (_e) { /* no runtime — ignore */ }
+
+  function isCartPage() {
+    const p = location.pathname;
+    // Desktop cart (/gp/cart/view.html) and the short /cart route. Exclude the
+    // /gp/cart/aws upsell interstitial (handled as an upsell surface).
+    if (/\/gp\/cart\/view\.html/i.test(p)) return true;
+    if (/^\/cart\/?$/i.test(p)) return true;
+    return false;
+  }
+
+  function setSaveCartLabel(btn, text) {
+    const label = btn.querySelector(".styx-save-cart-label");
+    if (label) label.textContent = text;
+  }
+
+  function injectSaveCartButton() {
+    if (document.getElementById(STYX_SAVE_CART_BTN_ID)) return true;
+
+    // Anchor to the buybox (subtotal + Proceed to Checkout). Absent on an
+    // empty cart, so this naturally no-ops when there's nothing to save.
+    const buyBox =
+      document.getElementById("sc-buy-box") ||
+      document.getElementById("sc-buy-box-ptc-button");
+    if (!buyBox) return false;
+    const ptc = document.getElementById("sc-buy-box-ptc-button");
+    const anchor = (ptc && ptc.closest(".a-button-stack, .sc-buy-box-ptc")) || ptc;
+    const container = (anchor && anchor.parentNode) || buyBox;
+    if (!container) return false;
+
+    if (!document.getElementById(STYX_SAVE_CART_STYLE_ID)) {
+      const style = document.createElement("style");
+      style.id = STYX_SAVE_CART_STYLE_ID;
+      style.textContent = `
+        #${STYX_SAVE_CART_BTN_ID} {
+          display: flex; align-items: center; justify-content: center; gap: 7px;
+          width: 100%; box-sizing: border-box;
+          margin-top: 10px; padding: 9px 12px;
+          font-size: 13px; line-height: 18px; font-weight: 700;
+          text-align: center; border-radius: ${STYX_BTN_RADIUS};
+          border: 1px solid ${STYX_BTN_BORDER};
+          background: ${STYX_BTN_BG};
+          color: #ffffff; cursor: pointer;
+          box-shadow: 0 1px 2px rgba(15,23,42,.25);
+          transition: filter 120ms ease, opacity 120ms ease;
+        }
+        #${STYX_SAVE_CART_BTN_ID}:hover { filter: brightness(1.12); }
+        #${STYX_SAVE_CART_BTN_ID}:disabled { opacity: 0.6; cursor: default; }
+        #${STYX_SAVE_CART_BTN_ID} .styx-btn-mark {
+          width: 17px; height: 17px; flex: 0 0 auto; display: block;
+        }
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = STYX_SAVE_CART_BTN_ID;
+    btn.title = "Save everything in this cart to a new Amazon wish list";
+    btn.innerHTML =
+      STYX_MARK_SVG("styx-btn-mark") +
+      '<span class="styx-save-cart-label">' + STYX_SAVE_CART_LABEL + "</span>";
+
+    // Place it right under Proceed to Checkout.
+    if (anchor && anchor.nextSibling) {
+      container.insertBefore(btn, anchor.nextSibling);
+    } else {
+      container.appendChild(btn);
+    }
+
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.disabled) return;
+
+      const defaultName = `Cart ${new Date().toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })}`;
+      const raw = window.prompt("Name your new Amazon list:", defaultName);
+      if (raw === null) return; // user cancelled
+      const name = raw.trim() || defaultName;
+
+      btn.disabled = true;
+      setSaveCartLabel(btn, "Saving to Amazon…");
+      showStyxToast(
+        "Opening Amazon tabs to add each item — please keep this tab open."
+      );
+
+      // Long-running: background creates the list + adds items via Amazon tabs,
+      // streaming progress into the toast, and on success navigates THIS tab to
+      // the finished list (so the success state is the list page itself).
+      const res = await sendRequest({
+        type: "MC_SAVE_LIVE_CART_TO_LIST",
+        name,
+        host: location.hostname,
+      });
+
+      if (res && res.ok) {
+        // Background is navigating this tab to the list; keep the toast up as a
+        // "done" state in case navigation is briefly delayed.
+        const added = res.added || 0;
+        finishStyxToast(
+          "done",
+          "List saved",
+          res.failed
+            ? `Saved ${added}/${res.total} to "${name}". ${res.failed} need a manual add. Opening your list…`
+            : `Saved ${added} item${added === 1 ? "" : "s"} to "${name}". Opening your list…`,
+          8000
+        );
+      } else {
+        finishStyxToast("error", "Couldn't save to Amazon", (res && res.error) || "Please try again.", 6000);
+        btn.disabled = false;
+        setSaveCartLabel(btn, STYX_SAVE_CART_LABEL);
+      }
+    });
+
+    dlog("[Styx ATC] Save-this-cart button injected");
+    return true;
+  }
+
+  function initSaveCart() {
+    injectSaveCartButton();
+    // The buybox re-renders on quantity changes / item removal, which drops
+    // our button. Keep a debounced, idempotent re-check running, scoped to
+    // the active cart form to bound the cost.
+    const root =
+      document.getElementById("sc-active-cart") ||
+      document.getElementById("activeCartViewForm") ||
+      document.documentElement;
+    let timer = 0;
+    const mo = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        injectSaveCartButton();
+      }, 250);
+    });
+    mo.observe(root, { childList: true, subtree: true });
+  }
+
+  // ---- PDP: surface "Save to a List" above "Add to Cart" ------------------
+  //
+  // Amazon renders the native "Add to List" split-button far below the buybox
+  // (#wishlistButtonStack: a default-list button + a ▼ caret that opens the
+  // multi-list chooser). We RELOCATE that real node above Add to Cart so
+  // a single real click reaches Amazon's own chooser and the user picks any
+  // named list. We MOVE the node (never clone): a clone's click is trusted but
+  // unbound, whereas moving preserves Amazon's a-declarative handler (verified
+  // live — the moved caret still loads the chooser). No background round-trip:
+  // the user's own trusted click is the entire mechanism, which is also why
+  // this sidesteps Amazon's anti-automation on programmatic list writes.
+
+  const STYX_PDP_ATL_FLAG = "styxAtlRelocated"; // dataset marker on the stack
+  const STYX_PDP_ATL_STYLE_ID = "styx-pdp-atl-style";
+
+  function stylePdpAddToListButton(stack) {
+    // Keep Amazon's button DOM and classes intact so its bound handlers and
+    // split-button behavior survive. These overrides are visual only.
+    if (!document.getElementById(STYX_PDP_ATL_STYLE_ID)) {
+      const style = document.createElement("style");
+      style.id = STYX_PDP_ATL_STYLE_ID;
+      // Branded to match the cart-page "Save cart to a new list" button: navy
+      // fill, white bold label, orange Styx cart mark, 8px radius. Amazon's
+      // split-button DOM/classes stay intact (handlers survive) — visual only.
+      style.textContent = `
+        #wishlistButtonStack[data-styx-atl-relocated="1"] {
+          width: 100%;
+          margin: 0 0 10px !important;
+          padding: 0;
+          border-radius: ${STYX_BTN_RADIUS};
+          overflow: hidden;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button {
+          background: ${STYX_BTN_BG} !important;
+          border-color: ${STYX_BTN_BORDER} !important;
+          box-shadow: none !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button-inner {
+          background: transparent !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button-text {
+          color: #ffffff !important;
+          font-weight: 700 !important;
+          text-shadow: none !important;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] #wishListMainButton-announce::before {
+          content: "";
+          display: inline-block;
+          width: 16px; height: 16px;
+          margin-right: 7px;
+          vertical-align: -3px;
+          background: url("${STYX_MARK_URI}") no-repeat center / contain;
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"] .a-button:hover {
+          filter: brightness(1.12);
+        }
+        #wishlistButtonStack[data-styx-atl-relocated="1"]:focus-within {
+          outline: 3px solid rgba(255, 153, 0, 0.35);
+          outline-offset: 2px;
+        }
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    const label =
+      stack.querySelector("#wishListMainButton-announce") ||
+      stack.querySelector("#wishListMainButton .a-button-text");
+    if (label) label.textContent = "Save to a List";
+  }
+
+  function injectPdpAddToListButton() {
+    const atc = document.getElementById("add-to-cart-button");
+    if (!atc) return false; // not a buyable PDP (or buybox not hydrated yet)
+
+    const stack = document.getElementById("wishlistButtonStack");
+    if (!stack) return false; // wishlist widget not rendered (yet)
+
+    // Put the list action immediately before the Add-to-Cart stack.
+    const atcStack = atc.closest(".a-button-stack") || atc.parentElement;
+    if (!atcStack || !atcStack.parentNode) return false;
+
+    // Idempotent: already relocated and sitting immediately before Add to Cart.
+    if (
+      stack.dataset[STYX_PDP_ATL_FLAG] === "1" &&
+      atcStack.previousElementSibling === stack
+    ) {
+      stylePdpAddToListButton(stack);
+      return true;
+    }
+
+    atcStack.parentNode.insertBefore(stack, atcStack);
+    stack.dataset[STYX_PDP_ATL_FLAG] = "1";
+    stylePdpAddToListButton(stack);
+    dlog("[Styx ATC] relocated Save-to-a-List above Add to Cart");
+    return true;
+  }
+
+  function initPdpAddToList() {
+    injectPdpAddToListButton();
+    // The buybox hydrates after document_idle and re-renders on variant
+    // changes and soft navigations — each can spawn a fresh, unrelocated
+    // widget. Keep a debounced, idempotent re-check running, scoped to the
+    // stable product container to bound the cost.
+    const root = document.getElementById("dp") || document.documentElement;
+    let timer = 0;
+    const mo = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        injectPdpAddToListButton();
+      }, 250);
+    });
+    mo.observe(root, { childList: true, subtree: true });
+  }
+
   // ---- Boot ---------------------------------------------------------------
 
   // Always install the ATC intercept on Amazon pages. It's a single
@@ -2099,4 +2736,8 @@
   // through because MC_LIST_CARTS hadn't responded yet.
   hydrateCachesFromStorage();
   if (onUpsell) watchUpsellClicks();
+  if (isWishlistPage()) initWishlist();
+  if (isWishlistPage()) initStyxCartRelabel();
+  if (onProduct) initPdpAddToList();
+  if (isCartPage()) initSaveCart();
 })();
