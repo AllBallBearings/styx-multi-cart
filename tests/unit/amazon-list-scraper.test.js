@@ -60,12 +60,14 @@ describe("pageScrapeAmazonLists", () => {
             name: "Wish List",
             url: "https://www.amazon.com/hz/wishlist/ls/3ABCXYZ123",
             count: null,
+            kind: "default", // carries the "Default List" badge
           },
           {
             listId: "2OLDID9",
             name: "Project Supplies",
             url: "https://www.amazon.com/hz/wishlist/ls/2OLDID9",
             count: null,
+            kind: "custom",
           },
         ],
       });

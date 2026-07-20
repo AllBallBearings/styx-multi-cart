@@ -171,7 +171,7 @@ importScripts("ExtPay.js");
     "e0a8d5a301195b7f3386f8b419ace9e8b55f1e7137ff0b5aa8e24753580a9b13"
   ]);
   var PROMO_GRANT_MS = 90 * 24 * 60 * 60 * 1e3;
-  var FREE_CART_LIMIT = 2;
+  var FREE_CART_LIMIT = 3;
   var PREMIUM_CART_LIMIT = 20;
   var DEFAULT_ENTITLEMENT = Object.freeze({
     tier: "free",
@@ -187,6 +187,9 @@ importScripts("ExtPay.js");
     // "Your Styx Carts", custom list names "List" → "Cart"). On by default;
     // read by observer.js, which reverts live when toggled off.
     relabelListsAsCarts: true,
+    // Pulse the in-page floating Styx button (orange glow) as a reminder to use
+    // it. On by default; read by observer.js, toggled from popup settings.
+    fabPulse: true,
     // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
     // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
     // is unavailable (e.g. Safari), which always uses the popup.
@@ -301,6 +304,17 @@ importScripts("ExtPay.js");
   }
   if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
     readSettings().then((s) => applyUiSurface(s.uiSurface)).catch(() => applyUiSurface("sidepanel"));
+  }
+  if (chrome.action && chrome.action.onClicked) {
+    chrome.action.onClicked.addListener((tab) => {
+      if (!tab || tab.id == null) return;
+      try {
+        chrome.tabs.sendMessage(tab.id, { type: "MC_TOGGLE_FLOATING" }, () => {
+          void chrome.runtime.lastError;
+        });
+      } catch (_e) {
+      }
+    });
   }
   async function syncEntitlementFromExtPay() {
     if (!extpay) return;
@@ -428,6 +442,29 @@ importScripts("ExtPay.js");
       code: "CART_LOCKED",
       reason: isPremiumActive(ent, nowMs) ? "This cart exceeds your plan's limit." : "Renew Premium to edit this cart, or delete other carts to free up a slot."
     };
+  }
+  function computeListAccess(lists, ent, nowMs = Date.now()) {
+    const premium = isPremiumActive(ent, nowMs);
+    const limit = premium ? Infinity : FREE_CART_LIMIT;
+    let customSeen = 0;
+    const annotated = (Array.isArray(lists) ? lists : []).map((l) => {
+      const kind = l && l.kind ? l.kind : "custom";
+      if (kind !== "custom") return Object.assign({}, l, { kind, access: "editable" });
+      customSeen += 1;
+      return Object.assign({}, l, {
+        kind,
+        access: customSeen <= limit ? "editable" : "locked"
+      });
+    });
+    return { lists: annotated, isPremium: premium, limit, customCount: customSeen };
+  }
+  var _lastListAccess = { byId: /* @__PURE__ */ new Map(), at: 0 };
+  function rememberListAccess(annotatedLists) {
+    const byId = /* @__PURE__ */ new Map();
+    for (const l of annotatedLists || []) {
+      if (l && l.listId) byId.set(String(l.listId).toUpperCase(), l.access);
+    }
+    _lastListAccess = { byId, at: Date.now() };
   }
   async function readSettings() {
     const result = await chrome.storage.local.get(SETTINGS_KEY);
@@ -2636,7 +2673,8 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       listId: l.listId,
       name: l.name,
       count: l.count,
-      url: l.listId ? amazonListUrl(host, l.listId) : l.url
+      url: l.listId ? amazonListUrl(host, l.listId) : l.url,
+      kind: l.kind || "custom"
     }));
   }
   async function amazonListExists(host, listId) {
@@ -2860,11 +2898,18 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
         }
         if (!name || name.length > 120) return;
         seen.add(id);
+        let kind = "custom";
+        if (/\bDefault List/i.test(a.textContent || "")) {
+          kind = "default";
+        } else if (/^(?:alexa\s+)?shopping list$/i.test(name)) {
+          kind = "alexa";
+        }
         out.push({
           listId: id,
           name,
           url: location.origin + "/hz/wishlist/ls/" + id,
-          count: null
+          count: null,
+          kind
         });
       });
       return { lists: out };
@@ -3601,6 +3646,18 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
               });
               break;
             }
+            if (msg.listId) {
+              const acc = _lastListAccess.byId.get(String(msg.listId).toUpperCase());
+              if (acc === "locked") {
+                sendResponse({
+                  ok: false,
+                  code: "CART_LOCKED",
+                  upsell: true,
+                  error: "This cart is locked on the free plan. Upgrade to send it to your Amazon cart."
+                });
+                break;
+              }
+            }
             sendResponse({ ok: true, started: true, total: items.length });
             setOpStatus("Adding wishlist to cart", "Starting\u2026");
             openStatusWindow();
@@ -3692,6 +3749,16 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
           case "MC_SET_RELABEL": {
             const next = await writeSettings({ relabelListsAsCarts: !!msg.enabled });
             sendResponse({ ok: true, enabled: next.relabelListsAsCarts !== false });
+            break;
+          }
+          case "MC_GET_FAB_PULSE": {
+            const settings = await readSettings();
+            sendResponse({ ok: true, enabled: settings.fabPulse !== false });
+            break;
+          }
+          case "MC_SET_FAB_PULSE": {
+            const next = await writeSettings({ fabPulse: !!msg.enabled });
+            sendResponse({ ok: true, enabled: next.fabPulse !== false });
             break;
           }
           case "MC_GET_UI_SURFACE": {
@@ -3910,8 +3977,50 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             break;
           }
           case "MC_LIST_AMAZON_LISTS": {
-            const lists = await listAmazonLists(msg.host);
-            sendResponse({ ok: true, lists });
+            const rawLists = await listAmazonLists(msg.host);
+            const ent = await readEntitlement();
+            const access = computeListAccess(rawLists, ent);
+            rememberListAccess(access.lists);
+            sendResponse({
+              ok: true,
+              lists: access.lists,
+              entitlement: {
+                isPremium: access.isPremium,
+                limit: access.isPremium ? null : access.limit,
+                customCount: access.customCount
+              }
+            });
+            break;
+          }
+          case "MC_GET_LIST_ACCESS": {
+            const wantId = String(msg.listId || "").toUpperCase();
+            if (!wantId) {
+              sendResponse({ ok: false, error: "Missing list id." });
+              break;
+            }
+            if (!_lastListAccess.byId.has(wantId) && _sender && _sender.tab && _sender.tab.id != null) {
+              try {
+                const res = await chrome.scripting.executeScript({
+                  target: { tabId: _sender.tab.id },
+                  func: pageScrapeAmazonLists
+                });
+                const scraped = res && res[0] && res[0].result && res[0].result.lists || [];
+                if (scraped.length) {
+                  const entNow = await readEntitlement();
+                  const computed = computeListAccess(scraped, entNow);
+                  rememberListAccess(computed.lists);
+                }
+              } catch (_e) {
+              }
+            }
+            const acc = _lastListAccess.byId.get(wantId) || "editable";
+            const known = _lastListAccess.byId.has(wantId);
+            sendResponse({
+              ok: true,
+              access: acc,
+              known,
+              isPremium: isPremiumActive(await readEntitlement())
+            });
             break;
           }
           case "MC_GET_AMAZON_LIST": {

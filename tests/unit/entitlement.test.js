@@ -124,17 +124,15 @@ describe("computeCartAccess", () => {
     expect(acc.readOnlyIds.size).toBe(0);
     expect(acc.limit).toBe(PREMIUM_CART_LIMIT);
   });
-  it("lapsed premium with 5 carts: top 2 editable, rest read-only", () => {
-    const carts = [
-      cart("oldest", NOW - 1000),
-      cart("newest", NOW - 100),    // ← top
-      cart("middle1", NOW - 500),
-      cart("second-newest", NOW - 200), // ← top
-      cart("middle2", NOW - 800),
-    ];
+  it("lapsed premium: top FREE_CART_LIMIT by lastUsedAt editable, rest read-only", () => {
+    // Recency order, newest first.
+    const ordered = ["r0", "r1", "r2", "r3", "r4"];
+    const carts = ordered.map((id, i) => cart(id, NOW - (i + 1) * 100));
     const acc = computeCartAccess(carts, lapsedPremium(), NOW);
-    expect([...acc.editableIds].sort()).toEqual(["newest", "second-newest"].sort());
-    expect([...acc.readOnlyIds].sort()).toEqual(["middle1", "middle2", "oldest"].sort());
+    const editable = ordered.slice(0, FREE_CART_LIMIT);
+    const locked = ordered.slice(FREE_CART_LIMIT);
+    expect([...acc.editableIds].sort()).toEqual([...editable].sort());
+    expect([...acc.readOnlyIds].sort()).toEqual([...locked].sort());
   });
   it("premium beyond limit: excess carts become read-only", () => {
     const carts = Array.from({ length: PREMIUM_CART_LIMIT + 3 }, (_, i) =>
@@ -154,7 +152,9 @@ describe("canCreateSavedCart", () => {
     expect(result.tier).toBe("free");
   });
   it("blocks at free limit with FREE_LIMIT_REACHED code", () => {
-    const carts = [cart("a", 1), cart("b", 2)];
+    const carts = Array.from({ length: FREE_CART_LIMIT }, (_, i) =>
+      cart(String.fromCharCode(97 + i), i + 1)
+    );
     const result = canCreateSavedCart(carts, freeEnt(), NOW);
     expect(result.allowed).toBe(false);
     expect(result.code).toBe("FREE_LIMIT_REACHED");
@@ -192,19 +192,19 @@ describe("canEditCart", () => {
     expect(canEditCart("a", carts, freeEnt(), NOW).allowed).toBe(true);
     expect(canEditCart("b", carts, freeEnt(), NOW).allowed).toBe(true);
   });
-  it("lapsed premium: only top 2 by lastUsedAt editable", () => {
-    const carts = [
-      cart("old", NOW - 1000),
-      cart("recent1", NOW - 100),
-      cart("recent2", NOW - 200),
-      cart("ancient", NOW - 5000),
-    ];
+  it("lapsed premium: only top FREE_CART_LIMIT by lastUsedAt editable", () => {
+    // FREE_CART_LIMIT + 1 carts, most-recent first. Top FREE_CART_LIMIT are
+    // editable; the oldest overflow cart is locked.
+    const carts = Array.from({ length: FREE_CART_LIMIT + 1 }, (_, i) =>
+      cart(`c${i}`, NOW - i * 100)
+    );
     const ent = lapsedPremium();
-    expect(canEditCart("recent1", carts, ent, NOW).allowed).toBe(true);
-    expect(canEditCart("recent2", carts, ent, NOW).allowed).toBe(true);
-    expect(canEditCart("old", carts, ent, NOW).allowed).toBe(false);
-    expect(canEditCart("ancient", carts, ent, NOW).allowed).toBe(false);
-    expect(canEditCart("old", carts, ent, NOW).code).toBe("CART_LOCKED");
+    for (let i = 0; i < FREE_CART_LIMIT; i++) {
+      expect(canEditCart(`c${i}`, carts, ent, NOW).allowed).toBe(true);
+    }
+    const overflow = `c${FREE_CART_LIMIT}`;
+    expect(canEditCart(overflow, carts, ent, NOW).allowed).toBe(false);
+    expect(canEditCart(overflow, carts, ent, NOW).code).toBe("CART_LOCKED");
   });
   it("unknown cart id is treated as locked (defensive)", () => {
     const carts = [cart("a", 1)];
@@ -216,25 +216,22 @@ describe("auto-promotion via deletion", () => {
   // The handler-layer behavior we want to verify: when a lapsed user deletes
   // one of their top-2 editable carts, the next-most-recent locked cart
   // should automatically become editable on the next access computation.
-  it("after deleting a top-2 cart, the next-recent cart becomes editable", () => {
+  it("after deleting a top-slot cart, the next-recent cart becomes editable", () => {
     const ent = lapsedPremium();
-    let carts = [
-      cart("a", NOW - 100),  // editable
-      cart("b", NOW - 200),  // editable
-      cart("c", NOW - 300),  // locked
-      cart("d", NOW - 400),  // locked
-    ];
+    // FREE_CART_LIMIT + 1 carts, most-recent first; the last overflows (locked).
+    let carts = Array.from({ length: FREE_CART_LIMIT + 1 }, (_, i) =>
+      cart(`c${i}`, NOW - (i + 1) * 100)
+    );
+    const overflow = `c${FREE_CART_LIMIT}`;
     let acc = computeCartAccess(carts, ent, NOW);
-    expect(acc.editableIds.has("a")).toBe(true);
-    expect(acc.editableIds.has("b")).toBe(true);
-    expect(acc.editableIds.has("c")).toBe(false);
+    expect(acc.editableIds.has("c0")).toBe(true);
+    expect(acc.editableIds.has(overflow)).toBe(false);
 
-    // User deletes "a" — handler is free to do this without a gate.
-    carts = carts.filter((c) => c.id !== "a");
+    // User deletes the most-recent editable cart — no gate on deletion.
+    carts = carts.filter((c) => c.id !== "c0");
     acc = computeCartAccess(carts, ent, NOW);
-    expect(acc.editableIds.has("b")).toBe(true);
-    expect(acc.editableIds.has("c")).toBe(true);   // ← auto-promoted
-    expect(acc.editableIds.has("d")).toBe(false);
+    // The previously-locked overflow cart auto-promotes into the freed slot.
+    expect(acc.editableIds.has(overflow)).toBe(true);
   });
 });
 

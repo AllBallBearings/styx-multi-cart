@@ -122,7 +122,7 @@ const PROMO_HASHES = Object.freeze([
 const PROMO_GRANT_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 // Tier limits — keep in sync with lib/helpers.js. See docs/MONETIZATION_PLAN.md.
-const FREE_CART_LIMIT = 2;
+const FREE_CART_LIMIT = 3;
 const PREMIUM_CART_LIMIT = 20;
 
 const DEFAULT_ENTITLEMENT = Object.freeze({
@@ -141,6 +141,9 @@ const DEFAULT_SETTINGS = {
   // "Your Styx Carts", custom list names "List" → "Cart"). On by default;
   // read by observer.js, which reverts live when toggled off.
   relabelListsAsCarts: true,
+  // Pulse the in-page floating Styx button (orange glow) as a reminder to use
+  // it. On by default; read by observer.js, toggled from popup settings.
+  fabPulse: true,
   // Which surface the toolbar icon opens on Chrome: "sidepanel" (default,
   // docked panel) or "popup" (compact popover). Ignored where chrome.sidePanel
   // is unavailable (e.g. Safari), which always uses the popup.
@@ -329,6 +332,25 @@ if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
   readSettings()
     .then((s) => applyUiSurface(s.uiSurface))
     .catch(() => applyUiSurface("sidepanel"));
+}
+
+// The UI is now an in-page floating modal (injected by observer.js on Amazon
+// pages) rather than a native side panel. With no default_popup and no
+// side_panel, clicking the toolbar icon fires action.onClicked — forward it to
+// the active tab's content script to toggle the modal. On tabs without
+// observer.js (non-Amazon) there's no receiver, so the message just no-ops.
+if (chrome.action && chrome.action.onClicked) {
+  chrome.action.onClicked.addListener((tab) => {
+    if (!tab || tab.id == null) return;
+    try {
+      chrome.tabs.sendMessage(tab.id, { type: "MC_TOGGLE_FLOATING" }, () => {
+        // Swallow "Receiving end does not exist" on tabs without the observer.
+        void chrome.runtime.lastError;
+      });
+    } catch (_e) {
+      /* ignore */
+    }
+  });
 }
 
 /**
@@ -521,6 +543,43 @@ function canEditCart(cartId, carts, ent, nowMs = Date.now()) {
       ? "This cart exceeds your plan's limit."
       : "Renew Premium to edit this cart, or delete other carts to free up a slot.",
   };
+}
+
+// ---- Amazon-list tier access -------------------------------------------------
+//
+// The product treats Amazon lists as "carts". On the free tier only the first
+// FREE_CART_LIMIT *custom* lists (Amazon order) are usable; the rest are locked
+// (grayed in the UI, click → paywall). Amazon's own default lists — the Default
+// List (Wish List) and the Alexa Shopping List — never count toward the limit
+// and are always editable. Premium unlocks every custom list.
+//
+// `lists` are the {listId,name,url,count,kind} objects from listAmazonLists().
+function computeListAccess(lists, ent, nowMs = Date.now()) {
+  const premium = isPremiumActive(ent, nowMs);
+  const limit = premium ? Infinity : FREE_CART_LIMIT;
+  let customSeen = 0;
+  const annotated = (Array.isArray(lists) ? lists : []).map((l) => {
+    const kind = l && l.kind ? l.kind : "custom";
+    if (kind !== "custom") return Object.assign({}, l, { kind, access: "editable" });
+    customSeen += 1;
+    return Object.assign({}, l, {
+      kind,
+      access: customSeen <= limit ? "editable" : "locked",
+    });
+  });
+  return { lists: annotated, isPremium: premium, limit, customCount: customSeen };
+}
+
+// Snapshot of the last computed list access, keyed by listId. Lets the on-page
+// wishlist button and the MC_WISHLIST_ADD_ALL gate check a list without paying
+// for a fresh scrape. Refreshed by MC_LIST_AMAZON_LISTS / MC_GET_LIST_ACCESS.
+let _lastListAccess = { byId: new Map(), at: 0 };
+function rememberListAccess(annotatedLists) {
+  const byId = new Map();
+  for (const l of annotatedLists || []) {
+    if (l && l.listId) byId.set(String(l.listId).toUpperCase(), l.access);
+  }
+  _lastListAccess = { byId, at: Date.now() };
 }
 
 /**
@@ -3813,6 +3872,7 @@ async function listAmazonLists(preferredHost) {
     name: l.name,
     count: l.count,
     url: l.listId ? amazonListUrl(host, l.listId) : l.url,
+    kind: l.kind || "custom",
   }));
 }
 
@@ -4118,11 +4178,24 @@ function pageScrapeAmazonLists() {
       }
       if (!name || name.length > 120) return; // skip icon-only / chrome anchors
       seen.add(id);
+      // Classify the list so tier-gating can exclude Amazon's own defaults.
+      // "Default List" badge → the account default Wish List; a "Shopping List"
+      // name → the Alexa list. Everything else is a user-created custom cart.
+      // (Badge lives in the anchor's raw text, alongside the title we cleaned.)
+      // Note: Amazon badges concatenate without spaces ("Default ListPublic"),
+      // so no trailing word boundary here.
+      let kind = "custom";
+      if (/\bDefault List/i.test(a.textContent || "")) {
+        kind = "default";
+      } else if (/^(?:alexa\s+)?shopping list$/i.test(name)) {
+        kind = "alexa";
+      }
       out.push({
         listId: id,
         name,
         url: location.origin + "/hz/wishlist/ls/" + id,
         count: null,
+        kind,
       });
     });
     return { lists: out };
@@ -5054,6 +5127,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             });
             break;
           }
+          // Best-effort tier gate: locked custom carts can't push to the Amazon
+          // cart. Only blocks when the cached snapshot marks the list locked, so
+          // an unknown/premium list is never wrongly refused.
+          if (msg.listId) {
+            const acc = _lastListAccess.byId.get(String(msg.listId).toUpperCase());
+            if (acc === "locked") {
+              sendResponse({
+                ok: false,
+                code: "CART_LOCKED",
+                upsell: true,
+                error:
+                  "This cart is locked on the free plan. Upgrade to send it to your Amazon cart.",
+              });
+              break;
+            }
+          }
           // Acknowledge immediately — the bulk flow navigates a tab and waits
           // on the user's confirmation, which can outlive the message channel.
           sendResponse({ ok: true, started: true, total: items.length });
@@ -5172,6 +5261,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case "MC_SET_RELABEL": {
           const next = await writeSettings({ relabelListsAsCarts: !!msg.enabled });
           sendResponse({ ok: true, enabled: next.relabelListsAsCarts !== false });
+          break;
+        }
+
+        case "MC_GET_FAB_PULSE": {
+          const settings = await readSettings();
+          sendResponse({ ok: true, enabled: settings.fabPulse !== false });
+          break;
+        }
+
+        case "MC_SET_FAB_PULSE": {
+          const next = await writeSettings({ fabPulse: !!msg.enabled });
+          sendResponse({ ok: true, enabled: next.fabPulse !== false });
           break;
         }
 
@@ -5427,9 +5528,66 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
 
         case "MC_LIST_AMAZON_LISTS": {
-          // Read the user's Amazon wish lists for the popup dashboard.
-          const lists = await listAmazonLists(msg.host);
-          sendResponse({ ok: true, lists });
+          // Read the user's Amazon wish lists for the popup dashboard, then
+          // annotate each with tier access (editable/locked) so the popup can
+          // gray + paywall locked custom carts.
+          const rawLists = await listAmazonLists(msg.host);
+          const ent = await readEntitlement();
+          const access = computeListAccess(rawLists, ent);
+          rememberListAccess(access.lists);
+          sendResponse({
+            ok: true,
+            lists: access.lists,
+            entitlement: {
+              isPremium: access.isPremium,
+              limit: access.isPremium ? null : access.limit,
+              customCount: access.customCount,
+            },
+          });
+          break;
+        }
+
+        case "MC_GET_LIST_ACCESS": {
+          // Access lookup for the on-page wishlist button. Prefer the cached
+          // snapshot; on a cache miss, scrape the SENDER's own tab — the wish
+          // list page's left sidebar already lists every list, so we can rank
+          // the custom lists WITHOUT navigating or spawning a new tab. Only if
+          // that yields nothing do we fail OPEN ("editable").
+          const wantId = String(msg.listId || "").toUpperCase();
+          if (!wantId) {
+            sendResponse({ ok: false, error: "Missing list id." });
+            break;
+          }
+          if (
+            !_lastListAccess.byId.has(wantId) &&
+            _sender &&
+            _sender.tab &&
+            _sender.tab.id != null
+          ) {
+            try {
+              const res = await chrome.scripting.executeScript({
+                target: { tabId: _sender.tab.id },
+                func: pageScrapeAmazonLists,
+              });
+              const scraped =
+                (res && res[0] && res[0].result && res[0].result.lists) || [];
+              if (scraped.length) {
+                const entNow = await readEntitlement();
+                const computed = computeListAccess(scraped, entNow);
+                rememberListAccess(computed.lists);
+              }
+            } catch (_e) {
+              /* fall through to fail-open */
+            }
+          }
+          const acc = _lastListAccess.byId.get(wantId) || "editable";
+          const known = _lastListAccess.byId.has(wantId);
+          sendResponse({
+            ok: true,
+            access: acc,
+            known,
+            isPremium: isPremiumActive(await readEntitlement()),
+          });
           break;
         }
 

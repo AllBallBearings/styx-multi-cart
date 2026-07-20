@@ -9,8 +9,7 @@
     "storage",
     "activeTab",
     "scripting",
-    "alarms",
-    "sidePanel"
+    "alarms"
   ],
   "host_permissions": [
     "*://amazon.com/*",
@@ -49,9 +48,6 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  },
-  "side_panel": {
-    "default_path": "popup.html?surface=sidepanel"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -164,6 +160,37 @@
       "matches": ["https://extensionpay.com/*"],
       "js": ["ExtPay.js"],
       "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html", "icons/*.png"],
+      "matches": [
+        "*://amazon.com/*",
+        "*://*.amazon.com/*",
+        "*://amazon.co.uk/*",
+        "*://*.amazon.co.uk/*",
+        "*://amazon.ca/*",
+        "*://*.amazon.ca/*",
+        "*://amazon.com.au/*",
+        "*://*.amazon.com.au/*",
+        "*://amazon.de/*",
+        "*://*.amazon.de/*",
+        "*://amazon.fr/*",
+        "*://*.amazon.fr/*",
+        "*://amazon.it/*",
+        "*://*.amazon.it/*",
+        "*://amazon.es/*",
+        "*://*.amazon.es/*",
+        "*://amazon.co.jp/*",
+        "*://*.amazon.co.jp/*",
+        "*://amazon.in/*",
+        "*://*.amazon.in/*",
+        "*://amazon.com.mx/*",
+        "*://*.amazon.com.mx/*",
+        "*://amazon.com.br/*",
+        "*://*.amazon.com.br/*"
+      ]
     }
   ]
 }
