@@ -548,26 +548,26 @@ function canEditCart(cartId, carts, ent, nowMs = Date.now()) {
 // ---- Amazon-list tier access -------------------------------------------------
 //
 // The product treats Amazon lists as "carts". On the free tier only the first
-// FREE_CART_LIMIT *custom* lists (Amazon order) are usable; the rest are locked
-// (grayed in the UI, click → paywall). Amazon's own default lists — the Default
-// List (Wish List) and the Alexa Shopping List — never count toward the limit
-// and are always editable. Premium unlocks every custom list.
+// FREE_CART_LIMIT lists (Amazon order) are usable; the rest are locked (grayed
+// in the UI, click → paywall). Every list counts toward the limit — Amazon does
+// not auto-create any list for new accounts, so there are no default lists to
+// exclude (the "Wish List" is just a user-created list like any other). Premium
+// unlocks every list.
 //
 // `lists` are the {listId,name,url,count,kind} objects from listAmazonLists().
 function computeListAccess(lists, ent, nowMs = Date.now()) {
   const premium = isPremiumActive(ent, nowMs);
   const limit = premium ? Infinity : FREE_CART_LIMIT;
-  let customSeen = 0;
+  let seen = 0;
   const annotated = (Array.isArray(lists) ? lists : []).map((l) => {
     const kind = l && l.kind ? l.kind : "custom";
-    if (kind !== "custom") return Object.assign({}, l, { kind, access: "editable" });
-    customSeen += 1;
+    seen += 1;
     return Object.assign({}, l, {
       kind,
-      access: customSeen <= limit ? "editable" : "locked",
+      access: seen <= limit ? "editable" : "locked",
     });
   });
-  return { lists: annotated, isPremium: premium, limit, customCount: customSeen };
+  return { lists: annotated, isPremium: premium, limit, customCount: seen };
 }
 
 // Snapshot of the last computed list access, keyed by listId. Lets the on-page

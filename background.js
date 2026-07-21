@@ -446,17 +446,16 @@ importScripts("ExtPay.js");
   function computeListAccess(lists, ent, nowMs = Date.now()) {
     const premium = isPremiumActive(ent, nowMs);
     const limit = premium ? Infinity : FREE_CART_LIMIT;
-    let customSeen = 0;
+    let seen = 0;
     const annotated = (Array.isArray(lists) ? lists : []).map((l) => {
       const kind = l && l.kind ? l.kind : "custom";
-      if (kind !== "custom") return Object.assign({}, l, { kind, access: "editable" });
-      customSeen += 1;
+      seen += 1;
       return Object.assign({}, l, {
         kind,
-        access: customSeen <= limit ? "editable" : "locked"
+        access: seen <= limit ? "editable" : "locked"
       });
     });
-    return { lists: annotated, isPremium: premium, limit, customCount: customSeen };
+    return { lists: annotated, isPremium: premium, limit, customCount: seen };
   }
   var _lastListAccess = { byId: /* @__PURE__ */ new Map(), at: 0 };
   function rememberListAccess(annotatedLists) {

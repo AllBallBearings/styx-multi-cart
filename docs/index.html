@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Styx Multi-Cart — Turn your Amazon lists into reusable carts</title>
+    <title>Styx Multi-Cart — Supercharge your Amazon lists into carts</title>
     <meta
       name="description"
-      content="Styx Multi-Cart turns your Amazon wish lists into reusable carts. Build unlimited carts backed by your Amazon account, send any cart to your Amazon cart in one click, save your whole cart into a new cart, and clear your cart instantly. Free."
+      content="Styx Multi-Cart supercharges your Amazon lists, repurposing them as reusable carts you fill with items and move to checkout in one click — a separate cart for every occasion. Backed by your Amazon account. 3 carts free; unlimited with Premium."
     />
     <link rel="icon" type="image/png" href="assets/favicon-128.png" />
     <link rel="stylesheet" href="assets/css/style.css" />
@@ -14,7 +14,7 @@
     <meta property="og:title" content="Styx Multi-Cart" />
     <meta
       property="og:description"
-      content="Your Amazon lists, reimagined as reusable carts. Move items between your carts and your Amazon cart in one click — build unlimited carts that sync across devices."
+      content="Supercharge your Amazon lists — repurpose them as reusable carts you fill and send to checkout in one click. A cart for every occasion, synced across your devices. 3 free; unlimited with Premium."
     />
     <meta
       property="og:image"
@@ -50,23 +50,26 @@
     <section class="hero" id="top">
       <div class="wrap">
         <div class="hero-copy">
-          <span class="hero-eyebrow">Free browser extension</span>
+          <span class="hero-eyebrow">Browser extension · 3 carts free</span>
           <h1>
-            All your Amazon lists,<br />now reusable
+            Supercharge your Amazon lists<br />into reusable
             <span class="accent">carts</span>.
           </h1>
           <p class="lead">
-            Styx repurposes your Amazon wish lists as reusable carts. Build as
-            many as you want, then move items between your carts and your Amazon
-            cart in a single click. Your carts live in your Amazon account, so
+            Styx repurposes your Amazon lists as reusable carts you fill with
+            items and move to checkout in one click. Keep a separate cart for
+            every occasion — the birthday, the holidays, the weekly groceries,
+            the home project — and drop the whole thing into your Amazon cart
+            when you're ready to buy. Your carts live in your Amazon account, so
             they follow you to every device.
           </p>
           <p class="lead">
-            Save your whole Amazon cart into a brand-new cart with one click,
-            send any cart back to your Amazon cart, and clear your cart
-            instantly. Styx even relabels Amazon's own Lists page as
-            <strong>Your Styx Carts</strong> and adds a bold
-            <strong>Save to a Cart</strong> button right next to Add to Cart.
+            A floating Styx button rides along on Amazon: click it for a
+            draggable panel of all your carts. Send any cart to your Amazon cart,
+            save your whole cart into a new one, and clear your cart instantly.
+            Styx even relabels Amazon's Lists page as
+            <strong>Your Styx Carts</strong> and adds an
+            <strong>Add to a Styx cart</strong> button right next to Add to Cart.
           </p>
           <div class="cta-row">
             <a
@@ -102,41 +105,44 @@
         <div class="section-head">
           <span class="kicker">Why Styx</span>
           <h2>
-            Unlimited carts, one click each way
+            A cart for every occasion, one click to checkout
           </h2>
           <p>
             Amazon gives you a single cart and buries your lists. Styx turns
-            those lists into as many reusable carts as you want, and makes
-            moving items between them and your Amazon cart effortless.
+            those lists into as many reusable carts as you need — one per
+            occasion or purpose — and makes moving a whole cart to checkout
+            effortless.
           </p>
         </div>
         <div class="features">
           <div class="feature-card">
             <div class="icon">🛒</div>
-            <h3>Lists, reimagined as carts</h3>
+            <h3>Lists, supercharged into carts</h3>
             <p>
-              Every Amazon wish list shows up as a cart in one panel — and Styx
+              Every Amazon list becomes a cart you can shop from — and Styx
               relabels Amazon's own Lists page to match. Your carts are backed
               by your Amazon account, so they sync across every device.
             </p>
           </div>
           <div class="feature-card">
             <div class="icon">⚡</div>
-            <h3>One click each way</h3>
+            <h3>Fill it, then send it to checkout</h3>
             <p>
-              <strong>Send All to Amazon Cart</strong> loads a whole cart into
-              your Amazon cart at once, skipping anything out of stock. Or
-              <strong>Save cart to a new list</strong> saves your entire Amazon
-              cart into a brand-new cart — right from the cart page.
+              Add items to a cart as you browse with the
+              <strong>Add to a Styx cart</strong> button next to Add to Cart.
+              When you're ready, <strong>Send All to Amazon Cart</strong> loads
+              the whole cart into your Amazon cart at once, skipping anything
+              out of stock.
             </p>
           </div>
           <div class="feature-card">
-            <div class="icon">🧹</div>
-            <h3>Clear &amp; save-to-a-cart</h3>
+            <div class="icon">🎈</div>
+            <h3>Floating panel, save &amp; clear</h3>
             <p>
-              Empty your Amazon cart in one click. And on any product page, a
-              bold <strong>Save to a Cart</strong> button sits right next to Add
-              to Cart, so filling a cart is as easy as buying.
+              A floating Styx button opens a draggable panel of all your carts.
+              <strong>Save</strong> your live Amazon cart into a new cart, or
+              <strong>clear</strong> it in one click for a fresh session — your
+              carts stay untouched.
             </p>
           </div>
         </div>
@@ -154,29 +160,31 @@
         </div>
 
         <!--
-          TODO: the screenshots below still show the earlier local-saved-cart
-          flow. Re-capture them for the list-backed carts (panel with "Your
-          Carts" + "Go to Carts", the cart-page "Save cart to a new list"
-          button, the list-page "Send All to Amazon Cart", and the branded
-          "Save to a Cart" button on a product page). See the
-          chrome-web-store-assets skill.
+          TODO: re-capture the screenshots below for the CURRENT UI. They still
+          show the earlier local-saved-cart / side-panel flow. The shipping UI
+          is: a floating Styx button (pulsing, bottom-right) that opens a
+          draggable modal panel with "Your Carts" + "Go to Carts"; the cart-page
+          "Save cart to a new list" button; the list-page "Send All to Amazon
+          Cart"; and the branded "Add to a Styx cart" button on a product page.
+          See the chrome-web-store-assets skill.
         -->
 
         <div class="showcase-row">
           <div class="showcase-img">
             <img
               src="assets/screenshots/01-popup.png"
-              alt="Styx side panel listing all your Amazon carts, with a Go to Carts button"
+              alt="Styx floating panel listing all your Amazon carts, with a Go to Carts button"
             />
           </div>
           <div class="showcase-text">
             <span class="step">Step 1</span>
-            <h3>All your carts in one panel</h3>
+            <h3>All your carts in one floating panel</h3>
             <p>
-              Open Styx and every Amazon list shows up as a cart. Jump into any
-              of them, or hit <strong>Go to Carts</strong> to manage them on
-              Amazon — where Styx relabels the Lists page as
-              <strong>Your Styx Carts</strong>.
+              A floating Styx button rides along on Amazon — click it to pop
+              open a draggable panel where every list shows up as a cart (click
+              off it to tuck it away). Jump into any cart, or hit
+              <strong>Go to Carts</strong> to manage them on Amazon, where Styx
+              relabels the Lists page as <strong>Your Styx Carts</strong>.
             </p>
           </div>
         </div>
@@ -222,16 +230,16 @@
           <div class="showcase-img">
             <img
               src="assets/screenshots/05-intercept.png"
-              alt="An Amazon product page with a bold 'Save to a Cart' button next to Add to Cart"
+              alt="An Amazon product page with a branded 'Add to a Styx cart' button next to Add to Cart"
             />
           </div>
           <div class="showcase-text">
             <span class="step">Step 4</span>
-            <h3>Save to a cart while you browse</h3>
+            <h3>Add to a cart while you browse</h3>
             <p>
-              On any product page, Styx puts a bold <strong>Save to a
-              Cart</strong> button right next to Add to Cart and clears your
-              Amazon cart in one click — so building a cart is as easy as buying.
+              On any product page, Styx puts a branded <strong>Add to a Styx
+              cart</strong> button right next to Add to Cart — pick which cart
+              it goes in, so building the right cart is as easy as buying.
             </p>
           </div>
         </div>
@@ -270,8 +278,12 @@
 
     <section class="cta-band">
       <div class="wrap">
-        <h2>Ready to turn your lists into carts?</h2>
-        <p>Free, open source, and built to respect your privacy.</p>
+        <h2>Ready to supercharge your Amazon lists?</h2>
+        <p>
+          <strong>3 carts free.</strong> Go <strong>Premium</strong> for
+          unlimited carts — $9.99/year or $19.99 once. Your live Amazon cart is
+          always free and never breaks. Built to respect your privacy.
+        </p>
         <div class="cta-row">
           <a
             class="btn btn-primary"
