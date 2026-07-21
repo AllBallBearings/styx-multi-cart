@@ -12,15 +12,23 @@
   // it can fill the panel's width/height instead of the fixed popup size.
   // ("panel" is the legacy in-page-iframe value, kept for safety.)
   const _surface = new URLSearchParams(location.search).get("surface");
-  if (_surface === "sidepanel" || _surface === "panel") {
+  if (
+    _surface === "sidepanel" ||
+    _surface === "panel" ||
+    _surface === "floating"
+  ) {
     document.documentElement.dataset.surface = _surface;
   }
 
-  // In the side panel, window.close() tears the entire panel down — the user
-  // then has to reopen it from the toolbar. Only the fixed-size popup should
-  // auto-dismiss to "get out of the way" after an op; the panel sits beside
-  // the page and never covers it. Guard every close() call with this.
-  const IS_PANEL_SURFACE = _surface === "sidepanel" || _surface === "panel";
+  // In the side panel (and the floating modal iframe), window.close() would
+  // tear the whole surface down — the user then has to reopen it. Only the
+  // fixed-size toolbar popup should auto-dismiss to "get out of the way" after
+  // an op; the panel/modal stays put beside/over the page. Guard every close()
+  // call with this. (window.close() is a no-op inside an iframe anyway, but we
+  // skip the auto-dismiss flows so the modal doesn't try to vanish mid-task.)
+  const IS_FLOATING_SURFACE = _surface === "floating";
+  const IS_PANEL_SURFACE =
+    _surface === "sidepanel" || _surface === "panel" || IS_FLOATING_SURFACE;
 
   // Safari serves extension pages from safari-web-extension://. On Safari the
   // premium unlock is an App Store In-App Purchase handled by the native host
@@ -77,6 +85,7 @@
   const $qtyPopVal = $qtyPop.querySelector(".mc-qty-pop-val");
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
   const $relabelToggle = document.getElementById("mc-relabel-toggle");
+  const $fabpulseToggle = document.getElementById("mc-fabpulse-toggle");
   const $sidepanelToggle = document.getElementById("mc-sidepanel-toggle");
   const $gotoCarts = document.getElementById("mc-goto-carts");
   const $displaySection = document.getElementById(
@@ -162,7 +171,7 @@
   let currentEntitlement = {
     tier: "free",
     isPremium: false,
-    limit: 2,
+    limit: 3,
     count: 0,
     premiumUntil: null,
     autoRenew: false,
@@ -697,7 +706,7 @@
   function renderTierStrip(carts) {
     const ent = currentEntitlement;
     const count = carts.length;
-    const limit = ent.limit || 2;
+    const limit = ent.limit || 3;
     const premium = !!ent.isPremium;
     const now = Date.now();
 
@@ -732,7 +741,7 @@
 
   /**
    * Lapsed banner: shown when a free-tier user has read-only carts visible
-   * (i.e., they were premium, kept >2 carts, and the subscription lapsed).
+   * (i.e., they were premium, kept >3 carts, and the subscription lapsed).
    * Per spec, this banner is persistent and only disappears on renewal or
    * cart cleanup.
    */
@@ -804,6 +813,25 @@
           ? "Amazon lists now show as your Styx carts."
           : "Amazon lists left as-is."
       );
+    });
+  }
+
+  async function loadFabPulseSetting() {
+    if (!$fabpulseToggle) return;
+    const res = await send({ type: "MC_GET_FAB_PULSE" });
+    if (res && res.ok) $fabpulseToggle.checked = res.enabled !== false;
+  }
+
+  if ($fabpulseToggle) {
+    $fabpulseToggle.addEventListener("change", async () => {
+      const enabled = $fabpulseToggle.checked;
+      const res = await send({ type: "MC_SET_FAB_PULSE", enabled });
+      if (!res || !res.ok) {
+        $fabpulseToggle.checked = !enabled; // revert on failure
+        toast((res && res.error) || "Could not save setting", "error");
+        return;
+      }
+      toast(enabled ? "Floating button will pulse." : "Floating button pulse off.");
     });
   }
 
@@ -1665,11 +1693,23 @@
     if (forceItems) node.dataset.forceRefresh = "1";
     const nameEl = node.querySelector(".mc-amazon-list-name");
     nameEl.textContent = list.name || "Amazon list";
-    nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
-    node.querySelector(".mc-amazon-list-meta").textContent =
-      `${fullHost.replace(/^www\./, "")} · Amazon Wish List`;
+    const host = fullHost.replace(/^www\./, "");
+    const metaEl = node.querySelector(".mc-amazon-list-meta");
     const open = node.querySelector(".mc-amazon-list-open");
     open.href = list.url || "#";
+    if (list.access === "locked") {
+      // Free-tier cart beyond the limit: gray it out, drop the add-all action,
+      // and route clicks to the paywall (handled in the list click listener).
+      node.classList.add("mc-amazon-list-locked");
+      node.dataset.locked = "1";
+      const addAll = node.querySelector(".mc-amazon-list-addall");
+      if (addAll) addAll.remove();
+      metaEl.textContent = `${host} · Premium cart — upgrade to use`;
+      nameEl.setAttribute("aria-label", `Unlock ${list.name || "this cart"} with Premium`);
+    } else {
+      metaEl.textContent = `${host} · Amazon Wish List`;
+      nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
+    }
     amazonListCache.set(list.listId, Object.assign({}, list));
     return node;
   }
@@ -1733,6 +1773,15 @@
       const li = (btn || e.target).closest("li.mc-amazon-list-card");
       if (!li) return;
 
+      // Locked (free-tier over-limit) cart: any interaction except the
+      // View-on-Amazon link opens the paywall. Amazon functionality (opening
+      // the real list) stays available.
+      if (li.dataset.locked === "1") {
+        if (e.target.closest(".mc-amazon-list-open")) return;
+        openPaywall("limit");
+        return;
+      }
+
       // Click anywhere on the card body toggles expand/collapse — but not on
       // the View-on-Amazon link, the add-all icon, or item-tile controls.
       if (!btn) {
@@ -1785,6 +1834,7 @@
           type: "MC_WISHLIST_ADD_ALL",
           items: availableItems,
           host: list.host || li.dataset.host,
+          listId: li.dataset.listId,
         });
         if (res.ok) {
           toast(`Adding ${availableItems.length} item${availableItems.length === 1 ? "" : "s"} to your Amazon cart…`);
@@ -2234,7 +2284,7 @@
 
   function openPaywall(trigger) {
     if (trigger === "limit") {
-      $paywallTitle.textContent = "You've used both free carts";
+      $paywallTitle.textContent = "You've used all 3 free carts";
       $paywallSub.textContent =
         "Upgrade to Premium to save more — your existing carts stay exactly as they are.";
     } else if (trigger === "renew") {
@@ -2667,6 +2717,7 @@
     refresh();
     loadInterceptSetting();
     loadRelabelSetting();
+    loadFabPulseSetting();
     loadSurfaceSetting();
     // Fire-and-forget: ask the background to re-sync entitlement from
     // ExtensionPay. If the user just returned from a successful checkout,

@@ -15,9 +15,22 @@ Decisions captured for the free/premium model across Chrome Web Store (launch) a
 
 ---
 
+## Current Model (updated 2026-07-14)
+
+The product pivoted: **Amazon lists ARE the carts** — the extension surfaces the user's Amazon wish lists rather than a separate local-cart store. The tier limits below now apply to **custom Amazon lists**, with these adjustments from the original plan:
+
+- **Free tier = 3 custom carts** (raised from 2 — a "Wish List" is not auto-created for new Amazon accounts, so the original count was low).
+- **Amazon's own default lists don't count** and are always usable: the account **Default List** (Wish List) and the **Alexa Shopping List**. The 3-cart limit is for the user's *own* custom lists, on top of these.
+- **Premium unlocks all custom lists** (no 20-cap on the Amazon-list path — locking a paying user's real Amazon lists would be user-hostile). The "up to 20" figure below is legacy/marketing for the local-cart model.
+- **List creation is never blocked** (avoids making the extension a target for Amazon). Over-limit custom carts render **grayed/locked** in the extension, lose the "send all to Amazon cart" action, and open the paywall on click.
+
+Gate logic: `computeListAccess()` in `lib/helpers.js` (mirrored in `src/background/index.js`); `FREE_CART_LIMIT = 3` (single source, shared with the dormant local-cart gate). The local-cart sections below remain accurate for the dormant `mc.carts.v1` model and the shared gate constants; treat their "2" as the historical value now superseded by 3.
+
+---
+
 ## Pricing
 
-- **Free tier**: 2 extension-managed saved carts (= 3 total shopping contexts including Amazon's live cart)
+- **Free tier**: 3 extension-managed saved carts (= 4 total shopping contexts including Amazon's live cart)
 - **Premium**: up to **20 saved carts**, two ways to buy:
   - **$9.99/year** — annual subscription
   - **$19.99 one-time** — lifetime access
@@ -33,9 +46,9 @@ Decisions captured for the free/premium model across Chrome Web Store (launch) a
 ## Entitlement Model
 
 Three states:
-1. **Free / trial** — `savedCartsCount < 2`
-2. **Free / exhausted** — `savedCartsCount >= 2`, no license
-3. **Premium** — valid license, up to 20 saved carts
+1. **Free / trial** — `savedCartsCount < 3`
+2. **Free / exhausted** — `savedCartsCount >= 3`, no license
+3. **Premium** — valid license, up to 20 saved carts (local-cart model; unlimited on the Amazon-list path)
 
 ### The Amazon cart is first-class and always free
 Even an expired premium user keeps Amazon-cart passthrough functionality. The extension must never brick core functionality on payment lapse — important for store review and user trust.
@@ -44,10 +57,10 @@ Even an expired premium user keeps Amazon-cart passthrough functionality. The ex
 
 ## Lapsed Premium Behavior
 
-When a premium subscription expires and the user has more than 2 saved carts:
+When a premium subscription expires and the user has more than 3 saved carts:
 
-- **Top 2 by `lastUsedAt`**: behave exactly like free tier (full edit, move to/from Amazon cart).
-- **Carts 3–20**: visible but **pure read-only reference**.
+- **Top 3 by `lastUsedAt`**: behave exactly like free tier (full edit, move to/from Amazon cart).
+- **Carts 4–20**: visible but **pure read-only reference**.
   - ✅ View items, names, prices (cached/stale, with "data may be outdated" note)
   - ✅ Delete the cart entirely (let them clean up)
   - ❌ Add, remove, rename, reorder items
@@ -56,7 +69,7 @@ When a premium subscription expires and the user has more than 2 saved carts:
 - Persistent (non-dismissible) banner: *"Renew to unlock N saved carts"*
 
 ### Auto-promotion on deletion
-If a lapsed user deletes one of their top-2 active carts, the next-most-recent locked cart auto-promotes to active. The user always has exactly 2 active slots — consistent with free-tier mental model.
+If a lapsed user deletes one of their top-3 active carts, the next-most-recent locked cart auto-promotes to active. The user always has exactly 3 active slots — consistent with free-tier mental model.
 
 ### Rationale for strict read-only
 Allowing "move to Amazon cart" on lapsed carts was considered and rejected — too much surface area for "is this allowed?" edge cases. Clean rule: **lapsed carts are pure reference material.** If users want to act on them, they can manually re-add the items.
@@ -101,7 +114,7 @@ carts: [
 
 ### Derived at render time
 - `isPremium = entitlement.tier === "premium" && now < entitlement.premiumUntil`
-- `editableCartIds = isPremium ? all : top2ByLastUsed(carts)`
+- `editableCartIds = isPremium ? all : top3ByLastUsed(carts)`
 
 ### Storage location
 - **Local storage** (`chrome.storage.local`) for `cartsUsed` / cart data — simple, no auth for free users.
@@ -125,7 +138,7 @@ Every "new cart" and "edit cart" entry point calls these. Paywall UI, badge coun
 
 ## Paywall UX
 
-- Triggered on attempted 3rd saved cart creation.
+- Triggered on attempted 4th saved cart creation.
 - Framing: *"You're using all your saved carts — unlock up to 20 for $9.99/yr or $19.99 once"* (not "Limit reached").
 - Acknowledges the user is getting value, doesn't feel like a wall.
 
@@ -151,9 +164,9 @@ Every "new cart" and "edit cart" entry point calls these. Paywall UI, badge coun
    - ✅ Entitlement object + daily lazy license check
    - ✅ `canCreateSavedCart()` / `canEditCart(cartId)` gates
    - ✅ `lastUsedAt` tracking on every cart interaction
-   - ✅ Derived `activeCartIds = top2ByLastUsed` when not premium
+   - ✅ Derived `activeCartIds = top3ByLastUsed` when not premium
 3. ✅ **UI states**: active / locked-readonly / banners (lapsed) — _shipped 2026-05-25_
-   - ✅ Tier strip "X / 2 carts (Free)" near header
+   - ✅ Tier strip "X / 3 carts (Free)" near header
    - ✅ Lapsed banner "Renew to unlock N saved carts" (non-dismissible-by-default; now snooze-dismissible 7d)
    - ✅ Read-only lock pill on locked carts (`Read-Only — Go Premium?`) → opens paywall
    - ✅ Premium flair badge in header (replaces tier strip when premium)
@@ -181,8 +194,8 @@ Every "new cart" and "edit cart" entry point calls these. Paywall UI, badge coun
 
 ## Open Questions / Future
 
-- **Pinning**: ship without; add if users complain about "wrong 2 carts active" after lapse.
+- **Pinning**: ship without; add if users complain about "wrong 3 carts active" after lapse.
 - **Performance cap raise**: profile actual ceiling; raise from 20 if demand emerges.
 - **Lifetime $9.99 one-time option**: considered, deferred — rules out cloud-sync upside later.
-- **Naming**: confirm UI consistently frames Amazon cart as part of the set ("Active Cart" + "Saved Cart 1/2") so free tier reads as 3 total contexts.
+- **Naming**: confirm UI consistently frames Amazon cart as part of the set ("Active Cart" + "Saved Cart 1/3") so free tier reads as 4 total contexts.
 - **Stale data warning** for read-only lapsed carts when prices/availability may have changed.

@@ -105,7 +105,9 @@ body {
 html[data-surface="panel"],
 html[data-surface="panel"] body,
 html[data-surface="sidepanel"],
-html[data-surface="sidepanel"] body {
+html[data-surface="sidepanel"] body,
+html[data-surface="floating"],
+html[data-surface="floating"] body {
   width: 100%;
   min-width: 0;
   height: 100%;
@@ -115,7 +117,8 @@ html[data-surface="sidepanel"] body {
 }
 
 html[data-surface="panel"] body,
-html[data-surface="sidepanel"] body {
+html[data-surface="sidepanel"] body,
+html[data-surface="floating"] body {
   font-size: 12px;
 }
 
@@ -142,7 +145,8 @@ body.mc-move-modal-open {
 }
 
 html[data-surface="panel"] .mc-header,
-html[data-surface="sidepanel"] .mc-header {
+html[data-surface="sidepanel"] .mc-header,
+html[data-surface="floating"] .mc-header {
   position: sticky;
   top: 0;
   z-index: 20;
@@ -1958,6 +1962,33 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
   position: relative;
   cursor: pointer;
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* Free-tier over-limit cart: grayed reference. Click opens the paywall
+   (wired in popup.js). The name/meta dim; a small lock mark sits top-right. */
+.mc-amazon-list-card.mc-amazon-list-locked {
+  opacity: 0.62;
+  filter: grayscale(0.5);
+}
+.mc-amazon-list-card.mc-amazon-list-locked:hover {
+  opacity: 0.82;
+}
+.mc-amazon-list-card.mc-amazon-list-locked .mc-item-name-row,
+.mc-amazon-list-card.mc-amazon-list-locked .mc-amazon-list-meta {
+  padding-right: 40px;
+}
+.mc-amazon-list-card.mc-amazon-list-locked .mc-amazon-list-name {
+  cursor: pointer;
+}
+.mc-amazon-list-card.mc-amazon-list-locked::after {
+  content: "🔒";
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.8;
 }
 
 /* Card body reads as one clickable target; keep the name row clear of the

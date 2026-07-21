@@ -876,7 +876,7 @@
   // Entitlement mirror — see lib/helpers.js / background.js for the source of
   // truth. Constants duplicated for the same "service-worker can't import
   // ESM" reason the other mirrors exist.
-  const FREE_CART_LIMIT = 2;
+  const FREE_CART_LIMIT = 3;
   const PREMIUM_CART_LIMIT = 20;
   let _entitlementCache = {
     tier: "free",
@@ -1022,6 +1022,7 @@
         if (next && typeof next === "object") {
           _settingsCache = Object.assign({}, _settingsCache, next);
           applyPickerTheme(document.getElementById(PICKER_ID));
+          applyFabPulse(); // live-toggle the floating-button pulse
           // Apply or undo the "Lists → Carts" rebrand live on the lists page.
           if (isWishlistPage()) {
             if (relabelEnabled()) relabelStyxCarts();
@@ -1771,6 +1772,73 @@
     delete modal.dataset.styxOriginalHtml;
   }
 
+  // Standalone Premium upgrade overlay for the on-page wishlist "Send All"
+  // button. Reuses the picker's styx-pk-* styling (scoped under #__styx-picker)
+  // and wires its own close + plan handlers. Shown when a free-tier user tries
+  // to push a LOCKED custom cart to their Amazon cart.
+  function openWishlistUpgrade() {
+    injectPickerStyles();
+    dismissPicker(); // clear any existing overlay reusing PICKER_ID
+    const root = document.createElement("div");
+    root.id = PICKER_ID;
+    root.innerHTML = `
+      <div class="styx-pk-backdrop" data-styx-action="cancel"></div>
+      <div class="styx-pk-modal">
+        <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+        <div class="styx-pk-brand">
+          <svg class="styx-pk-brand-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131a22"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/></g><circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/></g><circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/></g><circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
+          <span class="styx-pk-brand-name">Styx Multi-Cart</span>
+        </div>
+        <div class="styx-pk-upgrade">
+          <div class="styx-pk-upgrade-title">Premium cart</div>
+          <div class="styx-pk-upgrade-sub">
+            This cart is locked on the free plan. Upgrade to send it to your
+            Amazon cart and unlock all your carts.
+          </div>
+          <div class="styx-pk-upgrade-plan">
+            <ul class="styx-pk-upgrade-features">
+              <li>Use <b>all</b> your Amazon-list carts</li>
+              <li>Send any cart to your Amazon cart</li>
+              <li>Cancel anytime</li>
+            </ul>
+          </div>
+          <div class="styx-pk-upgrade-actions">
+            <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="annual">
+              <span class="styx-pk-upgrade-cta-label">Annual</span>
+              <span class="styx-pk-upgrade-cta-price">$9.99 / yr</span>
+            </button>
+            <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="lifetime">
+              <span class="styx-pk-upgrade-cta-label">Lifetime</span>
+              <span class="styx-pk-upgrade-cta-price">$19.99 once</span>
+            </button>
+            <button type="button" class="styx-pk-upgrade-back" data-styx-action="cancel">← Not now</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(root);
+    applyPickerTheme(root);
+    root.addEventListener("click", (e) => {
+      const actEl = e.target.closest("[data-styx-action]");
+      if (!actEl) return;
+      const act = actEl.dataset.styxAction;
+      if (act === "cancel") {
+        root.remove();
+        return;
+      }
+      if (act === "upgrade-go") {
+        const plan = actEl.getAttribute("data-styx-plan") || "annual";
+        const buttons = root.querySelectorAll(".styx-pk-upgrade-cta");
+        buttons.forEach((b) => (b.disabled = true));
+        sendRequest({ type: "MC_OPEN_PAYMENT_PAGE", plan })
+          .then((res) => {
+            if (!res || !res.ok) buttons.forEach((b) => (b.disabled = false));
+            else root.remove();
+          })
+          .catch(() => buttons.forEach((b) => (b.disabled = false)));
+      }
+    });
+  }
+
   /**
    * Swap the picker body to an inline "Create new cart" form. Lets the
    * user spin up a fresh cart mid-shop without leaving the product page.
@@ -2165,24 +2233,50 @@
     const spacer = document.createElement("span");
     spacer.className = "a-letter-space";
 
+    injectStyxBrandButtonStyles();
     const btn = document.createElement("span");
     btn.id = STYX_WL_BTN_ID;
-    btn.className = "a-button a-button-primary";
+    btn.className = "styx-brand-btn";
+    btn.setAttribute("role", "button");
+    btn.tabIndex = 0;
     btn.style.marginLeft = "12px";
-    btn.style.verticalAlign = "middle";
     btn.innerHTML =
-      '<span class="a-button-inner">' +
-      '<a class="a-button-text" role="button" href="#" style="white-space:nowrap;">' +
-      STYX_WL_LABEL +
-      "</a></span>";
+      STYX_MARK_SVG("styx-btn-mark") +
+      '<span class="a-button-text">' + STYX_WL_LABEL + "</span>";
 
     // Insert "<spacer><button>" right after the list title.
     title.parentNode.insertBefore(btn, title.nextSibling);
     title.parentNode.insertBefore(spacer, btn);
 
+    // Tier gate: if this list is a LOCKED custom cart (free tier, over the
+    // 3-cart limit), gray the button and route clicks to the upgrade overlay
+    // instead of pushing to the Amazon cart. Access comes from the cached
+    // snapshot; on a cache miss it stays unlocked (fail-open).
+    const wlMatch = location.pathname.match(/\/wishlist\/ls\/([A-Z0-9]{7,})/i);
+    const wlListId = wlMatch ? wlMatch[1].toUpperCase() : null;
+    let wlLocked = false;
+    if (wlListId) {
+      sendRequest({
+        type: "MC_GET_LIST_ACCESS",
+        listId: wlListId,
+        host: location.hostname,
+      })
+        .then((res) => {
+          if (res && res.ok && res.access === "locked") {
+            wlLocked = true;
+            btn.classList.add("styx-locked");
+          }
+        })
+        .catch(() => {});
+    }
+
     btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (wlLocked) {
+        openWishlistUpgrade();
+        return;
+      }
       if (btn.dataset.busy === "1") return;
 
       const items = scrapeWishlistItems();
@@ -2200,6 +2294,7 @@
         type: "MC_WISHLIST_ADD_ALL",
         items,
         host: location.hostname,
+        listId: wlListId,
       });
 
       if (!res || !res.ok) {
@@ -2299,6 +2394,124 @@
     if (detail) relabelNode(detail, rebrandListName);
   }
 
+  // Relabel the list names inside the PDP "Add to List" chooser popover (each
+  // row is `#atwl-list-name-<listId>`). Amazon adds by the row's listId, not
+  // its text, so renaming the visible label is display-only and safe.
+  function relabelPdpListChooser() {
+    if (!relabelEnabled()) return;
+    document
+      .querySelectorAll('[id^="atwl-list-name-"]')
+      .forEach((el) => relabelNode(el, rebrandListName));
+  }
+
+  // Relabel a leaf element whose whole trimmed text exactly equals `from`.
+  // Scoped to a root so we never touch matching strings elsewhere on the page.
+  function relabelLeafPhrase(root, from, to) {
+    root.querySelectorAll("*").forEach((el) => {
+      if (el.children.length) return; // leaf text only
+      if ((el.textContent || "").trim() === from) relabelNode(el, () => to);
+    });
+  }
+
+  // Relabel a leaf whose text STARTS WITH `prefixRe`, swapping the matched
+  // prefix for `replacement` and keeping the tail (e.g. "List name (required)"
+  // → "Styx Cart name (required)"). Reversible via relabelNode.
+  function relabelLeafPrefix(root, prefixRe, replacement) {
+    root.querySelectorAll("*").forEach((el) => {
+      if (el.children.length) return; // leaf text only
+      const t = (el.textContent || "").trim();
+      const m = t.match(prefixRe);
+      if (!m || m.index !== 0) return;
+      const next = replacement + t.slice(m[0].length);
+      relabelNode(el, () => next);
+    });
+  }
+
+  // Relabel the Amazon "Add to List" popover / confirmation modal to match the
+  // Lists→Carts rebrand:
+  //   • header "Add to List"            → "Add to Styx Cart"
+  //   • "View Your List" button         → "View Your Styx Cart"
+  //   • "N items added to <List>"       → list name gets " Cart" (rebrandListName)
+  // Text-only + reversible (relabelNode stashes originals). Scoped to the
+  // visible atwl popover so nothing else on the page is affected.
+  function relabelAtlModal() {
+    if (!relabelEnabled()) return;
+    document.querySelectorAll(".a-popover-modal, .a-popover").forEach((pop) => {
+      if (!pop.offsetWidth && !pop.offsetHeight) return; // hidden template
+      const isAtl =
+        pop.querySelector('[id^="atwl-"], [class*="atwl"]') ||
+        /\b(Add to List|Add to Styx Cart)\b/.test(pop.textContent || "");
+      if (!isAtl) return;
+
+      // Fixed phrases first so the list-name pass below skips these nodes.
+      relabelLeafPhrase(pop, "Add to List", "Add to Styx Cart");
+      relabelLeafPhrase(pop, "View Your List", "View Your Styx Cart");
+
+      // Confirmation header: Amazon renders "N item(s) added to" and the list
+      // name as SIBLING spans (class huc-atwl-header-main), not nested. Rebrand
+      // the name span — every header span that isn't the count/"added to"
+      // prefix. Also covers the name being a link, in case the markup shifts.
+      const PREFIX_RE = /item[s]?\s+added\s+to|^\s*\d+\s+item/i;
+      pop
+        .querySelectorAll(
+          '.huc-atwl-header-main, [class*="atwl-header"] a[href*="wishlist"]'
+        )
+        .forEach((el) => {
+          if (el.children.length) return; // leaf text only
+          const t = (el.textContent || "").trim();
+          if (!t || PREFIX_RE.test(t)) return; // skip the "N items added to" bit
+          relabelNode(el, rebrandListName);
+        });
+    });
+  }
+
+  // Relabel Amazon's native "Create a new list or registry" modal so it reads
+  // as creating a Styx Cart (with "Amazon list" kept in parens for clarity):
+  //   • title  "Create a new list or registry" → "Create a new Styx Cart (Amazon list)"
+  //   • field  "List name (required)"          → "Styx Cart name (required)"
+  // Text-only + reversible; scoped to the visible modal via its title text.
+  function relabelCreateListModal() {
+    if (!relabelEnabled()) return;
+    document
+      .querySelectorAll(".a-popover-modal, .a-popover, [role='dialog'], .a-modal")
+      .forEach((pop) => {
+        if (!pop.offsetWidth && !pop.offsetHeight) return; // hidden template
+        if (!/Create a new list or registry/i.test(pop.textContent || "")) return;
+        relabelLeafPhrase(
+          pop,
+          "Create a new list or registry",
+          "Create a new Styx Cart (Amazon list)"
+        );
+        // "List name" / "List name (required)" → "Styx Cart name …"
+        relabelLeafPrefix(pop, /^List name/i, "Styx Cart name");
+      });
+  }
+
+  // One pass over every Amazon Add-to-List surface (chooser rows + confirmation
+  // modal). Called on init and from the debounced popover observer.
+  function relabelPdpAtl() {
+    relabelPdpListChooser();
+    relabelAtlModal();
+  }
+
+  // Watch for Amazon's create-list modal on any page (it appears from the PDP
+  // chooser and the lists page) and rebrand it. Top-frame only; debounced;
+  // scans only the handful of popover/dialog containers so it's cheap.
+  function initCreateListRelabel() {
+    if (window.top !== window) return;
+    if (!document.body) return;
+    relabelCreateListModal();
+    let timer = 0;
+    const mo = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        relabelCreateListModal();
+      }, 200);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+
   // Undo every relabel we applied (used when the setting is toggled off live).
   function revertStyxCarts() {
     document
@@ -2366,6 +2579,58 @@
   // whose DOM belongs to Amazon so we can't inject a child node cleanly).
   const STYX_MARK_URI =
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff9900'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2.5%203.5h2.2l2.2%2011.1a1.3%201.3%200%200%200%201.28%201.05h8.3a1.3%201.3%200%200%200%201.27-1.02L20.8%207.5H6'/%3E%3Ccircle%20cx='9'%20cy='20'%20r='1.5'/%3E%3Ccircle%20cx='17.5'%20cy='20'%20r='1.5'/%3E%3C/svg%3E";
+
+  // Shared branding for every Styx-injected inline button on Amazon pages
+  // (currently the wishlist "Send All to Amazon Cart"). One class so all our
+  // controls read as the same product: navy fill, orange border, white bold
+  // label, orange cart mark, 8px radius — matching the PDP "Add to a Styx cart"
+  // and cart-page "Save cart to a new list" buttons.
+  const STYX_BRAND_BTN_STYLE_ID = "styx-brand-btn-style";
+  function injectStyxBrandButtonStyles() {
+    if (document.getElementById(STYX_BRAND_BTN_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYX_BRAND_BTN_STYLE_ID;
+    style.textContent = `
+      .styx-brand-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 6px; padding: 5px 10px; margin: 0; vertical-align: middle;
+        font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+        font-size: 13px; line-height: 18px; font-weight: 700;
+        border-radius: ${STYX_BTN_RADIUS}; border: 1px solid ${STYX_BTN_BORDER};
+        background: ${STYX_BTN_BG}; color: #fff !important; cursor: pointer;
+        text-decoration: none; white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(15,23,42,.25);
+        transition: filter 120ms ease, opacity 120ms ease;
+      }
+      .styx-brand-btn:hover { filter: brightness(1.12); }
+      /* Busy state ("Adding…"): keep the navy fill — force it past Amazon's
+         global .a-button-disabled, which would otherwise paint the bg white. */
+      .styx-brand-btn.a-button-disabled {
+        background: ${STYX_BTN_BG} !important; opacity: .6; cursor: default;
+      }
+      /* Locked (free-tier over-limit) state: muted gray fill, readable text,
+         still clickable (opens the upgrade overlay). */
+      .styx-brand-btn.styx-locked {
+        background: #d5d9de !important;
+        border-color: rgba(0,0,0,.12) !important;
+        opacity: 1 !important; filter: none !important; cursor: pointer;
+        box-shadow: none;
+      }
+      .styx-brand-btn.styx-locked .a-button-text,
+      .styx-brand-btn.styx-locked .styx-brand-btn-label { color: #6b7280 !important; }
+      .styx-brand-btn.styx-locked .styx-btn-mark { opacity: .5; }
+      .styx-brand-btn .a-button-text,
+      .styx-brand-btn .styx-brand-btn-label {
+        color: #fff !important; font-weight: 700 !important;
+        padding: 0 !important; margin: 0 !important;
+        line-height: 18px !important; font-size: 13px !important;
+        height: auto !important; background: transparent !important;
+        border: 0 !important; box-shadow: none !important; white-space: nowrap;
+      }
+      .styx-brand-btn .styx-btn-mark { width: 15px; height: 15px; flex: 0 0 auto; display: block; }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
 
   // ---- Styx progress toast (on-page, for long list-save operations) -------
   const STYX_TOAST_ID = "styx-progress-toast";
@@ -2615,6 +2880,41 @@
   const STYX_PDP_ATL_FLAG = "styxAtlRelocated"; // dataset marker on the stack
   const STYX_PDP_ATL_STYLE_ID = "styx-pdp-atl-style";
 
+  // The split-button caret (▼) that opens Amazon's multi-list chooser. Same
+  // resolution order as the background driver's pageAddToList (validated live).
+  function findAtlCaret(stack) {
+    return (
+      (stack && stack.querySelector("#add-to-wishlist-button")) ||
+      document.getElementById("add-to-wishlist-button") ||
+      (stack && stack.querySelector(".a-button-splitdropdown input")) ||
+      document.getElementById("wishListDropDown") ||
+      null
+    );
+  }
+
+  // Make the main (left) "Save to a Styx cart" button open the chooser dropdown
+  // instead of silently adding to the default list — i.e. behave like the caret.
+  // Capture-phase so we run before Amazon's own handler; only intercept clicks
+  // on the main button, leaving the real caret and everything else untouched.
+  function wireMainButtonOpensChooser(stack) {
+    if (!stack || stack.dataset.styxAtlRedirect === "1") return;
+    const mainBtn = stack.querySelector("#wishListMainButton");
+    if (!mainBtn) return;
+    stack.addEventListener(
+      "click",
+      (e) => {
+        if (!mainBtn.contains(e.target)) return; // only the main button
+        const caret = findAtlCaret(stack);
+        if (!caret || mainBtn.contains(caret)) return; // no separate caret → default
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        caret.click(); // opens the multi-list chooser
+      },
+      true
+    );
+    stack.dataset.styxAtlRedirect = "1";
+  }
+
   function stylePdpAddToListButton(stack) {
     // Keep Amazon's button DOM and classes intact so its bound handlers and
     // split-button behavior survive. These overrides are visual only.
@@ -2668,7 +2968,28 @@
     const label =
       stack.querySelector("#wishListMainButton-announce") ||
       stack.querySelector("#wishListMainButton .a-button-text");
-    if (label) label.textContent = "Save to a List";
+    // Match the Lists→Carts rebrand: when it's on, this reads as a Styx cart
+    // action; off, keep Amazon's native wording so the surface stays coherent.
+    if (label) {
+      label.textContent = relabelEnabled() ? "Add to a Styx cart" : "Add to List";
+    }
+
+    // Left button opens the chooser instead of adding to the default list.
+    wireMainButtonOpensChooser(stack);
+  }
+
+  // With the rebrand on, relabel Amazon's own "Add to Cart" so the destination
+  // is explicit next to our "Add to a Styx cart" button. Reversible via
+  // relabelNode (revertStyxCarts restores it when the toggle is turned off).
+  function relabelAtcButton() {
+    if (!relabelEnabled()) return;
+    const atc = document.getElementById("add-to-cart-button");
+    if (!atc) return;
+    const wrap = atc.closest(".a-button");
+    const label =
+      (wrap && wrap.querySelector(".a-button-text")) ||
+      document.getElementById("submit.add-to-cart-announce");
+    if (label) relabelNode(label, () => "Add directly to Amazon cart");
   }
 
   function injectPdpAddToListButton() {
@@ -2700,6 +3021,7 @@
 
   function initPdpAddToList() {
     injectPdpAddToListButton();
+    relabelAtcButton();
     // The buybox hydrates after document_idle and re-renders on variant
     // changes and soft navigations — each can spawn a fresh, unrelocated
     // widget. Keep a debounced, idempotent re-check running, scoped to the
@@ -2711,9 +3033,28 @@
       timer = setTimeout(() => {
         timer = 0;
         injectPdpAddToListButton();
+        relabelAtcButton();
       }, 250);
     });
     mo.observe(root, { childList: true, subtree: true });
+
+    // The "Add to List" chooser popover is fetched on caret-click and appended
+    // to <body> (outside #dp), so it needs its own watcher to catch + rebrand
+    // the list names as they render. Debounced + idempotent (relabelNode flags
+    // each node), scoped to body.
+    relabelPdpAtl();
+    let chooserTimer = 0;
+    const chooserMo = new MutationObserver(() => {
+      if (chooserTimer) return;
+      chooserTimer = setTimeout(() => {
+        chooserTimer = 0;
+        relabelPdpAtl();
+      }, 150);
+    });
+    chooserMo.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
   }
 
   // ---- Boot ---------------------------------------------------------------
@@ -2740,4 +3081,285 @@
   if (isWishlistPage()) initStyxCartRelabel();
   if (onProduct) initPdpAddToList();
   if (isCartPage()) initSaveCart();
+  initCreateListRelabel();
+
+  // ------------------------------------------------------------------------
+  // Floating UI — the primary surface for the extension. A round button
+  // pinned to the bottom-right of the viewport (showing the extension icon)
+  // toggles a draggable modal that embeds popup.html in an iframe, so every
+  // control/behaviour of the old side panel is reused verbatim. The toolbar
+  // icon also toggles it (background forwards MC_TOGGLE_FLOATING).
+  //
+  // observer.js runs in all frames; this UI must exist only in the top frame.
+  // ------------------------------------------------------------------------
+  const FAB_ID = "__styx-fab";
+  const FAB_MODAL_ID = "__styx-fab-modal";
+  const FAB_STYLE_ID = "__styx-fab-style";
+  const FAB_POS_KEY = "styx.fab.pos.v1"; // per-tab dragged position
+  const FAB_OPEN_KEY = "styx.fab.open.v1"; // per-tab open/closed memory
+  const FAB_WIDTH = 400;
+  const FAB_MARGIN = 20;
+
+  function injectFloatingStyles() {
+    if (document.getElementById(FAB_STYLE_ID)) return;
+    const css = `
+      #${FAB_ID} {
+        position: fixed; right: ${FAB_MARGIN}px; bottom: ${FAB_MARGIN}px;
+        z-index: 2147483640;
+        width: 56px; height: 56px; padding: 0;
+        border: none; border-radius: 50%;
+        background: #131a22; cursor: pointer;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+        display: flex; align-items: center; justify-content: center;
+        transition: transform .12s ease, box-shadow .12s ease;
+      }
+      #${FAB_ID}:hover { transform: translateY(-2px);
+        box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,153,0,0.5); }
+      #${FAB_ID}:active { transform: translateY(0); }
+      #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
+      #${FAB_ID}[hidden] { display: none; }
+
+      /* Orange pulse ring around the button as a reminder to use it. Toggled
+         by the "Pulse the floating button" setting (on by default). */
+      @keyframes styx-fab-pulse {
+        0%   { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0.55); }
+        70%  { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 14px rgba(255,153,0,0); }
+        100% { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0); }
+      }
+      #${FAB_ID}.styx-fab-pulse { animation: styx-fab-pulse 2s ease-out infinite; }
+      #${FAB_ID}.styx-fab-pulse:hover { animation-play-state: paused; }
+      /* Motion-averse users still get a cue: a steady orange ring, no pulse. */
+      @media (prefers-reduced-motion: reduce) {
+        #${FAB_ID}.styx-fab-pulse {
+          animation: none;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 4px rgba(255,153,0,0.55);
+        }
+      }
+
+      #${FAB_MODAL_ID} {
+        position: fixed; right: ${FAB_MARGIN}px; bottom: ${FAB_MARGIN}px;
+        z-index: 2147483641;
+        width: ${FAB_WIDTH}px; height: min(640px, calc(100vh - ${FAB_MARGIN * 2}px));
+        display: flex; flex-direction: column;
+        background: #131a22; border-radius: 12px; overflow: hidden;
+        box-shadow: 0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+      }
+      #${FAB_MODAL_ID}[hidden] { display: none; }
+      #${FAB_MODAL_ID} .styx-fab-bar {
+        display: flex; align-items: center; gap: 8px;
+        height: 36px; flex: 0 0 36px; padding: 0 6px 0 12px;
+        background: #0f151c; cursor: move; user-select: none;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      #${FAB_MODAL_ID} .styx-fab-bar-title {
+        flex: 1; min-width: 0; font-size: 12px; font-weight: 600;
+        color: #f3efe6; letter-spacing: .2px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #${FAB_MODAL_ID} .styx-fab-bar-close {
+        flex: 0 0 auto; width: 26px; height: 26px; padding: 0;
+        border: none; border-radius: 6px; background: transparent;
+        color: #8a93a0; font-size: 16px; line-height: 1; cursor: pointer;
+      }
+      #${FAB_MODAL_ID} .styx-fab-bar-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      #${FAB_MODAL_ID} .styx-fab-frame {
+        flex: 1 1 auto; width: 100%; border: none; background: #131a22;
+      }
+      #${FAB_MODAL_ID}.styx-fab-dragging { user-select: none; }
+      #${FAB_MODAL_ID}.styx-fab-dragging .styx-fab-frame { pointer-events: none; }
+    `;
+    const style = document.createElement("style");
+    style.id = FAB_STYLE_ID;
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function readStoredOpen() {
+    try { return sessionStorage.getItem(FAB_OPEN_KEY) === "1"; } catch (_e) { return false; }
+  }
+  function writeStoredOpen(open) {
+    try { sessionStorage.setItem(FAB_OPEN_KEY, open ? "1" : "0"); } catch (_e) { /* ignore */ }
+  }
+  function readStoredPos() {
+    try {
+      const raw = sessionStorage.getItem(FAB_POS_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (typeof p.left === "number" && typeof p.top === "number") return p;
+    } catch (_e) { /* ignore */ }
+    return null;
+  }
+  function writeStoredPos(pos) {
+    try { sessionStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch (_e) { /* ignore */ }
+  }
+
+  // Clamp a left/top so the modal stays mostly on-screen after viewport changes.
+  function clampPos(left, top, el) {
+    const w = el.offsetWidth || FAB_WIDTH;
+    const h = el.offsetHeight || 400;
+    const maxLeft = Math.max(0, window.innerWidth - w);
+    const maxTop = Math.max(0, window.innerHeight - Math.min(h, 80));
+    return {
+      left: Math.min(Math.max(0, left), maxLeft),
+      top: Math.min(Math.max(0, top), maxTop)
+    };
+  }
+
+  function applyPos(modal, pos) {
+    modal.style.left = pos.left + "px";
+    modal.style.top = pos.top + "px";
+    modal.style.right = "auto";
+    modal.style.bottom = "auto";
+  }
+
+  // Toggle the orange pulse ring on the floating button from the current
+  // setting (on by default). Called on init and on live settings changes.
+  function applyFabPulse() {
+    const fab = document.getElementById(FAB_ID);
+    if (!fab) return;
+    fab.classList.toggle("styx-fab-pulse", _settingsCache.fabPulse !== false);
+  }
+
+  function initFloatingUi() {
+    // Top frame only — Amazon embeds many iframes; the FAB belongs on the page.
+    if (window.top !== window) return;
+    if (!document.body) return;
+    if (document.getElementById(FAB_ID)) return;
+
+    injectFloatingStyles();
+
+    const fab = document.createElement("button");
+    fab.id = FAB_ID;
+    fab.type = "button";
+    fab.setAttribute("aria-label", "Open Styx Multi-Cart");
+    const icon = document.createElement("img");
+    try { icon.src = chrome.runtime.getURL("icons/icon48.png"); } catch (_e) { /* ignore */ }
+    icon.alt = "";
+    fab.appendChild(icon);
+
+    const modal = document.createElement("div");
+    modal.id = FAB_MODAL_ID;
+    modal.hidden = true;
+
+    const bar = document.createElement("div");
+    bar.className = "styx-fab-bar";
+    const title = document.createElement("span");
+    title.className = "styx-fab-bar-title";
+    title.textContent = "Styx Multi-Cart";
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "styx-fab-bar-close";
+    closeBtn.setAttribute("aria-label", "Close");
+    closeBtn.textContent = "✕";
+    bar.appendChild(title);
+    bar.appendChild(closeBtn);
+
+    const frame = document.createElement("iframe");
+    frame.className = "styx-fab-frame";
+    // Lazily set src on first open so we don't spin up popup.js on every page.
+    frame.dataset.src = (() => {
+      try { return chrome.runtime.getURL("popup.html") + "?surface=floating"; }
+      catch (_e) { return ""; }
+    })();
+
+    modal.appendChild(bar);
+    modal.appendChild(frame);
+    document.body.appendChild(fab);
+    document.body.appendChild(modal);
+    applyFabPulse();
+
+    // Restore a dragged position from this tab's session, if any.
+    const storedPos = readStoredPos();
+    if (storedPos) applyPos(modal, clampPos(storedPos.left, storedPos.top, modal));
+
+    // Close when the user clicks anywhere outside the modal (i.e. on the page).
+    // Clicks inside the iframe don't reach this document, so they never count as
+    // "outside"; only true page clicks and the (hidden) FAB are checked.
+    function onDocPointerDown(e) {
+      if (modal.hidden) return;
+      if (modal.contains(e.target)) return;
+      if (e.target === fab || fab.contains(e.target)) return;
+      closeModal();
+    }
+    function openModal() {
+      if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
+      modal.hidden = false;
+      fab.hidden = true;
+      writeStoredOpen(true);
+      // Defer so the click that opened the modal doesn't immediately close it.
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+      setTimeout(() => {
+        if (!modal.hidden) {
+          document.addEventListener("pointerdown", onDocPointerDown, true);
+        }
+      }, 0);
+    }
+    function closeModal() {
+      modal.hidden = true;
+      fab.hidden = false;
+      writeStoredOpen(false);
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+    }
+    function toggleModal() {
+      if (modal.hidden) openModal(); else closeModal();
+    }
+
+    fab.addEventListener("click", openModal);
+    closeBtn.addEventListener("click", closeModal);
+
+    // Drag the modal by its title bar. Switches from right/bottom anchoring to
+    // left/top on first move, then persists the position for this tab.
+    let dragging = false;
+    let dx = 0;
+    let dy = 0;
+    bar.addEventListener("pointerdown", (e) => {
+      if (e.target === closeBtn || closeBtn.contains(e.target)) return;
+      dragging = true;
+      const rect = modal.getBoundingClientRect();
+      dx = e.clientX - rect.left;
+      dy = e.clientY - rect.top;
+      applyPos(modal, { left: rect.left, top: rect.top });
+      modal.classList.add("styx-fab-dragging");
+      try { bar.setPointerCapture(e.pointerId); } catch (_e) { /* ignore */ }
+      e.preventDefault();
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const pos = clampPos(e.clientX - dx, e.clientY - dy, modal);
+      applyPos(modal, pos);
+    });
+    function endDrag(e) {
+      if (!dragging) return;
+      dragging = false;
+      modal.classList.remove("styx-fab-dragging");
+      try { bar.releasePointerCapture(e.pointerId); } catch (_e) { /* ignore */ }
+      const rect = modal.getBoundingClientRect();
+      writeStoredPos({ left: rect.left, top: rect.top });
+    }
+    bar.addEventListener("pointerup", endDrag);
+    bar.addEventListener("pointercancel", endDrag);
+
+    // Keep the modal on-screen if the window shrinks after a drag.
+    window.addEventListener("resize", () => {
+      if (modal.hidden || modal.style.left === "" || modal.style.left === "auto") return;
+      const pos = clampPos(parseInt(modal.style.left, 10) || 0, parseInt(modal.style.top, 10) || 0, modal);
+      applyPos(modal, pos);
+    });
+
+    // Toolbar icon → background forwards this to toggle the modal.
+    try {
+      chrome.runtime.onMessage.addListener((m) => {
+        if (m && m.type === "MC_TOGGLE_FLOATING") toggleModal();
+      });
+    } catch (_e) { /* no runtime — ignore */ }
+
+    // Restore open state across Amazon's full-page navigations.
+    if (readStoredOpen()) openModal();
+  }
+
+  // Run after the const/function declarations above are initialized (avoids a
+  // temporal-dead-zone ReferenceError if called earlier in the init sequence).
+  initFloatingUi();
 })();
