@@ -31,19 +31,15 @@ describe("computeListAccess", () => {
     expect(res.isPremium).toBe(false);
   });
 
-  it("default (Wish List) and Alexa lists never count and are always editable", () => {
-    // A default + an alexa + (FREE_CART_LIMIT + 1) customs. Defaults don't
-    // consume slots, so only the last custom overflows into "locked".
-    const kinds = ["default", "alexa", ...Array(FREE_CART_LIMIT + 1).fill("custom")];
+  it("kind is ignored: every list counts toward the limit (no default exclusion)", () => {
+    // Amazon does not auto-create lists, so there are no default lists to
+    // exclude. A "default" + "alexa" + customs are all just carts: the first
+    // FREE_CART_LIMIT (in order) are editable, everything after is locked.
+    const kinds = ["default", "alexa", ...Array(FREE_CART_LIMIT).fill("custom")];
     const res = computeListAccess(lists(...kinds), FREE);
-    const byId = Object.fromEntries(res.lists.map((l) => [l.listId, l.access]));
-    expect(byId.L0).toBe("editable"); // default
-    expect(byId.L1).toBe("editable"); // alexa
-    for (let i = 0; i < FREE_CART_LIMIT; i++) {
-      expect(byId[`L${2 + i}`]).toBe("editable"); // customs within limit
-    }
-    expect(byId[`L${2 + FREE_CART_LIMIT}`]).toBe("locked"); // overflow custom
-    expect(res.customCount).toBe(FREE_CART_LIMIT + 1);
+    const expected = kinds.map((_, i) => (i < FREE_CART_LIMIT ? "editable" : "locked"));
+    expect(accessOf(res)).toEqual(expected);
+    expect(res.customCount).toBe(kinds.length);
   });
 
   it("premium unlocks every custom list", () => {

@@ -1744,7 +1744,7 @@
         </div>
         <div class="styx-pk-upgrade-plan">
           <ul class="styx-pk-upgrade-features">
-            <li>Unlock up to <b>20 saved carts</b></li>
+            <li><b>Unlimited carts</b></li>
             <li>Edit, restore, rename, merge — full functionality</li>
             <li>Cancel anytime; carts stay readable</li>
           </ul>
