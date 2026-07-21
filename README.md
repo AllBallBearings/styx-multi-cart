@@ -4,20 +4,21 @@ Licensed under [PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and
 
 You can have multiple carts or separate purchases at checkout in the real world. Why not Amazon?!
 
-A browser extension that for multiple Amazon shopping carts. Save your current cart, switch between multiple named carts, and restore any of them with one click to proceed to checkout.
+Styx **supercharges your Amazon lists**, repurposing them as reusable **carts** you fill with items and move to checkout in one click — so you can keep a separate cart for every occasion or purpose (the birthday, the holidays, the weekly groceries, the home project) and drop the whole thing into your Amazon cart when you're ready to buy. Because the carts are just your Amazon lists, they're backed by your Amazon account and sync across every device you sign in on.
 
 ## What it does
 
-- **Save** — capture every item in your active Amazon cart (ASIN, quantity, title, image) under a name you choose.
-- **Multi-cart** — keep as many saved carts as you want. "Birthday gifts," "Office supplies," "Wishlist," whatever.
-- **Restore** — replace your live Amazon cart with the items from a saved cart.
-- **Clear** — empty your active cart on Amazon.
-- **Save & clear** — combine the two: snapshot the current cart, then empty it (so you can start a new one without losing the old).
-- **Delete** — remove saved carts you no longer need.
-- **Rename** — rename a saved cart any time.
-- **Edit items inline** — each item shows as a picture tile. Click the **X** (top-left) to remove it, click the **count badge** (bottom-left) for a +/− quantity popover, or click the **picture** to move that item into another cart. (Removing a cart's last item deletes the cart, so that one asks first.)
+- **Lists are carts** — every Amazon list shows up as a cart. Styx also relabels Amazon's own Lists page to **Your Styx Carts** and appends "Cart" to each list name (toggle the relabeling off in Settings).
+- **Floating panel** — a floating Styx button rides along on Amazon; click it for a draggable panel of all your carts, and click off it to dismiss. A **Go to Carts** button jumps to them on Amazon.
+- **Send All to Amazon Cart** — load an entire cart into your live Amazon cart at once, ready to check out. Out-of-stock items skip; books ask which edition/format.
+- **Add to a Styx cart while you browse** — a branded button next to **Add to Cart** on every product page lets you drop an item straight into the cart you choose.
+- **Save your Amazon cart into a new cart** — one click on the cart page snapshots everything in your live cart into a brand-new cart, so you can empty it and shop something else without losing a thing.
+- **Clear** — empty your live Amazon cart in one click for a fresh session; your carts stay untouched.
+- **Edit items inline** — each item shows as a picture tile. Click the **X** (top-left) to remove it, click the **count badge** (bottom-left) for a +/− quantity popover, or click the **picture** to move that item into another cart.
 
-Storage is local-only (`chrome.storage.local`), so saved carts never leave the device.
+**Free & Premium:** the free tier covers **3 carts** with every core action; **Premium unlocks unlimited carts** ($9.99/year or $19.99 lifetime). Over-limit carts render grayed and open the upgrade screen — list creation itself is never blocked. Your live Amazon cart is always first-class and always free, even if Premium lapses.
+
+Your carts live in your Amazon account; the extension stores only settings and preferences locally (`chrome.storage.local`) and never sends your cart contents to any server.
 
 ## Install (Chrome / Edge / Brave / Arc / Opera / Vivaldi)
 
@@ -104,21 +105,21 @@ steps above) — no build step needed, and the debug controls are present.
 
 ## How to use
 
-1. Go to your Amazon cart (`amazon.com/gp/cart/view.html` or click the cart icon).
-2. Click the Styx icon in your browser toolbar.
-3. Type a name and hit **Save**. (Leave the field blank to use a timestamped default.)
-4. To restore later, open the popup and click **Restore** on the saved cart you want. Styx clears the current Amazon cart first, then opens Amazon with the saved items added.
-5. Use **Save & clear** to snapshot what's in your cart and empty it in one step — handy when you want a fresh cart but don't want to lose the items you've gathered.
+1. On any Amazon page, click the **floating Styx button** (bottom-right) to open the panel of your carts. (You can also click the Styx toolbar icon.)
+2. **Build a cart:** while browsing, click **Add to a Styx cart** next to Add to Cart on a product page and pick the cart — or add items to any list on Amazon as usual.
+3. **Send a cart to checkout:** open a cart and hit **Send All to Amazon Cart**. Styx loads the whole cart into your live Amazon cart, ready to check out.
+4. **Save your current cart:** on the Amazon cart page, click **Save cart to a new list** to snapshot everything in your live cart into a brand-new cart — then empty it and shop something else without losing a thing.
+5. **Clear** empties your live Amazon cart in one click; your carts stay untouched.
 
-### How restore works under the hood
+### How "Send All to Amazon Cart" works under the hood
 
-The extension drives Amazon the same way you would: it opens one helper tab, navigates it through each saved product page in turn, and clicks the page's real **Add to Cart** button. When every item has been processed, it lands on `gp/cart/view.html` so you can review what came through.
+The extension drives Amazon the same way you would: it opens one helper tab, navigates it through each product page in the cart in turn, and clicks the page's real **Add to Cart** button. When every item has been processed, it lands on `gp/cart/view.html` so you can review what came through.
 
 This is slower than a single-shot batch URL — figure roughly 3–5 seconds per item — but it goes through the exact same UI flow as a human, so authentication, regional locks, multi-seller buy-box selection, and quantity caps are all handled by Amazon's own page logic. Items that have been delisted, are out of stock, or no longer ship to your region simply skip; the rest go through.
 
-You'll need to be signed in to Amazon for restore to work — the extension never handles your credentials.
+You'll need to be signed in to Amazon — the extension never handles your credentials.
 
-**Protection plans require your choice.** Amazon often interrupts Add-to-Cart with a protection-plan upsell. Styx pauses restore on that Amazon page, tells you to choose the option you want, then continues with the remaining saved items after the prompt is complete.
+**Protection plans require your choice.** Amazon often interrupts Add-to-Cart with a protection-plan upsell. Styx pauses on that Amazon page, tells you to choose the option you want, then continues with the remaining items after the prompt is complete.
 
 ## Files
 

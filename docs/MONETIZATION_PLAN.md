@@ -18,12 +18,12 @@ Decisions captured for the free/premium model across Chrome Web Store (launch) a
 
 ## Current Model (updated 2026-07-14)
 
-The product pivoted: **Amazon lists ARE the carts** — the extension surfaces the user's Amazon wish lists rather than a separate local-cart store. The tier limits below now apply to **custom Amazon lists**, with these adjustments from the original plan:
+The product pivoted: **Amazon lists ARE the carts** — the extension surfaces the user's Amazon lists rather than a separate local-cart store. The tier limits below now apply to **Amazon lists**, with these adjustments from the original plan:
 
-- **Free tier = 3 custom carts** (raised from 2 — a "Wish List" is not auto-created for new Amazon accounts, so the original count was low).
-- **Amazon's own default lists don't count** and are always usable: the account **Default List** (Wish List) and the **Alexa Shopping List**. The 3-cart limit is for the user's _own_ custom lists, on top of these.
-- **Premium unlocks all custom lists** (no 20-cap on the Amazon-list path — locking a paying user's real Amazon lists would be user-hostile). The "up to 20" figure below is legacy/marketing for the local-cart model.
-- **List creation is never blocked** (avoids making the extension a target for Amazon). Over-limit custom carts render **grayed/locked** in the extension, lose the "send all to Amazon cart" action, and open the paywall on click.
+- **Free tier = 3 carts, flat.** Every Amazon list counts toward the limit; the first 3 (in Amazon's list order) are editable, the rest lock.
+- **No default-list exclusion.** Amazon does not auto-create any list for a new account (the "Wish List" is just a user-created list like any other), so there are no default lists to exempt. Earlier drafts excluded a "Default List" (Wish List) and "Alexa Shopping List" from the count — that carve-out was **removed** (2026-07-21) because it let a badge-tagged list slip past the cap (showed 4 usable carts on free). `kind` is still scraped but no longer affects access.
+- **Premium unlocks all lists** (no 20-cap on the Amazon-list path — locking a paying user's real Amazon lists would be user-hostile). The "up to 20" figure below is legacy/marketing for the local-cart model.
+- **List creation is never blocked** (avoids making the extension a target for Amazon). Over-limit carts render **grayed/locked** in the extension, lose the "send all to Amazon cart" action, and open the paywall on click.
 
 Gate logic: `computeListAccess()` in `lib/helpers.js` (mirrored in `src/background/index.js`); `FREE_CART_LIMIT = 3` (single source, shared with the dormant local-cart gate). The local-cart sections below remain accurate for the dormant `mc.carts.v1` model and the shared gate constants; treat their "2" as the historical value now superseded by 3.
 
