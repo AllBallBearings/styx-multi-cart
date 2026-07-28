@@ -2315,8 +2315,160 @@
       }, 5000);
     });
 
+    // Docked copy in the lower-right that appears once this button scrolls off.
+    setupWishlistSticky();
+
     dlog("[Styx ATC] wishlist Send-All button injected");
     return true;
+  }
+
+  // ---- Docked "Send All" copy (rides beside the floating FAB) -------------
+  //
+  // The in-title "Send All to Amazon Cart" button scrolls away on long lists.
+  // We mirror it as a fixed pill docked to the LEFT of the floating Styx FAB
+  // (lower-right), shown only while the real button is off-screen AND the FAB
+  // is visible — so the pair travels together and the pill vanishes when the
+  // modal opens over that corner. Clicks forward to the real button so all the
+  // send/lock/busy logic lives in exactly one place.
+  const STYX_WL_STICKY_ID = "styx-wishlist-sticky";
+  const STYX_WL_STICKY_STYLE_ID = "styx-wishlist-sticky-style";
+  let _wlOrigOffscreen = false;
+  let _wlStickyIO = null;      // IntersectionObserver on the real button
+  let _wlStickyStateMO = null; // mirrors the real button's label + lock/busy
+
+  function injectWishlistStickyStyles() {
+    if (document.getElementById(STYX_WL_STICKY_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYX_WL_STICKY_STYLE_ID;
+    // Geometry mirrors the FAB (injectFloatingStyles): FAB is 56px square at
+    // right/bottom 20px, z-index 2147483640. Pill docks 12px to its left and
+    // shares its bottom + z-index. Kept as literals to avoid a TDZ on the
+    // FAB_* consts, which are declared later in this file.
+    style.textContent = `
+      #${STYX_WL_STICKY_ID}.styx-brand-btn {
+        position: fixed; right: 88px; bottom: 20px;
+        height: 56px; padding: 0 20px; gap: 8px;
+        border-radius: 28px; font-size: 14px; line-height: 1;
+        z-index: 2147483640;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+        animation: styx-wl-sticky-in .18s ease-out;
+      }
+      /* Id+attr specificity beats .styx-brand-btn's display:inline-flex, which
+         would otherwise defeat the plain [hidden] attribute. */
+      #${STYX_WL_STICKY_ID}.styx-brand-btn[hidden] { display: none; }
+      #${STYX_WL_STICKY_ID} .styx-btn-mark { width: 18px; height: 18px; }
+      #${STYX_WL_STICKY_ID} .a-button-text {
+        font-size: 14px !important; line-height: 1 !important;
+      }
+      @keyframes styx-wl-sticky-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #${STYX_WL_STICKY_ID}.styx-brand-btn { animation: none; }
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function ensureWishlistStickyButton() {
+    const existing = document.getElementById(STYX_WL_STICKY_ID);
+    if (existing) return existing;
+    if (!document.body) return null;
+
+    injectStyxBrandButtonStyles();
+    injectWishlistStickyStyles();
+
+    const btn = document.createElement("span");
+    btn.id = STYX_WL_STICKY_ID;
+    btn.className = "styx-brand-btn";
+    btn.setAttribute("role", "button");
+    btn.tabIndex = 0;
+    btn.hidden = true; // updateWishlistStickyVisibility reveals it
+    btn.innerHTML =
+      STYX_MARK_SVG("styx-btn-mark") +
+      '<span class="a-button-text">' + STYX_WL_LABEL + "</span>";
+
+    // Forward activation to the real button — one source of truth for the
+    // scrape/lock/busy/send flow. Guard against a stray self-reference.
+    const forward = () => {
+      const real = document.getElementById(STYX_WL_BTN_ID);
+      if (real && real !== btn) real.click();
+    };
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      forward();
+    });
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        forward();
+      }
+    });
+
+    document.body.appendChild(btn);
+    return btn;
+  }
+
+  // Copy the real button's visible label and lock/busy classes onto the pill
+  // so state (e.g. "Adding 7…", locked gray) stays identical.
+  function syncWishlistStickyFromReal() {
+    const real = document.getElementById(STYX_WL_BTN_ID);
+    const btn = document.getElementById(STYX_WL_STICKY_ID);
+    if (!real || !btn) return;
+    const realLabel = real.querySelector(".a-button-text");
+    const btnLabel = btn.querySelector(".a-button-text");
+    if (realLabel && btnLabel) btnLabel.textContent = realLabel.textContent;
+    btn.classList.toggle("styx-locked", real.classList.contains("styx-locked"));
+    btn.classList.toggle("a-button-disabled", real.classList.contains("a-button-disabled"));
+  }
+
+  // Visible only when the real button is scrolled off AND the FAB is showing
+  // (i.e. the modal isn't open over the corner). FAB id must match FAB_ID.
+  function updateWishlistStickyVisibility() {
+    const btn = document.getElementById(STYX_WL_STICKY_ID);
+    if (!btn) return;
+    const real = document.getElementById(STYX_WL_BTN_ID);
+    if (!real) { btn.hidden = true; return; }
+    const fab = document.getElementById("__styx-fab");
+    const fabVisible = !!fab && !fab.hidden;
+    btn.hidden = !(_wlOrigOffscreen && fabVisible);
+  }
+
+  function setupWishlistSticky() {
+    const btn = ensureWishlistStickyButton();
+    if (!btn) return;
+    const real = document.getElementById(STYX_WL_BTN_ID);
+    if (!real) return;
+
+    if (_wlStickyStateMO) _wlStickyStateMO.disconnect();
+    _wlStickyStateMO = new MutationObserver(syncWishlistStickyFromReal);
+    _wlStickyStateMO.observe(real, {
+      attributes: true,
+      attributeFilter: ["class"],
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    syncWishlistStickyFromReal();
+
+    if (_wlStickyIO) _wlStickyIO.disconnect();
+    _wlStickyIO = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) _wlOrigOffscreen = !en.isIntersecting;
+        updateWishlistStickyVisibility();
+      },
+      { threshold: 0 }
+    );
+    _wlStickyIO.observe(real);
+
+    // The FAB is injected later (initFloatingUi) and toggles its own hidden
+    // state when the modal opens/closes; it fires "styx:fabvis" so we can ride
+    // along without reaching into that scope.
+    window.removeEventListener("styx:fabvis", updateWishlistStickyVisibility);
+    window.addEventListener("styx:fabvis", updateWishlistStickyVisibility);
+    updateWishlistStickyVisibility();
   }
 
   function initWishlist() {
@@ -2392,6 +2544,22 @@
     // 3. The open list's detail heading.
     const detail = document.getElementById("profile-list-name");
     if (detail) relabelNode(detail, rebrandListName);
+
+    // 4. Each list item's NATIVE "Add to Cart" button → "Add to Amazon Cart".
+    // Amazon fires this via data-action="cta-add-to-cart" (not the label text),
+    // so renaming the visible <a> is display-only. Reverts with the rest when
+    // the rebrand toggle is turned off. The control swaps to a quantity stepper
+    // once added, so the debounced observer re-runs this when it swaps back.
+    document
+      .querySelectorAll(
+        "#g-items li[data-itemid] [data-action='cta-add-to-cart'] a.a-button-text, " +
+          "#g-items li[data-itemid] [id^='pab-declarative-'] a.a-button-text"
+      )
+      .forEach((el) =>
+        relabelNode(el, (orig) =>
+          orig.toLowerCase() === "add to cart" ? "Add to Amazon Cart" : orig
+        )
+      );
   }
 
   // Relabel the list names inside the PDP "Add to List" chooser popover (each
@@ -3222,6 +3390,14 @@
     fab.classList.toggle("styx-fab-pulse", _settingsCache.fabPulse !== false);
   }
 
+  // True while a background-driven multi-navigation operation is running
+  // (cart restore sets `restoring`; cart clear / list save set `busy`). Used
+  // to hold back the floating window's auto-reopen so it doesn't rebuild and
+  // re-hit the lists API on every page load during the operation.
+  function uiSuspended() {
+    return !!(_settingsCache.restoring || _settingsCache.busy);
+  }
+
   function initFloatingUi() {
     // Top frame only — Amazon embeds many iframes; the FAB belongs on the page.
     if (window.top !== window) return;
@@ -3283,10 +3459,16 @@
       if (e.target === fab || fab.contains(e.target)) return;
       closeModal();
     }
+    // Let other in-page UI (e.g. the docked wishlist "Send All" pill) react to
+    // the FAB showing/hiding without reaching into this scope.
+    function notifyFabVis() {
+      try { window.dispatchEvent(new Event("styx:fabvis")); } catch (_e) { /* ignore */ }
+    }
     function openModal() {
       if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
       modal.hidden = false;
       fab.hidden = true;
+      notifyFabVis();
       writeStoredOpen(true);
       // Defer so the click that opened the modal doesn't immediately close it.
       document.removeEventListener("pointerdown", onDocPointerDown, true);
@@ -3299,6 +3481,7 @@
     function closeModal() {
       modal.hidden = true;
       fab.hidden = false;
+      notifyFabVis();
       writeStoredOpen(false);
       document.removeEventListener("pointerdown", onDocPointerDown, true);
     }
@@ -3355,8 +3538,16 @@
       });
     } catch (_e) { /* no runtime — ignore */ }
 
-    // Restore open state across Amazon's full-page navigations.
-    if (readStoredOpen()) openModal();
+    // Restore open state across Amazon's full-page navigations — UNLESS a
+    // multi-navigation Styx operation is running (cart clear / list save /
+    // restore). Those reload the page repeatedly; auto-reopening here would
+    // rebuild the popup and re-hit the lists API on every single load. The
+    // FAB still shows, so the user can open it manually if they want to.
+    if (readStoredOpen() && !uiSuspended()) openModal();
+
+    // The FAB now exists; nudge any in-page UI that rides on its visibility
+    // (the wishlist "Send All" pill was set up before this ran).
+    notifyFabVis();
   }
 
   // Run after the const/function declarations above are initialized (avoids a

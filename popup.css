@@ -477,6 +477,10 @@ html[data-surface="panel"] .mc-list-block {
   align-items: baseline;
   gap: 8px;
   margin-bottom: 8px;
+  /* Let the action group drop to its own line when the heading + buttons don't
+     fit (e.g. the ~400px floating modal), instead of overflowing and getting
+     clipped by the modal's overflow:hidden. Stays on one line when it fits. */
+  flex-wrap: wrap;
 }
 
 .mc-list-header h2 {
@@ -922,8 +926,14 @@ button.mc-thumb-qty:focus-visible {
 /* ---- Combine mode ------------------------------------------------------- */
 
 .mc-list-header-actions {
-  margin-left: auto;
+  /* The actions sit on their own line directly under the heading, left-aligned
+     to the same left edge (not right-floated, which left an awkward gap and
+     clipped the last button on the ~400px floating modal). flex-wrap keeps them
+     from ever overflowing on the narrowest surfaces. */
+  flex-basis: 100%;
+  margin-top: 4px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
