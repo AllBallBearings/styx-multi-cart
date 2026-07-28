@@ -634,9 +634,13 @@
         const a = document.createElement("a");
         a.className = "mc-sync-link";
         a.href = cart.amazonListUrl;
-        a.target = "_blank";
-        a.rel = "noopener";
         a.textContent = "View list";
+        // Navigate the existing Amazon tab in place (same as the per-list
+        // "View on Amazon" link) rather than opening a new tab.
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          openInActiveTab(a.href);
+        });
         syncEl.appendChild(a);
       }
       if (saveBtn) saveBtn.textContent = "Update Amazon List";
@@ -853,6 +857,25 @@
         toast("Couldn't open your carts", "error");
       }
     });
+  }
+
+  // Navigate the user's EXISTING Amazon tab to `url` (per-list "View on Amazon"
+  // links). The popup surface can be a floating iframe on the Amazon page, the
+  // side panel, or a compact popover — in all three the active tab in the
+  // current window is the Amazon tab to move, so we update it in place rather
+  // than spawning a new tab. (A plain <a> can't do this: inside the floating
+  // iframe a same-tab link would try to load Amazon INTO the iframe, which
+  // Amazon blocks, and target=_blank always forks a new tab.)
+  async function openInActiveTab(url) {
+    if (!url || url === "#") return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id != null) {
+        await chrome.tabs.update(tab.id, { url });
+        return;
+      }
+    } catch (_e) { /* fall through to a new tab */ }
+    try { await chrome.tabs.create({ url }); } catch (_e) { /* give up quietly */ }
   }
 
   // ---- Settings: open as side panel vs popup (Chrome only) ---------------
@@ -1773,11 +1796,20 @@
       const li = (btn || e.target).closest("li.mc-amazon-list-card");
       if (!li) return;
 
+      // "View on Amazon": navigate the existing Amazon tab in place instead of
+      // letting the anchor open a new tab. Handled before the lock check so it
+      // works for locked carts too (opening the real list stays allowed).
+      const openLink = e.target.closest(".mc-amazon-list-open");
+      if (openLink) {
+        e.preventDefault();
+        openInActiveTab(openLink.href);
+        return;
+      }
+
       // Locked (free-tier over-limit) cart: any interaction except the
       // View-on-Amazon link opens the paywall. Amazon functionality (opening
       // the real list) stays available.
       if (li.dataset.locked === "1") {
-        if (e.target.closest(".mc-amazon-list-open")) return;
         openPaywall("limit");
         return;
       }

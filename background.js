@@ -197,7 +197,13 @@ importScripts("ExtPay.js");
     // Ephemeral flag — set to true for the duration of a cart restore so the
     // observer.js ATC intercept stands down. Cleared in a finally block so a
     // crash or early return can never leave interception permanently disabled.
-    restoring: false
+    restoring: false,
+    // Ephemeral flag — set to true while a multi-navigation operation (clearing
+    // the cart, saving a cart to an Amazon list) drives one page load after
+    // another. observer.js suppresses the floating window's auto-reopen while it
+    // is set, so the popup doesn't rebuild and re-hit the lists API on every
+    // navigation. Like `restoring`, it's cleared in a finally block.
+    busy: false
   };
   async function readCarts() {
     const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -361,6 +367,8 @@ importScripts("ExtPay.js");
     if (alarm.name === EXTPAY_SYNC_ALARM) syncEntitlement();
   });
   syncEntitlement();
+  writeSettings({ busy: false, restoring: false }).catch(() => {
+  });
   chrome.storage.local.get(DEV_FLAG_KEY).then((r) => {
     DEBUG = r[DEV_FLAG_KEY] === true;
   });
@@ -705,6 +713,12 @@ importScripts("ExtPay.js");
       if (_opStatus && !_opStatus.active) _opStatus = null;
     }, 5e3);
   }
+  async function setUiBusy(on) {
+    try {
+      await writeSettings({ busy: !!on });
+    } catch (_e) {
+    }
+  }
   function notifyTab(tabId, payload) {
     if (tabId == null) return;
     try {
@@ -870,6 +884,14 @@ importScripts("ExtPay.js");
     }
   }
   async function clearAmazonCart(preferredHost, options = {}) {
+    await setUiBusy(true);
+    try {
+      return await clearAmazonCartImpl(preferredHost, options);
+    } finally {
+      await setUiBusy(false);
+    }
+  }
+  async function clearAmazonCartImpl(preferredHost, options = {}) {
     const { returnToOrigin = false, originUrl: providedOriginUrl = null } = options;
     const host = preferredHost || await inferAmazonHost();
     const cartUrl = `https://${host}/gp/cart/view.html`;
@@ -1134,6 +1156,18 @@ importScripts("ExtPay.js");
     for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
     return out;
   }
+  function pageMinimizeFloatingUi() {
+    const modal = document.getElementById("__styx-fab-modal");
+    const fab = document.getElementById("__styx-fab");
+    if (modal && !modal.hidden) {
+      modal.hidden = true;
+      if (fab) fab.hidden = false;
+    }
+    try {
+      sessionStorage.setItem("styx.fab.open.v1", "0");
+    } catch (_e) {
+    }
+  }
   function pageHighlightBulkConfirm() {
     return new Promise((resolve) => {
       console.log("[Styx Multi-Cart] searching for bulk-confirm button\u2026");
@@ -1247,7 +1281,10 @@ importScripts("ExtPay.js");
         }
         return null;
       };
+      const onAddPage = /\/gp\/aws\/cart\/add\.html/i.test(location.pathname || "");
       const findButton = () => {
+        if (!onAddPage) return { emptyBulkPage: true };
+        if (!hasRenderedBulkItems()) return { emptyBulkPage: true };
         for (const sel of SELECTORS) {
           const matches = document.querySelectorAll(sel);
           for (const el of matches) {
@@ -1527,6 +1564,13 @@ importScripts("ExtPay.js");
         await waitForTabReload(helperTab.id, 25e3);
         const loadingPrompt = chunks.length > 1 ? `Loading bulk add \u2014 batch ${c + 1} of ${chunks.length} (${chunk.length} items)\u2026` : `Loading bulk add for ${chunk.length} item${chunk.length === 1 ? "" : "s"}\u2026`;
         await showStatus(helperTab.id, loadingPrompt, "loading");
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: helperTab.id },
+            func: pageMinimizeFloatingUi
+          });
+        } catch (_e) {
+        }
         const hlRes = await chrome.scripting.executeScript({
           target: { tabId: helperTab.id },
           func: pageHighlightBulkConfirm
@@ -1608,11 +1652,25 @@ importScripts("ExtPay.js");
         };
       }
       const addedCount = allItems.length - missing.length;
-      const summary = addedCount > 0 ? `Bulk add only got ${addedCount} of ${allItems.length} items into your cart.
+      const MISSING_LIST_MAX = 8;
+      const missingLines = missing.slice(0, MISSING_LIST_MAX).map((it) => {
+        let label = (it.title || it.asin || "item").trim();
+        if (label.length > 70) label = label.slice(0, 69).trimEnd() + "\u2026";
+        const qty = Math.max(1, Number(it.quantity) || 1);
+        return qty > 1 ? `\u2022 ${label} (\xD7${qty})` : `\u2022 ${label}`;
+      });
+      if (missing.length > MISSING_LIST_MAX) {
+        missingLines.push(`\u2022 \u2026and ${missing.length - MISSING_LIST_MAX} more`);
+      }
+      const missingList = `
+
+Still missing:
+${missingLines.join("\n")}`;
+      const summary = (addedCount > 0 ? `Bulk add only got ${addedCount} of ${allItems.length} items into your cart.
 
 Would you like to restore the remaining ${missing.length} one at a time? This is slower but more reliable.` : `The bulk add didn't put any items in your cart \u2014 Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).
 
-Would you like to restore all ${allItems.length} items one at a time instead?`;
+Would you like to restore all ${allItems.length} items one at a time instead?`) + missingList;
       let stillOnConfirmPage = false;
       try {
         const tab = await chrome.tabs.get(helperTab.id);
@@ -1638,7 +1696,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
           style: "primary"
         });
       }
-      choices.push({ label: "Cancel", value: "cancel", style: "ghost" });
+      choices.push({ label: "Skip missed items", value: "cancel", style: "ghost" });
       let userChoice = "cancel";
       try {
         let promptTheme = null;
@@ -2021,7 +2079,178 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       console.error("[Styx Multi-Cart] restore failed", err);
     }
   }
-  async function wishlistAddAllToCart(items, host) {
+  function pageAddAllFromList(targetAsins) {
+    return new Promise((resolve) => {
+      const wanted = new Set(
+        (targetAsins || []).map((a) => String(a).toUpperCase())
+      );
+      const results = {
+        added: [],
+        alreadyInCart: [],
+        notFound: [],
+        notCartable: []
+      };
+      const sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
+      const itemEls = () => Array.from(document.querySelectorAll("#g-items li[data-itemid]"));
+      const asinOf = (li) => {
+        const a = li.querySelector("a.a-button-text[data-csa-c-item-id]");
+        const fromAnchor = a && a.getAttribute("data-csa-c-item-id");
+        if (fromAnchor && /^[A-Z0-9]{10}$/i.test(fromAnchor)) {
+          return fromAnchor.toUpperCase();
+        }
+        const dp = li.querySelector("a[href*='/dp/'], a[href*='/gp/product/']");
+        const m = dp && (dp.getAttribute("href") || "").match(
+          /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i
+        );
+        return m ? m[1].toUpperCase() : null;
+      };
+      const hasStepper = (li) => !!li.querySelector("button[data-action='a-stepper-increment']");
+      const atcAnchor = (li) => {
+        const id = li.getAttribute("data-itemid");
+        const a = li.querySelector("#pab-declarative-" + id + " a.a-button-text") || li.querySelector("[data-action='cta-add-to-cart'] a.a-button-text");
+        if (!a) return null;
+        const t = (a.textContent || "").trim().toLowerCase();
+        return t.startsWith("add to") && t.includes("cart") ? a : null;
+      };
+      async function scrollToLoadAll() {
+        const scrollTo = (y) => {
+          try {
+            window.scrollTo(0, y);
+          } catch (_e) {
+          }
+        };
+        let last = -1;
+        let stable = 0;
+        for (let i = 0; i < 40 && stable < 3; i++) {
+          scrollTo(document.body.scrollHeight);
+          await sleep2(400);
+          const n = itemEls().length;
+          if (n === last) stable++;
+          else {
+            stable = 0;
+            last = n;
+          }
+        }
+        scrollTo(0);
+        await sleep2(200);
+      }
+      async function run() {
+        await scrollToLoadAll();
+        const byAsin = /* @__PURE__ */ new Map();
+        for (const li of itemEls()) {
+          const asin = asinOf(li);
+          if (asin && !byAsin.has(asin)) byAsin.set(asin, li);
+        }
+        for (const asin of wanted) {
+          const li = byAsin.get(asin);
+          if (!li) {
+            results.notFound.push(asin);
+            continue;
+          }
+          if (hasStepper(li)) {
+            results.alreadyInCart.push(asin);
+            continue;
+          }
+          const anchor = atcAnchor(li);
+          if (!anchor) {
+            results.notCartable.push(asin);
+            continue;
+          }
+          try {
+            anchor.scrollIntoView({ block: "center" });
+          } catch (_e) {
+          }
+          await sleep2(120);
+          anchor.click();
+          let ok = false;
+          for (let t = 0; t < 12; t++) {
+            await sleep2(250);
+            if (hasStepper(li)) {
+              ok = true;
+              break;
+            }
+          }
+          (ok ? results.added : results.notCartable).push(asin);
+          await sleep2(300);
+        }
+        resolve(results);
+      }
+      run().catch((e) => {
+        console.warn("[Styx Multi-Cart] pageAddAllFromList error:", e);
+        resolve({ ...results, error: String(e && e.message || e) });
+      });
+    });
+  }
+  async function restoreViaListPage(target) {
+    const host = target.host || "www.amazon.com";
+    const listId = target.listId;
+    const items = (target.items || []).filter((it) => it && it.asin);
+    if (!listId || !items.length) {
+      return { ok: false, error: "no listId or items", host, missing: items };
+    }
+    const targetAsins = items.map((it) => String(it.asin).toUpperCase());
+    const listUrl = amazonListUrl(host, listId);
+    await writeSettings({ restoring: true });
+    try {
+      let helperTab;
+      try {
+        const [active] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true
+        });
+        if (active && isAmazonUrl(active.url)) helperTab = active;
+      } catch (_e) {
+      }
+      if (!helperTab) {
+        helperTab = await chrome.tabs.create({ url: listUrl, active: true });
+      } else {
+        await chrome.tabs.update(helperTab.id, { url: listUrl, active: true });
+      }
+      await waitForTabReload(helperTab.id, 25e3);
+      setOpStatus(
+        "Adding wishlist to cart",
+        `Adding ${items.length} item${items.length === 1 ? "" : "s"} from the list page\u2026`
+      );
+      await showStatus(
+        helperTab.id,
+        `Adding ${items.length} item${items.length === 1 ? "" : "s"} from the list\u2026`,
+        "loading"
+      );
+      let res = {};
+      try {
+        const r = await chrome.scripting.executeScript({
+          target: { tabId: helperTab.id },
+          func: pageAddAllFromList,
+          args: [targetAsins]
+        });
+        res = r && r[0] && r[0].result || {};
+      } catch (e) {
+        dinfo("[Styx Multi-Cart] list-page add-all injection failed:", e);
+        res = { error: String(e) };
+      }
+      let cart = null;
+      try {
+        cart = await scrapeCartInBackground(host);
+      } catch (_e) {
+      }
+      const inCart = /* @__PURE__ */ new Map();
+      if (cart && Array.isArray(cart.items)) {
+        for (const it of cart.items) {
+          inCart.set(String(it.asin).toUpperCase(), Number(it.quantity) || 1);
+        }
+      }
+      const missing = [];
+      for (const it of items) {
+        const want = Math.max(1, Number(it.quantity) || 1);
+        const have = inCart.get(String(it.asin).toUpperCase()) || 0;
+        if (have < want) missing.push({ ...it, quantity: want - have });
+      }
+      return { ok: true, host, helperTabId: helperTab.id, listRes: res, missing };
+    } finally {
+      await writeSettings({ restoring: false });
+    }
+  }
+  async function wishlistAddAllToCart(items, host, listId) {
     try {
       const cleanItems = (items || []).filter(
         (it) => it && it.asin && it.unavailable !== true
@@ -2030,7 +2259,8 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       const target = {
         items: cleanItems,
         host: host || "www.amazon.com",
-        name: "wishlist"
+        name: "wishlist",
+        listId: listId || null
       };
       const bulk = await restoreCartBulk(target);
       if (bulk.ok && bulk.userDeclinedFallback) return;
@@ -2055,11 +2285,46 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
       const fallbackItems = bulk.missing && bulk.missing.length ? bulk.missing : target.items;
       if (!bulk.ok) {
         dinfo(
-          "[Styx Multi-Cart] wishlist bulk add failed, falling back to per-item:",
+          "[Styx Multi-Cart] wishlist bulk add failed, falling back to list-page add:",
           bulk.error
         );
       }
-      await restoreCart({ ...target, items: fallbackItems });
+      let remainder = fallbackItems;
+      if (target.listId) {
+        const listOutcome = await restoreViaListPage({
+          ...target,
+          items: fallbackItems
+        });
+        if (listOutcome && listOutcome.ok) {
+          remainder = listOutcome.missing || [];
+        }
+      }
+      if (remainder.length === 0) {
+        const addedMsg = `Added ${cleanItems.length} item${cleanItems.length === 1 ? "" : "s"} to your Amazon cart`;
+        clearOpStatus(addedMsg);
+        try {
+          const [active] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true
+          });
+          const cartTabId = active && isAmazonUrl(active.url) ? active.id : (await chrome.tabs.create({
+            url: `https://${target.host}/gp/cart/view.html`,
+            active: true
+          })).id;
+          await chrome.tabs.update(cartTabId, {
+            url: `https://${target.host}/gp/cart/view.html`,
+            active: true
+          });
+          await waitForTabReload(cartTabId, 15e3);
+          await showStatus(cartTabId, addedMsg, "done");
+        } catch (_e) {
+        }
+        return;
+      }
+      dinfo(
+        `[Styx Multi-Cart] list-page add left ${remainder.length} item(s); running per-item engine.`
+      );
+      await restoreCart({ ...target, items: remainder });
     } catch (err) {
       console.error("[Styx Multi-Cart] wishlist add-all failed", err);
     }
@@ -2803,6 +3068,14 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
     );
   }
   async function saveCartToAmazonList(cart, opts = {}) {
+    await setUiBusy(true);
+    try {
+      return await saveCartToAmazonListImpl(cart, opts);
+    } finally {
+      await setUiBusy(false);
+    }
+  }
+  async function saveCartToAmazonListImpl(cart, opts = {}) {
     const host = cart.host || "www.amazon.com";
     const items = (cart.items || []).filter((it) => it && it.asin);
     if (!items.length) return { ok: false, error: "This cart has no items to save." };
@@ -3660,7 +3933,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`;
             sendResponse({ ok: true, started: true, total: items.length });
             setOpStatus("Adding wishlist to cart", "Starting\u2026");
             openStatusWindow();
-            setTimeout(() => wishlistAddAllToCart(items, msg.host), 0);
+            setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
             break;
           }
           case "MC_CLEAR_CURRENT": {

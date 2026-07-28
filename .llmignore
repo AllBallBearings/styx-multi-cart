@@ -1,0 +1,6 @@
+# generated / vendored — see memory: background.js built from src/background/index.js
+background.js
+ExtPay.js
+test-results/
+store-assets/
+*.zip

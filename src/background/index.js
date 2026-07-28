@@ -152,6 +152,12 @@ const DEFAULT_SETTINGS = {
   // observer.js ATC intercept stands down. Cleared in a finally block so a
   // crash or early return can never leave interception permanently disabled.
   restoring: false,
+  // Ephemeral flag — set to true while a multi-navigation operation (clearing
+  // the cart, saving a cart to an Amazon list) drives one page load after
+  // another. observer.js suppresses the floating window's auto-reopen while it
+  // is set, so the popup doesn't rebuild and re-hit the lists API on every
+  // navigation. Like `restoring`, it's cleared in a finally block.
+  busy: false,
 };
 
 // ---- Storage helpers ------------------------------------------------------
@@ -440,6 +446,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // install/update, or after the worker has been suspended). Doesn't block
 // other event registration because top-level awaits aren't allowed here.
 syncEntitlement();
+
+// Clear the ephemeral operation flags on SW startup. They're set in try/finally
+// around multi-navigation ops, but a hard SW kill mid-op can't run finally and
+// would leave them stuck true on disk — permanently suppressing the floating
+// window (busy) or the ATC intercept (restoring). A fresh SW means no op is in
+// flight, so resetting both is always safe. Fire-and-forget.
+writeSettings({ busy: false, restoring: false }).catch(() => {});
 
 // Hydrate the DEBUG flag from storage at SW startup, and keep it in sync
 // when the user flips Settings → Developer mode in the popup. mc.dev.v1
@@ -932,6 +945,19 @@ function clearOpStatus(doneTitle = "Done") {
 }
 
 /**
+ * Toggle the persisted `busy` flag that tells observer.js to stop auto-
+ * reopening the floating window while a multi-navigation operation runs (so
+ * the popup doesn't rebuild and re-hit the lists API on every page load).
+ * Fire-and-forget writes; callers pair setUiBusy(true) with a finally
+ * setUiBusy(false). Cheap enough to call directly. See DEFAULT_SETTINGS.busy.
+ */
+async function setUiBusy(on) {
+  try {
+    await writeSettings({ busy: !!on });
+  } catch (_e) { /* settings write failed — non-fatal */ }
+}
+
+/**
  * Fire-and-forget message to a specific tab's content script. Used to drive
  * the on-page Styx toast during long list-save operations. Swallows errors
  * (tab closed / navigated / no listener) — progress UI is best-effort.
@@ -1226,6 +1252,19 @@ async function scrapeCartInBackground(preferredHost) {
  *   function queries the active tab itself.
  */
 async function clearAmazonCart(preferredHost, options = {}) {
+  // Clearing deletes items one by one, reloading the cart page each time. Hold
+  // the `busy` flag across the whole run so observer.js doesn't auto-reopen the
+  // floating window (and re-hit the lists API) on every reload. finally clears
+  // it even on early-return/throw.
+  await setUiBusy(true);
+  try {
+    return await clearAmazonCartImpl(preferredHost, options);
+  } finally {
+    await setUiBusy(false);
+  }
+}
+
+async function clearAmazonCartImpl(preferredHost, options = {}) {
   const { returnToOrigin = false, originUrl: providedOriginUrl = null } = options;
   const host = preferredHost || (await inferAmazonHost());
   const cartUrl = `https://${host}/gp/cart/view.html`;
@@ -1659,6 +1698,27 @@ function chunkItemsForBulk(items, size = 30) {
 }
 
 /**
+ * Runs in the page context. Minimizes the floating Styx modal (observer.js)
+ * down to its FAB so it can't cover the bulk-confirm "Add To Cart" button —
+ * the modal restores its open state across navigations, so on the
+ * /gp/aws/cart/add.html confirm page it would otherwise sit right on top of
+ * the buybox we just highlighted. Element ids and the sessionStorage key
+ * must match FAB_MODAL_ID / FAB_ID / FAB_OPEN_KEY in observer.js.
+ */
+function pageMinimizeFloatingUi() {
+  const modal = document.getElementById("__styx-fab-modal");
+  const fab = document.getElementById("__styx-fab");
+  if (modal && !modal.hidden) {
+    modal.hidden = true;
+    if (fab) fab.hidden = false;
+  }
+  // Always clear the stored open flag: if this runs before observer.js has
+  // initialized on the fresh page, clearing it prevents the modal from
+  // re-opening itself a moment later.
+  try { sessionStorage.setItem("styx.fab.open.v1", "0"); } catch (_e) { /* ignore */ }
+}
+
+/**
  * Runs in the page context. Locates the "Add To Cart" button on
  * /gp/aws/cart/add.html, scrolls it into view, and applies a pulsing
  * orange highlight so the user can find it at a glance. Does NOT click —
@@ -1822,7 +1882,20 @@ function pageHighlightBulkConfirm() {
       return null;
     };
 
+    // The confirm page is ALWAYS /gp/aws/cart/add.html (buildBulkAddUrl). When
+    // Amazon rejects every requested ASIN it redirects the bulk URL to the
+    // regular cart page, which renders sponsored "Products related to items in
+    // your cart" cards — each with a real "Add to cart" button. Highlighting
+    // there would ring a random sponsored product (exactly the reported bug),
+    // so the entire search is gated to the add page. Off it → treat as an
+    // empty/rejected bulk result and let the caller fall back to per-item.
+    const onAddPage = /\/gp\/aws\/cart\/add\.html/i.test(location.pathname || "");
+
     const findButton = () => {
+      if (!onAddPage) return { emptyBulkPage: true };
+      // On the add page but Amazon shows "cart is empty" / rendered none of the
+      // requested ASINs → nothing legitimate to confirm; bail to per-item.
+      if (!hasRenderedBulkItems()) return { emptyBulkPage: true };
       for (const sel of SELECTORS) {
         const matches = document.querySelectorAll(sel);
         for (const el of matches) {
@@ -2209,6 +2282,15 @@ async function restoreCartBulk(savedCart) {
         : `Loading bulk add for ${chunk.length} item${chunk.length === 1 ? '' : 's'}…`;
       await showStatus(helperTab.id, loadingPrompt, "loading");
 
+      // Get the floating modal out of the way — it re-opens across
+      // navigations and lands right on top of the confirm button's buybox.
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: helperTab.id },
+          func: pageMinimizeFloatingUi,
+        });
+      } catch (_e) { /* best-effort — worst case the user drags it aside */ }
+
       // Try to highlight the confirm button. Two possible outcomes:
       //   (a) Confirm page rendered → button found → highlight + ask user to click.
       //   (b) Amazon redirected past it OR our selectors miss the button →
@@ -2318,9 +2400,27 @@ async function restoreCartBulk(savedCart) {
     // per-item fallback — they're already on the cart page and may want
     // to see the partial result before committing to a long restore.
     const addedCount = allItems.length - missing.length;
-    const summary = addedCount > 0
+
+    // Build a readable list of what didn't make it into the cart so the user
+    // can decide whether the slow per-item restore is worth it. Titles are
+    // truncated; a long tail is summarized as "…and N more" to keep the modal
+    // from growing past the confirm buttons.
+    const MISSING_LIST_MAX = 8;
+    const missingLines = missing.slice(0, MISSING_LIST_MAX).map((it) => {
+      let label = (it.title || it.asin || "item").trim();
+      if (label.length > 70) label = label.slice(0, 69).trimEnd() + "…";
+      const qty = Math.max(1, Number(it.quantity) || 1);
+      return qty > 1 ? `• ${label} (×${qty})` : `• ${label}`;
+    });
+    if (missing.length > MISSING_LIST_MAX) {
+      missingLines.push(`• …and ${missing.length - MISSING_LIST_MAX} more`);
+    }
+    const missingList = `\n\nStill missing:\n${missingLines.join("\n")}`;
+
+    const summary = (addedCount > 0
       ? `Bulk add only got ${addedCount} of ${allItems.length} items into your cart.\n\nWould you like to restore the remaining ${missing.length} one at a time? This is slower but more reliable.`
-      : `The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).\n\nWould you like to restore all ${allItems.length} items one at a time instead?`;
+      : `The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).\n\nWould you like to restore all ${allItems.length} items one at a time instead?`)
+      + missingList;
 
     // Detect whether the helper tab is still on the bulk confirm page.
     // If so, the user can still click the real "Add To Cart" themselves
@@ -2351,7 +2451,7 @@ async function restoreCartBulk(savedCart) {
         style: "primary",
       });
     }
-    choices.push({ label: "Cancel", value: "cancel", style: "ghost" });
+    choices.push({ label: "Skip missed items", value: "cancel", style: "ghost" });
 
     let userChoice = "cancel";
     try {
@@ -2872,7 +2972,247 @@ async function clearThenRestoreCart(target) {
 // clears the existing cart — but it reuses the same proven bulk-add engine
 // (and per-item fallback) that powers cart restore. Items arrive from
 // observer.js as { asin, quantity, title, url }.
-async function wishlistAddAllToCart(items, host) {
+/**
+ * Runs in the wishlist page's context (injected via executeScript). Clicks
+ * each list item's NATIVE "Add to Cart" control for the requested ASINs —
+ * Amazon adds 1 unit per click via AJAX with no page navigation, so this
+ * replaces per-PDP navigation for the common qty-1 case and sidesteps PDP
+ * protection-plan upsells entirely.
+ *
+ * Selectors are LIVE-VERIFIED (2026-07-24 spike):
+ *   • item:   #g-items li[data-itemid]  (data-itemid = Amazon item id)
+ *   • asin:   a.a-button-text[data-csa-c-item-id]  (asin sits on the anchor),
+ *             falling back to the item's /dp/<ASIN> link
+ *   • ATC:    #pab-declarative-<itemid> a.a-button-text  (the clickable <a>),
+ *             wrapper span carries data-action="cta-add-to-cart"
+ *   • added?: after a successful add the control is replaced by an a-stepper
+ *             (button[data-action="a-stepper-increment"]) — used as the
+ *             per-item "in cart" signal. NOTE: that stepper does NOT change
+ *             cart quantity, so this only ever adds 1 unit per item; the
+ *             caller reconciles against the real cart and sends any qty
+ *             shortfall to the per-item (PDP) engine.
+ *
+ * Returns { added:[asin], alreadyInCart:[asin], notFound:[asin],
+ *           notCartable:[asin], error? }.
+ */
+function pageAddAllFromList(targetAsins) {
+  // Injected — no service-worker helpers (dlog/etc.) in this scope. Use
+  // console.* only. executeScript awaits the returned Promise.
+  return new Promise((resolve) => {
+    const wanted = new Set(
+      (targetAsins || []).map((a) => String(a).toUpperCase())
+    );
+    const results = {
+      added: [],
+      alreadyInCart: [],
+      notFound: [],
+      notCartable: [],
+    };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    const itemEls = () =>
+      Array.from(document.querySelectorAll("#g-items li[data-itemid]"));
+
+    const asinOf = (li) => {
+      const a = li.querySelector("a.a-button-text[data-csa-c-item-id]");
+      const fromAnchor = a && a.getAttribute("data-csa-c-item-id");
+      if (fromAnchor && /^[A-Z0-9]{10}$/i.test(fromAnchor)) {
+        return fromAnchor.toUpperCase();
+      }
+      const dp = li.querySelector("a[href*='/dp/'], a[href*='/gp/product/']");
+      const m =
+        dp &&
+        (dp.getAttribute("href") || "").match(
+          /\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i
+        );
+      return m ? m[1].toUpperCase() : null;
+    };
+
+    const hasStepper = (li) =>
+      !!li.querySelector("button[data-action='a-stepper-increment']");
+
+    const atcAnchor = (li) => {
+      const id = li.getAttribute("data-itemid");
+      const a =
+        li.querySelector("#pab-declarative-" + id + " a.a-button-text") ||
+        li.querySelector("[data-action='cta-add-to-cart'] a.a-button-text");
+      // Variation items render "See all buying options" in the SAME container —
+      // clicking that navigates to the PDP and would abort this in-page loop.
+      // Only treat a genuine add-to-cart anchor as clickable; everything else is
+      // left for the caller's per-item (PDP) engine. Accept both Amazon's native
+      // "Add to Cart" and our relabeled "Add to Amazon Cart" (observer.js), while
+      // still rejecting "See all buying options" and friends.
+      if (!a) return null;
+      const t = (a.textContent || "").trim().toLowerCase();
+      return t.startsWith("add to") && t.includes("cart") ? a : null;
+    };
+
+    // Amazon lazy-renders wishlist rows on scroll — force them all in before
+    // we start matching, or later items simply won't exist in the DOM.
+    async function scrollToLoadAll() {
+      const scrollTo = (y) => {
+        try { window.scrollTo(0, y); } catch (_e) { /* non-scrollable context */ }
+      };
+      let last = -1;
+      let stable = 0;
+      for (let i = 0; i < 40 && stable < 3; i++) {
+        scrollTo(document.body.scrollHeight);
+        await sleep(400);
+        const n = itemEls().length;
+        if (n === last) stable++;
+        else {
+          stable = 0;
+          last = n;
+        }
+      }
+      scrollTo(0);
+      await sleep(200);
+    }
+
+    async function run() {
+      await scrollToLoadAll();
+
+      const byAsin = new Map();
+      for (const li of itemEls()) {
+        const asin = asinOf(li);
+        if (asin && !byAsin.has(asin)) byAsin.set(asin, li);
+      }
+
+      for (const asin of wanted) {
+        const li = byAsin.get(asin);
+        if (!li) {
+          results.notFound.push(asin);
+          continue;
+        }
+        if (hasStepper(li)) {
+          results.alreadyInCart.push(asin);
+          continue;
+        }
+        const anchor = atcAnchor(li);
+        if (!anchor) {
+          results.notCartable.push(asin);
+          continue;
+        }
+        try {
+          anchor.scrollIntoView({ block: "center" });
+        } catch (_e) { /* older browsers */ }
+        await sleep(120);
+        anchor.click();
+
+        // Confirm the add by waiting for the stepper to replace the button.
+        let ok = false;
+        for (let t = 0; t < 12; t++) {
+          await sleep(250);
+          if (hasStepper(li)) {
+            ok = true;
+            break;
+          }
+        }
+        (ok ? results.added : results.notCartable).push(asin);
+        await sleep(300); // gentle pacing so Amazon's AJAX keeps up
+      }
+      resolve(results);
+    }
+
+    run().catch((e) => {
+      console.warn("[Styx Multi-Cart] pageAddAllFromList error:", e);
+      resolve({ ...results, error: String((e && e.message) || e) });
+    });
+  });
+}
+
+/**
+ * Fallback restore path: add the given items to the Amazon cart by clicking
+ * each one's native "Add to Cart" button ON THE LIST PAGE (via
+ * pageAddAllFromList), then reconcile against the live cart. No per-item PDP
+ * navigation. Returns { ok, host, helperTabId, missing } where `missing`
+ * carries any qty shortfall (list adds only 1 unit each) or items the list
+ * couldn't add — the caller routes those to the per-item PDP engine.
+ *
+ * Requires a listId; without one there's no list URL to drive, so it returns
+ * ok:false with the full item set still "missing" for the caller to fall back.
+ */
+async function restoreViaListPage(target) {
+  const host = target.host || "www.amazon.com";
+  const listId = target.listId;
+  const items = (target.items || []).filter((it) => it && it.asin);
+  if (!listId || !items.length) {
+    return { ok: false, error: "no listId or items", host, missing: items };
+  }
+  const targetAsins = items.map((it) => String(it.asin).toUpperCase());
+  const listUrl = amazonListUrl(host, listId);
+
+  // Suspend the on-page ATC intercept while we click Amazon's native buttons,
+  // mirroring restoreCart. observer.js reads mc.settings.v1 via storage.onChanged.
+  await writeSettings({ restoring: true });
+  try {
+    // Reuse the user's active Amazon tab (they were on the list); else spawn one.
+    let helperTab;
+    try {
+      const [active] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (active && isAmazonUrl(active.url)) helperTab = active;
+    } catch (_e) { /* fall through to create */ }
+
+    if (!helperTab) {
+      helperTab = await chrome.tabs.create({ url: listUrl, active: true });
+    } else {
+      await chrome.tabs.update(helperTab.id, { url: listUrl, active: true });
+    }
+    await waitForTabReload(helperTab.id, 25000);
+
+    setOpStatus(
+      "Adding wishlist to cart",
+      `Adding ${items.length} item${items.length === 1 ? "" : "s"} from the list page…`
+    );
+    await showStatus(
+      helperTab.id,
+      `Adding ${items.length} item${items.length === 1 ? "" : "s"} from the list…`,
+      "loading"
+    );
+
+    let res = {};
+    try {
+      const r = await chrome.scripting.executeScript({
+        target: { tabId: helperTab.id },
+        func: pageAddAllFromList,
+        args: [targetAsins],
+      });
+      res = (r && r[0] && r[0].result) || {};
+    } catch (e) {
+      dinfo("[Styx Multi-Cart] list-page add-all injection failed:", e);
+      res = { error: String(e) };
+    }
+
+    // Reconcile against the real cart — the on-page stepper is only a hint.
+    let cart = null;
+    try {
+      cart = await scrapeCartInBackground(host);
+    } catch (_e) { /* treat as empty → everything counts as missing */ }
+    const inCart = new Map();
+    if (cart && Array.isArray(cart.items)) {
+      for (const it of cart.items) {
+        inCart.set(String(it.asin).toUpperCase(), Number(it.quantity) || 1);
+      }
+    }
+    const missing = [];
+    for (const it of items) {
+      const want = Math.max(1, Number(it.quantity) || 1);
+      const have = inCart.get(String(it.asin).toUpperCase()) || 0;
+      if (have < want) missing.push({ ...it, quantity: want - have });
+    }
+
+    return { ok: true, host, helperTabId: helperTab.id, listRes: res, missing };
+  } finally {
+    // restoreCart (if the caller runs it next) re-sets restoring:true itself,
+    // so releasing here is safe regardless of what follows.
+    await writeSettings({ restoring: false });
+  }
+}
+
+async function wishlistAddAllToCart(items, host, listId) {
   try {
     const cleanItems = (items || []).filter(
       (it) => it && it.asin && it.unavailable !== true
@@ -2882,6 +3222,7 @@ async function wishlistAddAllToCart(items, host) {
       items: cleanItems,
       host: host || "www.amazon.com",
       name: "wishlist",
+      listId: listId || null,
     };
 
     // Fast path: Amazon's batch add endpoint, same as cart restore.
@@ -2910,18 +3251,65 @@ async function wishlistAddAllToCart(items, host) {
       return;
     }
 
-    // Hard failure OR partial where the user chose "Add one by one" — drive
-    // the remainder through the per-item engine (also additive, no clear).
+    // Bulk didn't fully land (hard failure, or partial where the user chose to
+    // continue). Remainder to recover:
     const fallbackItems = (bulk.missing && bulk.missing.length)
       ? bulk.missing
       : target.items;
     if (!bulk.ok) {
       dinfo(
-        "[Styx Multi-Cart] wishlist bulk add failed, falling back to per-item:",
+        "[Styx Multi-Cart] wishlist bulk add failed, falling back to list-page add:",
         bulk.error
       );
     }
-    await restoreCart({ ...target, items: fallbackItems });
+
+    // Preferred fallback: click each item's native "Add to Cart" ON THE LIST
+    // PAGE — no per-PDP navigation, and it skips PDP upsells. Reconciliation
+    // inside restoreViaListPage returns whatever the list couldn't fully add
+    // (qty shortfalls, unavailable rows), which then goes to the PDP engine.
+    let remainder = fallbackItems;
+    if (target.listId) {
+      const listOutcome = await restoreViaListPage({
+        ...target,
+        items: fallbackItems,
+      });
+      if (listOutcome && listOutcome.ok) {
+        remainder = listOutcome.missing || [];
+      }
+    }
+
+    if (remainder.length === 0) {
+      // Everything landed via the list page → take the user to their cart.
+      const addedMsg = `Added ${cleanItems.length} item${cleanItems.length === 1 ? "" : "s"} to your Amazon cart`;
+      clearOpStatus(addedMsg);
+      try {
+        const [active] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        const cartTabId =
+          active && isAmazonUrl(active.url)
+            ? active.id
+            : (await chrome.tabs.create({
+                url: `https://${target.host}/gp/cart/view.html`,
+                active: true,
+              })).id;
+        await chrome.tabs.update(cartTabId, {
+          url: `https://${target.host}/gp/cart/view.html`,
+          active: true,
+        });
+        await waitForTabReload(cartTabId, 15000);
+        await showStatus(cartTabId, addedMsg, "done");
+      } catch (_e) { /* tab may have closed — fine */ }
+      return;
+    }
+
+    // Anything the list page couldn't fully add (multi-qty extras, unavailable,
+    // format-choice items) → per-item PDP engine. It lands on the cart itself.
+    dinfo(
+      `[Styx Multi-Cart] list-page add left ${remainder.length} item(s); running per-item engine.`
+    );
+    await restoreCart({ ...target, items: remainder });
   } catch (err) {
     console.error("[Styx Multi-Cart] wishlist add-all failed", err);
   }
@@ -4040,6 +4428,18 @@ async function setListQuantities(host, listId, items) {
  * of partial failure — reports added/failed counts.
  */
 async function saveCartToAmazonList(cart, opts = {}) {
+  // Saving drives one product page per item to feed Amazon's Add-to-List
+  // chooser — many sequential navigations. Suppress the floating window's
+  // auto-reopen for the duration (same rationale as clearAmazonCart).
+  await setUiBusy(true);
+  try {
+    return await saveCartToAmazonListImpl(cart, opts);
+  } finally {
+    await setUiBusy(false);
+  }
+}
+
+async function saveCartToAmazonListImpl(cart, opts = {}) {
   const host = cart.host || "www.amazon.com";
   const items = (cart.items || []).filter((it) => it && it.asin);
   if (!items.length) return { ok: false, error: "This cart has no items to save." };
@@ -5148,7 +5548,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({ ok: true, started: true, total: items.length });
           setOpStatus("Adding wishlist to cart", "Starting…");
           openStatusWindow(); // non-blocking
-          setTimeout(() => wishlistAddAllToCart(items, msg.host), 0);
+          setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
           break;
         }
 
