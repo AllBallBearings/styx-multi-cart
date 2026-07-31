@@ -474,7 +474,9 @@ html[data-surface="panel"] .mc-list-block {
 
 .mc-list-header {
   display: flex;
-  align-items: baseline;
+  /* center, not baseline — the heading row now carries a pill button and an
+     icon button, which baseline alignment would leave visually offset. */
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
   /* Let the action group drop to its own line when the heading + buttons don't
@@ -500,6 +502,77 @@ html[data-surface="panel"] .mc-list-block {
   padding: 1px 7px;
   border-radius: 999px;
   border: 1px solid var(--mc-line);
+}
+
+/* The cart count IS the "open on Amazon" button — styled as a pill so the
+   number reads as clickable rather than as a passive badge. Sits on the
+   heading row, leaving the row below free for the cart actions. */
+.mc-count-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--mc-fg-soft);
+  background: var(--mc-bg-sunk);
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--mc-line);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.mc-count-btn:hover {
+  background: var(--mc-bg-soft);
+  color: var(--mc-fg);
+  border-color: var(--mc-line-strong);
+}
+
+.mc-count-btn:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 1px;
+}
+
+.mc-count-btn-num {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mc-fg);
+}
+
+.mc-count-btn-arrow {
+  width: 9px;
+  height: 9px;
+  opacity: 0.55;
+}
+
+/* Compact icon-only variant for the heading row (refresh). */
+.mc-icon-btn-xs {
+  width: 22px;
+  height: 22px;
+}
+
+.mc-icon-btn-xs svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* The refresh icon spins while a reload is in flight. withLoading() adds
+   .mc-loading; the .mc-btn spinner rules don't apply to .mc-icon-btn, so the
+   icon itself spins instead. Reuses the mc-spin keyframes defined below. */
+.mc-icon-btn-xs.mc-loading {
+  pointer-events: none;
+}
+
+.mc-icon-btn-xs.mc-loading svg {
+  animation: mc-spin 900ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-icon-btn-xs.mc-loading svg {
+    animation: none;
+    opacity: 0.5;
+  }
 }
 
 .mc-list {
@@ -1185,8 +1258,18 @@ body.mc-combine-active .mc-item:hover {
 
 .mc-modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* Three-action dialogs (e.g. "Save & Empty" / "Just Empty" / "Cancel") exceed
+   the card width at the 380px popup size and in the floating panel. Without
+   these, flex-end pushes the overflow out past the card's LEFT edge and the
+   primary button gets clipped. Wrapping above keeps them inside; not shrinking
+   below their label width keeps them readable. */
+.mc-modal-actions .mc-btn {
+  flex: 0 0 auto;
 }
 
 .mc-empty {

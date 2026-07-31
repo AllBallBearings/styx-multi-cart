@@ -435,7 +435,7 @@ importScripts("ExtPay.js");
     return {
       allowed: false,
       code: premium ? "PREMIUM_LIMIT_REACHED" : "FREE_LIMIT_REACHED",
-      reason: premium ? `You've reached the maximum of ${limit} saved carts.` : `Free plan is limited to ${limit} saved carts. Upgrade to Premium for up to ${PREMIUM_CART_LIMIT}.`,
+      reason: premium ? `You've reached the maximum of ${limit} saved carts.` : `Free plan is limited to ${limit} carts. Upgrade to Premium for unlimited carts.`,
       current,
       limit,
       remaining: 0,
@@ -2336,6 +2336,62 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
       console.error("[Styx Multi-Cart] clear failed", err);
     }
   }
+  async function saveThenClearInBackground(cart, { progressTabId, originUrl, clearAfter = true } = {}) {
+    let saved;
+    try {
+      saved = await saveCartToAmazonList(
+        { host: cart.host, name: cart.name, items: cart.items },
+        { progressTabId }
+      );
+    } catch (err) {
+      console.error("[Styx Multi-Cart] save-cart: save threw", err);
+      saved = { ok: false, error: String(err && err.message || err) };
+    }
+    if (!saved || !saved.ok) {
+      const why = saved && saved.error || "Could not save your cart.";
+      clearOpStatus(`Couldn't save \u2014 cart left untouched. ${why}`);
+      notifyTab(progressTabId, {
+        type: "MC_LIST_SAVE_DONE",
+        ok: false,
+        title: "Couldn't save your cart",
+        detail: `Your Amazon cart was left as-is. ${why}`,
+        hideAfter: 7e3
+      });
+      return;
+    }
+    const savedNote = saved.failed ? `Saved ${saved.added}/${saved.total} items` : `Saved ${saved.added} item${saved.added === 1 ? "" : "s"}`;
+    if (!clearAfter) {
+      clearOpStatus(`${savedNote} to "${cart.name}" \u2014 your cart is untouched.`);
+      notifyTab(progressTabId, {
+        type: "MC_LIST_SAVE_DONE",
+        ok: true,
+        title: "Cart saved for later",
+        detail: `${savedNote} to "${cart.name}". Your Amazon cart is untouched.`,
+        hideAfter: 6e3
+      });
+      return;
+    }
+    setOpStatus("Clearing cart", `${savedNote} \u2014 now clearing your cart\u2026`);
+    try {
+      await clearAmazonCart(cart.host, { returnToOrigin: true, originUrl });
+      notifyTab(progressTabId, {
+        type: "MC_LIST_SAVE_DONE",
+        ok: true,
+        title: "Saved and cleared",
+        detail: `${savedNote} to "${cart.name}". Your Amazon cart is empty.`,
+        hideAfter: 6e3
+      });
+    } catch (err) {
+      console.error("[Styx Multi-Cart] save-and-clear: clear failed", err);
+      notifyTab(progressTabId, {
+        type: "MC_LIST_SAVE_DONE",
+        ok: false,
+        title: "Saved, but couldn't clear",
+        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+        hideAfter: 8e3
+      });
+    }
+  }
   async function isUpsellTab(tabId) {
     try {
       const tab = await chrome.tabs.get(tabId);
@@ -3948,18 +4004,17 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             setTimeout(clearCurrentCartInBackground, 0);
             break;
           }
-          case "MC_SAVE_AND_CLEAR": {
-            {
-              const existing = await readCarts();
-              const ent = await readEntitlement();
-              const gate = canCreateSavedCart(existing, ent);
-              if (!gate.allowed) {
-                sendResponse({ ok: false, ...gate, error: gate.reason });
-                break;
-              }
-            }
+          case "MC_GET_CART_COUNT": {
+            const cartCount = await getActiveAmazonCartCount(msg.host);
+            sendResponse({ ok: true, count: cartCount });
+            break;
+          }
+          case "MC_SAVE_AND_CLEAR":
+          case "MC_SAVE_FOR_LATER": {
+            const scClearAfter = msg.type === "MC_SAVE_AND_CLEAR";
             const [scOriginTab] = await chrome.tabs.query({ active: true, currentWindow: true });
             const scOriginUrl = scOriginTab && scOriginTab.url && isAmazonUrl(scOriginTab.url) && !isAmazonCartUrl(scOriginTab.url) ? scOriginTab.url : null;
+            const scProgressTabId = _sender && _sender.tab && _sender.tab.id || null;
             let scCart;
             try {
               scCart = await scrapeCartInBackground();
@@ -3974,33 +4029,25 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
               sendResponse({ ok: false, error: "Cart appears empty \u2014 nothing to save." });
               break;
             }
-            const carts = await readCarts();
-            {
-              const ent = await readEntitlement();
-              const gate = canCreateSavedCart(carts, ent);
-              if (!gate.allowed) {
-                sendResponse({ ok: false, ...gate, error: gate.reason });
-                break;
-              }
-            }
-            carts.unshift({
-              id: makeId(),
-              name: msg.name || "Untitled cart",
-              host: scCart.host,
-              savedAt: scCart.capturedAt,
-              lastUsedAt: Date.now(),
-              items: scCart.items
-            });
-            await writeCarts(carts);
             const savedCount = scCart.items.length;
-            const savedHost = scCart.host;
-            sendResponse({ ok: true, saved: savedCount, removed: "pending" });
-            setOpStatus("Clearing cart", `Saved \u2014 now clearing ${savedCount} item${savedCount === 1 ? "" : "s"}\u2026`);
+            sendResponse({ ok: true, started: true, saving: savedCount });
+            setOpStatus("Saving cart", `Saving ${savedCount} item${savedCount === 1 ? "" : "s"} to a new Amazon list\u2026`);
             openStatusWindow();
-            setTimeout(() => clearAmazonCart(savedHost, {
-              returnToOrigin: true,
-              originUrl: scOriginUrl
-            }), 0);
+            setTimeout(() => saveThenClearInBackground(
+              {
+                // No cart.id → saveCartToAmazonList creates a new list and skips
+                // the saved-cart link persistence, so nothing lands in the
+                // legacy local store.
+                host: scCart.host,
+                name: msg.name && String(msg.name).trim() || "Amazon cart",
+                items: scCart.items
+              },
+              {
+                progressTabId: scProgressTabId,
+                originUrl: scOriginUrl,
+                clearAfter: scClearAfter
+              }
+            ), 0);
             break;
           }
           case "MC_GET_INTERCEPT": {

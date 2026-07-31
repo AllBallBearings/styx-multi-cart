@@ -16,7 +16,7 @@
         validate_assets.py  (1,311 tok)
       SKILL.md  (1,791 tok)
   launch.json  (117 tok)
-  settings.local.json  (2,036 tok)
+  settings.local.json  (2,389 tok)
 .github/
   ISSUE_TEMPLATE/
     bug_report.md  (171 tok)
@@ -112,7 +112,7 @@ scripts/
   sync-safari-resources.sh  (585 tok)
 src/
   background/
-    index.js  (54,779 tok)
+    index.js  (58,866 tok)
 tests/
   e2e/
     fixtures.js  (3,369 tok)
@@ -138,6 +138,7 @@ tests/
     extpay-sync.test.js  (1,829 tok)
     helpers.test.js  (3,307 tok)
     list-access.test.js  (825 tok)
+    list-page-add.test.js  (1,318 tok)
     manifest-floating.test.js  (827 tok)
     native-sync.test.js  (855 tok)
     observer-atc-intercept.test.js  (4,790 tok)
@@ -152,12 +153,12 @@ README.md  (2,259 tok)
 content.js  (6,377 tok)
 generate_icons.html  (2,121 tok)
 manifest.json  (1,602 tok)
-observer.js  (36,400 tok)
+observer.js  (38,592 tok)
 package.json  (235 tok)
 playwright.config.js  (192 tok)
-popup.css  (13,707 tok)
-popup.html  (9,266 tok)
-popup.js  (23,973 tok)
+popup.css  (13,852 tok)
+popup.html  (9,256 tok)
+popup.js  (24,339 tok)
 status.css  (1,010 tok)
 status.html  (897 tok)
 status.js  (505 tok)
@@ -372,7 +373,7 @@ store-assets/
   // mc.dev.v1 flag in chrome.storage.local). When it's on, dlog/dwarn print to
   // this page's console AND forward to the service worker's in-memory ring
   // buffer, so the popup's "Copy diagnostic logs" button can gather logs from
-… (3119 more non-blank lines elided)
+… (3293 more non-blank lines elided)
 ```
 
 ### `package.json`
@@ -432,7 +433,7 @@ export default defineConfig({ testDir: "./tests/e2e", testMatch: /.*\.spec\.js$/
   --mc-accent-strong: #e88a00;
   --mc-accent-ink: #1a1209;
   --mc-link: #0066c0;
-… (1850 more non-blank lines elided)
+… (1860 more non-blank lines elided)
 ```
 
 ### `popup.html`
@@ -457,7 +458,7 @@ export default defineConfig({ testDir: "./tests/e2e", testMatch: /.*\.spec\.js$/
           <!-- Background tile -->
           <rect width="32" height="32" rx="7" fill="#131a22" />
           <!-- Top cart (apex of the pyramid) -->
-… (1047 more non-blank lines elided)
+… (1045 more non-blank lines elided)
 ```
 
 ### `popup.js`
@@ -482,7 +483,7 @@ export default defineConfig({ testDir: "./tests/e2e", testMatch: /.*\.spec\.js$/
     document.documentElement.dataset.surface = _surface;
   }
   // In the side panel (and the floating modal iframe), window.close() would
-… (2487 more non-blank lines elided)
+… (2517 more non-blank lines elided)
 ```
 
 ### `status.css`
@@ -1767,6 +1768,7 @@ let _opStatus = null;
 let _statusWindowId = null;
 function setOpStatus(title, detail = "")
 function clearOpStatus(doneTitle = "Done")
+async function setUiBusy(on)
 function notifyTab(tabId, payload)
 async function openStatusWindow()
 const AMAZON_TLDS = [ "amazon.com", "amazon.co.uk", "amazon.ca", "amazon.com.au", "amazon.de", "amazon.fr", "amazon.it", "amazon.es", "amazon.co.jp", "amazon.in…
@@ -1783,6 +1785,7 @@ async function getActiveAmazonTab(preferredHost)
 async function findAmazonCartTab(preferredHost)
 async function scrapeCartInBackground(preferredHost)
 async function clearAmazonCart(preferredHost, options = {})
+async function clearAmazonCartImpl(preferredHost, options = {})
 async function getActiveAmazonCartCount(preferredHost)
 async function getAmazonCartCountDetailedFromTab(tabId)
 async function getAmazonCartCountFromTab(tabId)
@@ -1791,13 +1794,16 @@ async function sendToContent(tabId, message)
 const STYX_ASSOCIATE_TAG = "styxmcart-20";
 function buildBulkAddUrl(host, items, associateTag)
 function chunkItemsForBulk(items, size = 30)
+function pageMinimizeFloatingUi()
 function pageHighlightBulkConfirm()
 function pagePromptChoice(title, message, choices, theme)
 async function waitForUserBulkConfirm(tabId, timeoutMs = 5 * 60 * 1000)
 async function restoreCartBulk(savedCart)
 async function restoreCart(savedCart, onProgress)
 async function clearThenRestoreCart(target)
-async function wishlistAddAllToCart(items, host)
+function pageAddAllFromList(targetAsins)
+async function restoreViaListPage(target)
+async function wishlistAddAllToCart(items, host, listId)
 async function clearCurrentCartInBackground()
 async function isUpsellTab(tabId)
 async function waitForUserProductFormatChoice(tabId, item)
@@ -1825,6 +1831,7 @@ async function findAmazonListIdByName(host, name)
 async function addItemToList(host, listId, asin)
 async function setListQuantities(host, listId, items)
 async function saveCartToAmazonList(cart, opts = {})
+async function saveCartToAmazonListImpl(cart, opts = {})
 function pageScrapeAmazonLists()
 function pageScrapeSingleList()
 function pageCreateListAndAdd(name)
@@ -2138,6 +2145,21 @@ const FREE = { tier: "free", premiumUntil: null };
 const PREMIUM = { tier: "premium", premiumUntil: null };
 function lists(...kinds)
 const accessOf = (res) => res.lists.map((l) => l.access);
+```
+
+### `tests/unit/list-page-add.test.js`
+```js
+import { describe, expect, it } from "vitest";
+import { JSDOM } from "jsdom";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+const here = dirname(fileURLToPath(import.meta.url));
+const source = readFileSync(resolve(here, "../../src/background/index.js"), "utf8");
+function extractFunction(name)
+const pageAddAllFromList = new Function( `${extractFunction("pageAddAllFromList")}; return pageAddAllFromList;` )();
+function itemHtml(itemid, asin, { withStepper = false, label = "Add to Cart" } = {})
+function withDom(html, fn)
 ```
 
 ### `tests/unit/manifest-floating.test.js`

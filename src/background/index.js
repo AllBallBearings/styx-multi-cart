@@ -538,7 +538,7 @@ function canCreateSavedCart(carts, ent, nowMs = Date.now()) {
     code: premium ? "PREMIUM_LIMIT_REACHED" : "FREE_LIMIT_REACHED",
     reason: premium
       ? `You've reached the maximum of ${limit} saved carts.`
-      : `Free plan is limited to ${limit} saved carts. Upgrade to Premium for up to ${PREMIUM_CART_LIMIT}.`,
+      : `Free plan is limited to ${limit} carts. Upgrade to Premium for unlimited carts.`,
     current,
     limit,
     remaining: 0,
@@ -3323,6 +3323,88 @@ async function clearCurrentCartInBackground() {
   }
 }
 
+// Snapshot the live cart into a NEW Amazon list, and — when `clearAfter` is
+// set — clear the cart afterwards. Backs both "Save & Clear" (from the
+// clear-cart confirm dialog) and "Save Cart for Later" (save only).
+//
+// Composed here rather than in the message handler because saving drives one
+// background tab per item — far too slow to hold a sendResponse channel open,
+// and the popup that initiated it has usually closed by then. Progress rides
+// the status window + the on-page toast instead.
+//
+// The clear is deliberately gated on a successful save: clearing a cart whose
+// snapshot failed would destroy the only copy of it.
+async function saveThenClearInBackground(
+  cart,
+  { progressTabId, originUrl, clearAfter = true } = {}
+) {
+  let saved;
+  try {
+    saved = await saveCartToAmazonList(
+      { host: cart.host, name: cart.name, items: cart.items },
+      { progressTabId }
+    );
+  } catch (err) {
+    console.error("[Styx Multi-Cart] save-cart: save threw", err);
+    saved = { ok: false, error: String((err && err.message) || err) };
+  }
+
+  if (!saved || !saved.ok) {
+    const why = (saved && saved.error) || "Could not save your cart.";
+    clearOpStatus(`Couldn't save — cart left untouched. ${why}`);
+    // DONE, not PROGRESS: PROGRESS leaves the on-page toast spinning forever.
+    notifyTab(progressTabId, {
+      type: "MC_LIST_SAVE_DONE",
+      ok: false,
+      title: "Couldn't save your cart",
+      detail: `Your Amazon cart was left as-is. ${why}`,
+      hideAfter: 7000,
+    });
+    return;
+  }
+
+  const savedNote = saved.failed
+    ? `Saved ${saved.added}/${saved.total} items`
+    : `Saved ${saved.added} item${saved.added === 1 ? "" : "s"}`;
+
+  if (!clearAfter) {
+    clearOpStatus(`${savedNote} to "${cart.name}" — your cart is untouched.`);
+    notifyTab(progressTabId, {
+      type: "MC_LIST_SAVE_DONE",
+      ok: true,
+      title: "Cart saved for later",
+      detail: `${savedNote} to "${cart.name}". Your Amazon cart is untouched.`,
+      hideAfter: 6000,
+    });
+    return;
+  }
+
+  setOpStatus("Clearing cart", `${savedNote} — now clearing your cart…`);
+
+  try {
+    await clearAmazonCart(cart.host, { returnToOrigin: true, originUrl });
+    // On the happy path the clear navigates the tab, which tears the toast
+    // down with the page. This only lands if the tab survived.
+    notifyTab(progressTabId, {
+      type: "MC_LIST_SAVE_DONE",
+      ok: true,
+      title: "Saved and cleared",
+      detail: `${savedNote} to "${cart.name}". Your Amazon cart is empty.`,
+      hideAfter: 6000,
+    });
+  } catch (err) {
+    console.error("[Styx Multi-Cart] save-and-clear: clear failed", err);
+    // Without this the toast spins forever on a failed clear.
+    notifyTab(progressTabId, {
+      type: "MC_LIST_SAVE_DONE",
+      ok: false,
+      title: "Saved, but couldn't clear",
+      detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+      hideAfter: 8000,
+    });
+  }
+}
+
 async function isUpsellTab(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -5569,21 +5651,29 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
-        case "MC_SAVE_AND_CLEAR": {
-          // Convenience: scrape + save synchronously (using background tab so
-          // the user doesn't need to be on the cart page), then clear in the
-          // background (fire-and-forget) so the message channel stays open.
+        case "MC_GET_CART_COUNT": {
+          // Pre-flight for the clear-cart confirm dialog so it can name the
+          // stakes ("Save these 12 items…"). Cheap: reuses the active Amazon
+          // tab and never opens one. Resolves null when there's no such tab,
+          // in which case the dialog falls back to generic wording.
+          const cartCount = await getActiveAmazonCartCount(msg.host);
+          sendResponse({ ok: true, count: cartCount });
+          break;
+        }
 
-          // Tier gate: check BEFORE scraping so we don't waste a tab cycle.
-          {
-            const existing = await readCarts();
-            const ent = await readEntitlement();
-            const gate = canCreateSavedCart(existing, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-          }
+        case "MC_SAVE_AND_CLEAR":
+        case "MC_SAVE_FOR_LATER": {
+          // MC_SAVE_AND_CLEAR — "Save & Clear" from the clear-cart confirm
+          // dialog: snapshot the live cart into a NEW Amazon list, then clear.
+          // MC_SAVE_FOR_LATER — the panel's "Save Cart for Later": same save,
+          // no clear.
+          //
+          // Both are deliberately UNGATED. This is the free on-ramp — the
+          // same ungated driver the cart-page "Save cart to a new list"
+          // button uses. Do not reintroduce a canCreateSavedCart check here;
+          // the saved cart is an Amazon list, not one of the legacy local
+          // carts that limit counts.
+          const scClearAfter = msg.type === "MC_SAVE_AND_CLEAR";
 
           // Capture the origin page NOW, before scraping, so we can return
           // the user to it after the cart is cleared (scraping may take a few
@@ -5592,6 +5682,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const scOriginUrl = (scOriginTab && scOriginTab.url &&
             isAmazonUrl(scOriginTab.url) && !isAmazonCartUrl(scOriginTab.url))
             ? scOriginTab.url : null;
+          // Progress toasts land on the initiating Amazon tab when the popup
+          // is running as the in-page floating panel; null in the standalone
+          // popup, where the status window carries progress instead.
+          const scProgressTabId = (_sender && _sender.tab && _sender.tab.id) || null;
 
           let scCart;
           try {
@@ -5607,36 +5701,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             sendResponse({ ok: false, error: "Cart appears empty — nothing to save." });
             break;
           }
-          const carts = await readCarts();
-          // Re-check gate after scraping (concurrent saves are possible).
-          {
-            const ent = await readEntitlement();
-            const gate = canCreateSavedCart(carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-          }
-          carts.unshift({
-            id: makeId(),
-            name: msg.name || "Untitled cart",
-            host: scCart.host,
-            savedAt: scCart.capturedAt,
-            lastUsedAt: Date.now(),
-            items: scCart.items,
-          });
-          await writeCarts(carts);
-          // Respond immediately so the popup spinner clears; the actual cart
-          // clearing happens in the background via clearAmazonCart().
+
+          // Ack now: the save opens one background tab per item, which far
+          // outlives this message channel (and the popup that sent it).
           const savedCount = scCart.items.length;
-          const savedHost = scCart.host;
-          sendResponse({ ok: true, saved: savedCount, removed: "pending" });
-          setOpStatus("Clearing cart", `Saved — now clearing ${savedCount} item${savedCount === 1 ? '' : 's'}…`);
+          sendResponse({ ok: true, started: true, saving: savedCount });
+          setOpStatus("Saving cart", `Saving ${savedCount} item${savedCount === 1 ? "" : "s"} to a new Amazon list…`);
           openStatusWindow(); // non-blocking — don't await
-          setTimeout(() => clearAmazonCart(savedHost, {
-            returnToOrigin: true,
-            originUrl: scOriginUrl,
-          }), 0);
+          setTimeout(() => saveThenClearInBackground(
+            {
+              // No cart.id → saveCartToAmazonList creates a new list and skips
+              // the saved-cart link persistence, so nothing lands in the
+              // legacy local store.
+              host: scCart.host,
+              name: (msg.name && String(msg.name).trim()) || "Amazon cart",
+              items: scCart.items,
+            },
+            {
+              progressTabId: scProgressTabId,
+              originUrl: scOriginUrl,
+              clearAfter: scClearAfter,
+            }
+          ), 0);
           break;
         }
 

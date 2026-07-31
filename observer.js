@@ -2061,7 +2061,7 @@
             <div class="styx-pk-sub">${priceBit}Qty <b>${qty}</b></div>
           </div>
         </div>
-        <div class="styx-pk-prompt">Add to which saved cart?</div>
+        <div class="styx-pk-prompt">Add to which cart?</div>
         <ul class="styx-pk-list">${cartsHtml}</ul>
         <button type="button" class="styx-pk-create-row" data-styx-action="create-new">+ Create new cart</button>
         <div class="styx-pk-footer">
@@ -2886,10 +2886,23 @@
   }
 
   // Background pushes progress here during a cart→list save.
+  //
+  // PROGRESS keeps the spinner up; DONE is the terminal state. A save driven
+  // from the panel (rather than from this page's own button) has no local code
+  // awaiting a response, so without a DONE message the toast would spin
+  // forever even after the save succeeded.
   try {
     chrome.runtime.onMessage.addListener((m) => {
-      if (m && m.type === "MC_LIST_SAVE_PROGRESS") {
+      if (!m) return;
+      if (m.type === "MC_LIST_SAVE_PROGRESS") {
         showStyxToast(m.detail || "Working…");
+      } else if (m.type === "MC_LIST_SAVE_DONE") {
+        finishStyxToast(
+          m.ok ? "done" : "error",
+          m.title || (m.ok ? "Cart saved" : "Couldn't save to Amazon"),
+          m.detail || "",
+          m.hideAfter
+        );
       }
     });
   } catch (_e) { /* no runtime — ignore */ }
@@ -2950,7 +2963,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = STYX_SAVE_CART_BTN_ID;
-    btn.title = "Save everything in this cart to a new Amazon wish list";
+    btn.title = "Save everything in this cart to a new Amazon list";
     btn.innerHTML =
       STYX_MARK_SVG("styx-btn-mark") +
       '<span class="styx-save-cart-label">' + STYX_SAVE_CART_LABEL + "</span>";

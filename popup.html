@@ -189,7 +189,7 @@
         <span id="mc-tier-badge" class="mc-tier-badge" data-tier="free"
           >Free</span
         >
-        <span id="mc-tier-usage" class="mc-tier-usage">0 / 3 saved carts</span>
+        <span id="mc-tier-usage" class="mc-tier-usage">0 / 3 carts</span>
         <button
           id="mc-tier-upgrade"
           class="mc-btn mc-btn-primary mc-btn-sm mc-tier-upgrade"
@@ -241,24 +241,51 @@
 
       <div class="mc-list-header">
         <h2>Your Carts</h2>
-        <span id="mc-list-count" class="mc-count">0</span>
+        <!-- The cart count doubles as the "open them on Amazon" control, so
+             the number itself reads as clickable. -->
+        <button
+          id="mc-goto-carts"
+          class="mc-count-btn"
+          type="button"
+          title="Open your carts on Amazon"
+        >
+          <span id="mc-list-count" class="mc-count-btn-num">0</span>
+          <span class="mc-count-btn-word">carts</span>
+          <svg
+            class="mc-count-btn-arrow"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M7 17 L17 7" />
+            <path d="M9 7 h8 v8" />
+          </svg>
+        </button>
+        <button
+          id="mc-amazon-lists-refresh"
+          class="mc-icon-btn mc-icon-btn-xs"
+          type="button"
+          title="Refresh your carts from Amazon"
+          aria-label="Refresh your carts from Amazon"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+        </button>
         <div class="mc-list-header-actions">
-          <button
-            id="mc-goto-carts"
-            class="mc-btn mc-btn-ghost mc-btn-sm"
-            type="button"
-            title="Open your carts on Amazon"
-          >
-            Go to Carts
-          </button>
-          <button
-            id="mc-amazon-lists-refresh"
-            class="mc-btn mc-btn-ghost mc-btn-sm"
-            type="button"
-            title="Refresh your Amazon wish lists"
-          >
-            Refresh
-          </button>
           <button
             id="mc-clear"
             class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
@@ -266,6 +293,14 @@
             title="Remove every item from your active Amazon cart"
           >
             Clear Amazon Cart
+          </button>
+          <button
+            id="mc-save-for-later"
+            class="mc-btn mc-btn-ghost mc-btn-sm"
+            type="button"
+            title="Save everything in your Amazon cart as a new cart, without clearing it"
+          >
+            Save Cart for Later
           </button>
         </div>
         <div hidden>
@@ -422,7 +457,7 @@
           <button
             class="mc-btn mc-btn-ghost mc-btn-sm"
             data-action="save-to-list"
-            title="Save this cart as an Amazon wish list so it syncs across devices"
+            title="Save this cart as an Amazon list so it syncs across devices"
           >
             Save to Amazon List
           </button>
@@ -720,6 +755,15 @@
         <h3 id="mc-confirm-title" class="mc-modal-title">Are you sure?</h3>
         <p id="mc-confirm-body" class="mc-modal-sub"></p>
         <div class="mc-modal-actions">
+          <!-- Optional second affirmative (e.g. "Save & Empty"). Hidden unless
+               the caller passes altLabel; when shown it is the primary action. -->
+          <button
+            id="mc-confirm-alt"
+            class="mc-btn mc-btn-primary"
+            type="button"
+            data-action="confirm-alt"
+            hidden
+          ></button>
           <button
             id="mc-confirm-ok"
             class="mc-btn mc-btn-primary"
@@ -808,11 +852,6 @@
             <li>Keep curated lists for gifts, restocks, occasions</li>
             <li>Cancel anytime — all carts stay visible with 3 free</li>
           </ul>
-        </div>
-
-        <div class="mc-paywall-coming-soon" id="mc-paywall-stub" hidden>
-          <strong>Coming soon.</strong> Premium isn't live yet — we're polishing
-          the checkout flow. Thanks for being early!
         </div>
 
         <details class="mc-paywall-promo" id="mc-paywall-promo">

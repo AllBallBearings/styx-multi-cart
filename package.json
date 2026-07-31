@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Chrome MV3 extension to save, switch, and restore multiple Amazon shopping carts.",
+  "description": "Chrome MV3 extension to clear your Amazon cart in one click, or save it for a later checkout.",
   "scripts": {
     "build": "node scripts/build-extension.mjs",
     "sync:safari": "bash scripts/sync-safari-resources.sh",

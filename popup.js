@@ -88,6 +88,7 @@
   const $fabpulseToggle = document.getElementById("mc-fabpulse-toggle");
   const $sidepanelToggle = document.getElementById("mc-sidepanel-toggle");
   const $gotoCarts = document.getElementById("mc-goto-carts");
+  const $saveForLater = document.getElementById("mc-save-for-later");
   const $displaySection = document.getElementById(
     "mc-settings-display-section"
   );
@@ -107,13 +108,13 @@
   const $paywallModal = document.getElementById("mc-paywall-modal");
   const $paywallTitle = document.getElementById("mc-paywall-title");
   const $paywallSub = document.getElementById("mc-paywall-sub");
-  const $paywallStub = document.getElementById("mc-paywall-stub");
 
   // Confirm-dialog refs (in-popup replacement for window.confirm).
   const $confirmModal = document.getElementById("mc-confirm-modal");
   const $confirmTitle = document.getElementById("mc-confirm-title");
   const $confirmBody = document.getElementById("mc-confirm-body");
   const $confirmOk = document.getElementById("mc-confirm-ok");
+  const $confirmAlt = document.getElementById("mc-confirm-alt");
   const $confirmCancel = document.getElementById("mc-confirm-cancel");
 
   // Prompt-dialog refs (in-popup replacement for window.prompt).
@@ -248,12 +249,17 @@
   let confirmPending = null;
 
   function confirmDialog(opts) {
+    // Resolves "ok" | "alt" | false. Strings rather than booleans so a dialog
+    // can offer a second affirmative action; every caller that only cares
+    // about yes/no still works, because "ok"/"alt" are truthy and cancel is
+    // still false.
     const {
       title = "Are you sure?",
       message = "",
       emphasis = null,
       okLabel = "OK",
       cancelLabel = "Cancel",
+      altLabel = null,
       destructive = false,
     } = opts || {};
 
@@ -279,10 +285,25 @@
     $confirmCancel.textContent = cancelLabel;
     $confirmOk.classList.toggle("mc-btn-danger", !!destructive);
 
+    // Optional second affirmative. When present it becomes the primary action
+    // and the OK button steps down to a secondary style, so the recommended
+    // path (e.g. "Save & Empty") reads as the default rather than the
+    // destructive one.
+    $confirmAlt.hidden = !altLabel;
+    if (altLabel) {
+      $confirmAlt.textContent = altLabel;
+      $confirmOk.classList.remove("mc-btn-primary");
+      $confirmOk.classList.add("mc-btn-ghost");
+    } else {
+      $confirmOk.classList.add("mc-btn-primary");
+      $confirmOk.classList.remove("mc-btn-ghost");
+    }
+
     $confirmModal.hidden = false;
     $confirmModal.removeAttribute("inert");
-    // Give the OK button focus so Enter == confirm.
-    setTimeout(() => $confirmOk.focus(), 0);
+    // Focus the primary action so Enter picks it: the alt button when it
+    // exists, otherwise OK.
+    setTimeout(() => (altLabel ? $confirmAlt : $confirmOk).focus(), 0);
 
     return new Promise((resolve) => {
       confirmPending = {
@@ -292,6 +313,7 @@
           $confirmModal.hidden = true;
           $confirmModal.setAttribute("inert", "");
           $confirmOk.classList.remove("mc-btn-danger");
+          $confirmAlt.hidden = true;
           resolve(value);
         },
       };
@@ -301,7 +323,9 @@
   $confirmModal.addEventListener("click", (e) => {
     const action = e.target.closest("[data-action]")?.dataset.action;
     if (action === "confirm-ok") {
-      confirmPending?.resolve(true);
+      confirmPending?.resolve("ok");
+    } else if (action === "confirm-alt") {
+      confirmPending?.resolve("alt");
     } else if (action === "confirm-cancel") {
       confirmPending?.resolve(false);
     }
@@ -999,13 +1023,45 @@
   });
 
   $clear.addEventListener("click", async () => {
-    const ok = await confirmDialog({
-      title: "Clear Amazon cart?",
-      message: "Are you sure you want to clear your current Amazon cart?",
-      okLabel: "Clear Amazon Cart",
+    // Name the stakes when we can — "Save these 12 items" lands far harder
+    // than "these items". Falls back to generic wording if there's no active
+    // Amazon tab to count from.
+    let count = null;
+    try {
+      const c = await send({ type: "MC_GET_CART_COUNT" });
+      if (c && c.ok && Number.isFinite(c.count)) count = c.count;
+    } catch (_e) { /* non-fatal — generic copy below */ }
+    const these =
+      count && count > 0
+        ? `these ${count} item${count === 1 ? "" : "s"}`
+        : "these items";
+
+    const choice = await confirmDialog({
+      title: "Clear your Amazon cart?",
+      message:
+        `Save ${these} for a later checkout and they'll be waiting in your ` +
+        `Amazon account — or just clear it. Your Saved for Later stays ` +
+        `untouched either way.`,
+      altLabel: "Save & Clear",
+      okLabel: "Just Clear",
+      cancelLabel: "Cancel",
       destructive: true,
     });
-    if (!ok) return;
+    if (!choice) return;
+
+    if (choice === "alt") {
+      withLoading($clear, async () => {
+        const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
+        if (res.ok) {
+          toast("Saving your cart to a new Amazon list, then clearing it…");
+          if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
+        } else if (!handleEntitlementError(res)) {
+          toast(res.error || "Could not save cart", "error");
+        }
+      });
+      return;
+    }
+
     withLoading($clear, async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
@@ -1023,6 +1079,27 @@
       }
     });
   });
+
+  // Save the live Amazon cart into a new cart WITHOUT clearing it — the
+  // same driver as "Save & Clear", minus the clear step.
+  if ($saveForLater) {
+    $saveForLater.addEventListener("click", () => {
+      withLoading($saveForLater, async () => {
+        const res = await send({
+          type: "MC_SAVE_FOR_LATER",
+          name: defaultName(),
+        });
+        if (res.ok) {
+          toast(
+            `Saving ${res.saving} item${res.saving === 1 ? "" : "s"} to a new cart — your Amazon cart stays as it is.`
+          );
+          if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
+        } else if (!handleEntitlementError(res)) {
+          toast(res.error || "Could not save cart", "error");
+        }
+      });
+    });
+  }
 
   // ---- Combine mode ------------------------------------------------------
 
@@ -1559,8 +1636,8 @@
       const ok = await confirmDialog({
         title: isUpdate ? "Update Amazon list?" : "Save to Amazon list?",
         message: isUpdate
-          ? `Re-sync "${cartName}" to its Amazon wish list. Styx opens Amazon tabs to add the items — keep them open until it finishes.`
-          : `Create a private Amazon wish list named "${cartName}" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.`,
+          ? `Re-sync "${cartName}" to its Amazon list. Styx opens Amazon tabs to add the items — keep them open until it finishes.`
+          : `Create a private Amazon list named "${cartName}" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.`,
         okLabel: isUpdate ? "Update" : "Save to Amazon",
       });
       if (!ok) return;
@@ -1730,7 +1807,7 @@
       metaEl.textContent = `${host} · Premium cart — upgrade to use`;
       nameEl.setAttribute("aria-label", `Unlock ${list.name || "this cart"} with Premium`);
     } else {
-      metaEl.textContent = `${host} · Amazon Wish List`;
+      metaEl.textContent = `${host} · Amazon list`;
       nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
     }
     amazonListCache.set(list.listId, Object.assign({}, list));
@@ -2316,7 +2393,10 @@
 
   function openPaywall(trigger) {
     if (trigger === "limit") {
-      $paywallTitle.textContent = "You've used all 3 free carts";
+      // Derive from the entitlement rather than hard-coding — a changed
+      // FREE_CART_LIMIT must not leave this headline quietly lying.
+      const freeLimit = (currentEntitlement && currentEntitlement.limit) || 3;
+      $paywallTitle.textContent = `You've used all ${freeLimit} free carts`;
       $paywallSub.textContent =
         "Upgrade to Premium to save more — your existing carts stay exactly as they are.";
     } else if (trigger === "renew") {
@@ -2329,7 +2409,6 @@
         "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.";
     }
     // ExtensionPay is wired; each plan button deep-links its own checkout.
-    $paywallStub.hidden = true;
     resetPaywallButtons();
 
     $paywallModal.hidden = false;
@@ -2722,9 +2801,10 @@
       return true;
     }
     if (res.code === "PREMIUM_LIMIT_REACHED") {
+      // Only reachable via the legacy local-cart path (Amazon-list carts are
+      // uncapped on Premium), so don't quote a number the lists path contradicts.
       toast(
-        res.error ||
-          `You've reached the 20-cart limit. Delete or merge carts to free up space.`,
+        res.error || `You've reached the cart limit. Delete or merge carts to free up space.`,
         "error"
       );
       return true;

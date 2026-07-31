@@ -8,27 +8,33 @@ title: Permissions Justification — Styx Multi-Cart
 
 This document explains why Styx Multi-Cart requests each permission listed in its `manifest.json`. The content here is intended both as user-facing transparency and as copy-paste text for the Chrome Web Store's per-permission justification fields.
 
+> **Where your data lives:** your carts are your own Amazon lists, held in your Amazon account — not in the extension and not on any server of ours. `chrome.storage.local` holds only settings and licensing state. See the [privacy policy](privacy.html).
+
 ## `storage`
 
-The extension saves your cart snapshots and a small set of preferences (default restore mode, recorded upsell choices with 24-hour TTL) using `chrome.storage.local`. Without this permission the extension could not remember any saved cart between popup opens.
+The extension keeps a small set of local state using `chrome.storage.local`: your preferences (relabeling Amazon's Lists page as carts, floating-button pulse, developer mode), recorded upsell choices with a 24-hour TTL, your entitlement record and license token, and a short-lived (about five minutes) cache of list contents so the panel doesn't re-read Amazon on every open. Without this permission the extension could not remember your settings or your Premium status between sessions.
 
 ## `activeTab`
 
-When you click the toolbar icon and then **Save**, the extension reads the contents of the Amazon tab that is currently in front of you. `activeTab` is the minimum-privilege way to do that — it grants temporary access only to the tab the user explicitly invoked the extension on.
+When you invoke the extension on an Amazon page — via the floating Styx button or the toolbar icon — it reads the contents of the tab in front of you to find your cart or list. `activeTab` is the minimum-privilege way to do that: it grants temporary access only to the tab the user explicitly invoked the extension on.
 
 ## `scripting`
 
-The extension uses `chrome.scripting.executeScript` to inject three small, self-contained helpers into Amazon pages:
+The extension uses `chrome.scripting.executeScript` to inject its own interface and helpers into Amazon pages. All of them are small, self-contained, and shipped inside the extension package:
 
-1. **Cart scraper** — reads the items already on the Amazon cart page when you click Save.
-2. **Status overlay** — shows the floating progress toast at the top of the page while a clear or restore is in progress.
-3. **Add-to-Cart driver** — clicks the page's real "Add to Cart" button during a restore, just as a human would.
+1. **The floating button and panel** — the round Styx button and the draggable cart panel it opens.
+2. **Page buttons** — "Save cart to a new list" on the cart page, "Send All to Amazon Cart" on a list page, and the branded "Add to a Styx cart" button on a product page.
+3. **Cart picker** — the in-page chooser for picking which cart an item goes into.
+4. **Readers** — reads the items on your cart page or list page when you save, empty, or send a cart.
+5. **Drivers** — clicks the page's real "Add to Cart" and delete controls, just as a human would, when sending a cart to your Amazon cart or emptying it.
+6. **Status overlay** — the progress toast shown while a save, empty, or send is running.
+7. **Lists relabeler** — the display-only text swap that renames Amazon's Lists page to "Your Styx Carts" (toggleable in Settings).
 
 All injected code lives in the extension's own bundle. The extension never executes remote code.
 
 ## `tabs`
 
-During restore the extension opens one helper tab, navigates it through each saved product page in sequence, and closes the tab when finished. `tabs` is required to create, navigate, and close that helper, and to detect when each product page has finished loading.
+The extension opens helper tabs to act on Amazon on your behalf: navigating to your cart page to empty it, and opening a product page per item when saving a cart into a new Amazon list or sending a cart to your Amazon cart. `tabs` is required to create, navigate, and close those helpers, and to detect when each page has finished loading. It is also used to open the ExtensionPay checkout tab if you purchase Premium.
 
 ## `alarms`
 
@@ -40,7 +46,13 @@ The extension declares host permissions for the Amazon storefronts it supports:
 
 `amazon.com`, `amazon.co.uk`, `amazon.ca`, `amazon.com.au`, `amazon.de`, `amazon.fr`, `amazon.it`, `amazon.es`, `amazon.co.jp`, `amazon.in`, `amazon.com.mx`, `amazon.com.br`.
 
-The extension's entire purpose is to interact with the Amazon cart page on whichever regional storefront you use. It does not request access to any non-Amazon site. Content scripts are further narrowed to the specific cart, product, and checkout paths the extension needs (see the `content_scripts.matches` entries in `manifest.json`).
+The extension's entire purpose is to interact with your cart and lists on whichever regional storefront you use. It does not request access to any non-Amazon site. Content scripts are further narrowed to the specific cart, product, list/wish-list, and checkout paths the extension needs (see the `content_scripts.matches` entries in `manifest.json`).
+
+## The `tag=` parameter in add-to-cart URLs
+
+When the extension sends a whole cart to your Amazon cart, the Amazon add-to-cart URL it opens carries an Amazon Associates–style parameter (`tag=styxmcart-20`). Amazon's bulk add-to-cart endpoint will not render the items without one, so the extension supplies a placeholder value purely to make the feature function.
+
+**This is not a registered Associates account. We earn no commission, referral fee, or other compensation from your purchases.** The parameter carries no information about you, does not track your browsing, and sends nothing to us or any third party. It is noted here only because it is visible in network traffic and would otherwise look like undisclosed affiliate monetization.
 
 ## Outbound non-Amazon network requests
 
@@ -60,7 +72,7 @@ The extension bundles one third-party JavaScript file: **`ExtPay.js`** (≈55 KB
 
 - It does not run on, read from, or transmit data to any non-Amazon website besides `extensionpay.com` (used solely for Premium licensing as described above).
 - It does not collect analytics, telemetry, or any personally identifiable information.
-- It does not transmit your saved carts to any server.
+- It does not transmit your carts to any server of ours — there isn't one. Cart and list contents move only between your browser and Amazon.
 - It does not read or store your Amazon password — authentication is handled entirely by Amazon in your normal browser session.
 
 See the [privacy policy](privacy.html) for the full data-handling statement.

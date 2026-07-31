@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Styx Multi-Cart",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
-  "description": "Save, switch, and restore multiple Amazon shopping carts. Local-only storage, no tracking, no account required.",
+  "description": "One click to clear your Amazon cart — or save it for a later checkout. Free, unlimited, no tracking.",
   "permissions": [
     "storage",
     "activeTab",
@@ -122,7 +122,9 @@
         "*://amazon.com.br/cart*",
         "*://*.amazon.com.br/cart*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     },
     {
@@ -152,19 +154,28 @@
         "*://*.amazon.com.br/*",
         "*://amazon.com.br/*"
       ],
-      "js": ["observer.js"],
+      "js": [
+        "observer.js"
+      ],
       "all_frames": true,
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://extensionpay.com/*"],
-      "js": ["ExtPay.js"],
+      "matches": [
+        "https://extensionpay.com/*"
+      ],
+      "js": [
+        "ExtPay.js"
+      ],
       "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["popup.html", "icons/*.png"],
+      "resources": [
+        "popup.html",
+        "icons/*.png"
+      ],
       "matches": [
         "*://amazon.com/*",
         "*://*.amazon.com/*",
