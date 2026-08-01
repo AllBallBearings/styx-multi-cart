@@ -11,7 +11,7 @@ Paste these into the Chrome Web Store Developer Dashboard listing form. Keep the
 >
 > **"One click" is a deliberate owner decision, not an oversight.** Clearing
 > actually takes two clicks — the button, then a choice in the confirm dialog
-> ("Save & Empty" / "Just Empty"). The owner opted to keep the phrase. Don't
+> ("Save & Clear" / "Just Clear"). The owner opted to keep the phrase. Don't
 > "fix" it to something weaker without asking; equally, don't propagate it to
 > *other* actions, where it has never been true.
 

@@ -287,7 +287,7 @@
 
     // Optional second affirmative. When present it becomes the primary action
     // and the OK button steps down to a secondary style, so the recommended
-    // path (e.g. "Save & Empty") reads as the default rather than the
+    // path (e.g. "Save & Clear") reads as the default rather than the
     // destructive one.
     $confirmAlt.hidden = !altLabel;
     if (altLabel) {
