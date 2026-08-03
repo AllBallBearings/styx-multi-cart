@@ -158,11 +158,13 @@ importScripts("ExtPay.js");
     pushLogEntry({ ctx: "sw", level: "warn", msg: mcStringifyArgs(a) });
   };
   var IS_SAFARI = chrome.runtime.getURL("").startsWith("safari-web-extension://");
-  var STORAGE_KEY = "mc.carts.v1";
   var SETTINGS_KEY = "mc.settings.v1";
   var ENTITLEMENT_KEY = "mc.entitlement.v1";
   var DEV_FLAG_KEY = "mc.dev.v1";
+  var DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
   var PROMO_KEY = "mc.promos.v1";
+  var AMAZON_LISTS_CACHE_KEY = "mc.amazonlists.v1";
+  var LIST_ITEM_COUNTS_KEY = "mc.listcounts.v1";
   var PROMO_HASHES = Object.freeze([
     "47f0ec155e6bcfcdf6f63f88879a868a7dbaafdd1f95913eed6aa221fc7e9961",
     "848eebb65c9c41aac69fc477bc1945d549bae0a695424e82f7785b26f44cbdd8",
@@ -172,7 +174,6 @@ importScripts("ExtPay.js");
   ]);
   var PROMO_GRANT_MS = 90 * 24 * 60 * 60 * 1e3;
   var FREE_CART_LIMIT = 3;
-  var PREMIUM_CART_LIMIT = 20;
   var DEFAULT_ENTITLEMENT = Object.freeze({
     tier: "free",
     premiumUntil: null,
@@ -205,26 +206,6 @@ importScripts("ExtPay.js");
     // navigation. Like `restoring`, it's cleared in a finally block.
     busy: false
   };
-  async function readCarts() {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    const carts = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-    for (const c of carts) {
-      if (c && !Number.isFinite(c.lastUsedAt)) {
-        const sa = Number(c.savedAt);
-        c.lastUsedAt = Number.isFinite(sa) ? sa : 0;
-      }
-    }
-    for (const c of carts) {
-      if (!c || typeof c !== "object") continue;
-      if (!("amazonListId" in c)) c.amazonListId = null;
-      if (!("amazonListUrl" in c)) c.amazonListUrl = null;
-      if (!("syncedAt" in c)) c.syncedAt = null;
-    }
-    return carts;
-  }
-  async function writeCarts(carts) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: carts });
-  }
   async function readEntitlement() {
     const result = await chrome.storage.local.get(ENTITLEMENT_KEY);
     const stored = result[ENTITLEMENT_KEY];
@@ -243,6 +224,113 @@ importScripts("ExtPay.js");
   async function isDevModeEnabled() {
     const r = await chrome.storage.local.get(DEV_FLAG_KEY);
     return r[DEV_FLAG_KEY] === true;
+  }
+  async function isDevEntitlementLocked() {
+    const r = await chrome.storage.local.get(DEV_ENT_LOCK_KEY);
+    return r[DEV_ENT_LOCK_KEY] === true;
+  }
+  async function rememberListItemCount(listId, count) {
+    if (!listId || typeof count !== "number" || !Number.isFinite(count) || count < 0) {
+      return;
+    }
+    try {
+      const key = String(listId).toUpperCase();
+      const got = await chrome.storage.local.get(LIST_ITEM_COUNTS_KEY);
+      const map = got[LIST_ITEM_COUNTS_KEY] && typeof got[LIST_ITEM_COUNTS_KEY] === "object" ? got[LIST_ITEM_COUNTS_KEY] : {};
+      if (map[key] === count) return;
+      map[key] = count;
+      await chrome.storage.local.set({ [LIST_ITEM_COUNTS_KEY]: map });
+    } catch (_e) {
+    }
+  }
+  async function readRememberedListItemCounts() {
+    try {
+      const got = await chrome.storage.local.get(LIST_ITEM_COUNTS_KEY);
+      const map = got[LIST_ITEM_COUNTS_KEY];
+      return map && typeof map === "object" ? map : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+  async function bumpRememberedListItemCount(listId, delta) {
+    if (!listId || !Number.isFinite(delta)) return;
+    const counts = await readRememberedListItemCounts();
+    const key = String(listId).toUpperCase();
+    if (typeof counts[key] === "number") {
+      await rememberListItemCount(listId, Math.max(0, counts[key] + delta));
+    }
+  }
+  var _countBackfillRunning = false;
+  async function backfillListCounts(host, lists) {
+    if (_countBackfillRunning) return;
+    _countBackfillRunning = true;
+    try {
+      const usedHost = host || await inferAmazonHost();
+      const source = Array.isArray(lists) && lists.length ? lists : await listAmazonLists(usedHost).catch(() => []);
+      const remembered = await readRememberedListItemCounts();
+      const pending = source.filter((l) => {
+        const key = l && l.listId ? String(l.listId).toUpperCase() : null;
+        return key && l.count == null && typeof remembered[key] !== "number";
+      });
+      let learnedAny = false;
+      for (const l of pending) {
+        try {
+          await readAmazonList(l.listId, usedHost);
+          learnedAny = true;
+        } catch (_e) {
+        }
+      }
+      if (learnedAny) {
+        try {
+          await refreshSnapshotCounts(usedHost);
+        } catch (_e) {
+        }
+      }
+    } finally {
+      _countBackfillRunning = false;
+    }
+  }
+  async function refreshSnapshotCounts() {
+    const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+    const snap = got[AMAZON_LISTS_CACHE_KEY];
+    if (!snap || !Array.isArray(snap.lists)) return;
+    const remembered = await readRememberedListItemCounts();
+    let changed = false;
+    snap.lists = snap.lists.map((l) => {
+      const key = l.listId ? String(l.listId).toUpperCase() : null;
+      if (key && l.count == null && typeof remembered[key] === "number") {
+        changed = true;
+        return Object.assign({}, l, { count: remembered[key] });
+      }
+      return l;
+    });
+    if (changed) await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
+  }
+  async function listAmazonListsWithAccessCached(host) {
+    const rawLists = await listAmazonLists(host);
+    const remembered = await readRememberedListItemCounts();
+    const withCounts = rawLists.map((l) => {
+      const key = l.listId ? String(l.listId).toUpperCase() : null;
+      if (l.count == null && key && typeof remembered[key] === "number") {
+        return Object.assign({}, l, { count: remembered[key] });
+      }
+      return l;
+    });
+    const ent = await readEntitlement();
+    const access = computeListAccess(withCounts, ent);
+    rememberListAccess(access.lists);
+    const usedHost = host || (rawLists[0] && rawLists[0].url ? new URL(rawLists[0].url).hostname : null);
+    try {
+      await chrome.storage.local.set({
+        [AMAZON_LISTS_CACHE_KEY]: {
+          host: usedHost,
+          fetchedAt: Date.now(),
+          lists: access.lists
+        }
+      });
+    } catch (_e) {
+    }
+    return access;
   }
   async function sha256Hex(input) {
     const buf = new TextEncoder().encode(input);
@@ -324,6 +412,10 @@ importScripts("ExtPay.js");
   }
   async function syncEntitlementFromExtPay() {
     if (!extpay) return;
+    if (await isDevEntitlementLocked()) {
+      dlog("[Styx Multi-Cart] entitlement locked (dev); skipping ExtPay sync");
+      return;
+    }
     if (EXTPAY_ID === "REPLACE_ME") return;
     let user;
     try {
@@ -340,6 +432,10 @@ importScripts("ExtPay.js");
   }
   async function syncEntitlementFromNative() {
     if (!IS_SAFARI) return;
+    if (await isDevEntitlementLocked()) {
+      dlog("[Styx Multi-Cart] entitlement locked (dev); skipping native sync");
+      return;
+    }
     let native;
     try {
       const runtime = typeof browser !== "undefined" && browser.runtime && typeof browser.runtime.sendNativeMessage === "function" ? browser.runtime : chrome.runtime;
@@ -402,55 +498,6 @@ importScripts("ExtPay.js");
     if (ent.premiumUntil == null) return true;
     return nowMs < Number(ent.premiumUntil);
   }
-  function cartLimitFor(ent, nowMs = Date.now()) {
-    return isPremiumActive(ent, nowMs) ? PREMIUM_CART_LIMIT : FREE_CART_LIMIT;
-  }
-  function topNCartIdsByLastUsed(carts, n) {
-    if (!Array.isArray(carts) || n <= 0) return [];
-    const sorted = [...carts].sort((a, b) => {
-      const lu = (Number(b.lastUsedAt) || 0) - (Number(a.lastUsedAt) || 0);
-      if (lu !== 0) return lu;
-      const sa = (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0);
-      if (sa !== 0) return sa;
-      return String(a.id).localeCompare(String(b.id));
-    });
-    return sorted.slice(0, n).map((c) => c.id);
-  }
-  function computeCartAccess(carts, ent, nowMs = Date.now()) {
-    const limit = cartLimitFor(ent, nowMs);
-    const editableIds = new Set(topNCartIdsByLastUsed(carts, limit));
-    const readOnlyIds = /* @__PURE__ */ new Set();
-    for (const c of carts || []) {
-      if (c && c.id && !editableIds.has(c.id)) readOnlyIds.add(c.id);
-    }
-    return { editableIds, readOnlyIds, limit };
-  }
-  function canCreateSavedCart(carts, ent, nowMs = Date.now()) {
-    const current = Array.isArray(carts) ? carts.length : 0;
-    const limit = cartLimitFor(ent, nowMs);
-    const premium = isPremiumActive(ent, nowMs);
-    if (current < limit) {
-      return { allowed: true, current, limit, remaining: limit - current, tier: premium ? "premium" : "free" };
-    }
-    return {
-      allowed: false,
-      code: premium ? "PREMIUM_LIMIT_REACHED" : "FREE_LIMIT_REACHED",
-      reason: premium ? `You've reached the maximum of ${limit} saved carts.` : `Free plan is limited to ${limit} carts. Upgrade to Premium for unlimited carts.`,
-      current,
-      limit,
-      remaining: 0,
-      tier: premium ? "premium" : "free"
-    };
-  }
-  function canEditCart(cartId, carts, ent, nowMs = Date.now()) {
-    const { editableIds } = computeCartAccess(carts, ent, nowMs);
-    if (editableIds.has(cartId)) return { allowed: true };
-    return {
-      allowed: false,
-      code: "CART_LOCKED",
-      reason: isPremiumActive(ent, nowMs) ? "This cart exceeds your plan's limit." : "Renew Premium to edit this cart, or delete other carts to free up a slot."
-    };
-  }
   function computeListAccess(lists, ent, nowMs = Date.now()) {
     const premium = isPremiumActive(ent, nowMs);
     const limit = premium ? Infinity : FREE_CART_LIMIT;
@@ -483,9 +530,6 @@ importScripts("ExtPay.js");
     const next = Object.assign({}, current, patch || {});
     await chrome.storage.local.set({ [SETTINGS_KEY]: next });
     return next;
-  }
-  function makeId() {
-    return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
   }
   var UPSELL_CHOICES_KEY = "mc.upsell.choices.v1";
   var UPSELL_TTL_MS = 24 * 60 * 60 * 1e3;
@@ -2013,72 +2057,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     }
     return _restoreResult;
   }
-  async function clearThenRestoreCart(target) {
-    try {
-      const currentCount = await getActiveAmazonCartCount(target.host);
-      if (currentCount !== 0) {
-        const cleared = await clearAmazonCart(target.host);
-        if (!cleared || !cleared.ok) {
-          dwarn(
-            "[Styx Multi-Cart] restore could not clear existing cart",
-            cleared
-          );
-          return;
-        }
-        setOpStatus(`Restoring "${target.name || "cart"}"`, "Preparing\u2026");
-        try {
-          const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (active && isAmazonUrl(active.url)) {
-            await showStatus(active.id, "Preparing to restore\u2026", "loading");
-          }
-        } catch (_e) {
-        }
-        await sleep(2e3);
-      }
-      const bulk = await restoreCartBulk(target);
-      if (bulk.ok && bulk.userDeclinedFallback) {
-        dinfo(
-          `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; user declined per-item fallback`
-        );
-        return;
-      }
-      if (!bulk.ok && bulk.userAbandoned) {
-        dinfo("[Styx Multi-Cart] user abandoned bulk confirm \u2014 not falling back");
-        return;
-      }
-      if (bulk.ok && bulk.missing.length === 0) {
-        const host = bulk.host || target.host || "www.amazon.com";
-        const doneMsg = `Cart restored \u2014 ${bulk.added} item${bulk.added === 1 ? "" : "s"} added`;
-        clearOpStatus(doneMsg);
-        try {
-          if (bulk.helperTabId) {
-            await chrome.tabs.update(bulk.helperTabId, {
-              url: `https://${host}/gp/cart/view.html`,
-              active: true
-            });
-            await waitForTabReload(bulk.helperTabId, 15e3);
-            await showStatus(bulk.helperTabId, doneMsg, "done");
-          }
-        } catch (_e) {
-        }
-        return;
-      }
-      const fallbackItems = bulk.missing && bulk.missing.length ? bulk.missing : target.items;
-      if (!bulk.ok) {
-        dinfo(
-          "[Styx Multi-Cart] bulk restore failed, falling back to per-item:",
-          bulk.error
-        );
-      } else {
-        dinfo(
-          `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; user opted to per-item-fill ${bulk.missing.length} missing`
-        );
-      }
-      await restoreCart({ ...target, items: fallbackItems });
-    } catch (err) {
-      console.error("[Styx Multi-Cart] restore failed", err);
-    }
-  }
   function pageAddAllFromList(targetAsins) {
     return new Promise((resolve) => {
       const wanted = new Set(
@@ -3006,6 +2984,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     const cacheKey = `${host}:${listId}`;
     const cached = amazonListReadCache.get(cacheKey);
     if (!forceRefresh && cached && Date.now() - cached.cachedAt < AMAZON_LIST_READ_CACHE_MS) {
+      rememberListItemCount(listId, (cached.value.items || []).length);
       return cached.value;
     }
     const url = amazonListUrl(host, listId);
@@ -3035,10 +3014,8 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     }));
     const value = { host, name: data.name || "Amazon list", listId, url, items };
     amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+    rememberListItemCount(listId, items.length);
     return value;
-  }
-  async function importAmazonListToCart(listId, preferredHost) {
-    return readAmazonList(listId, preferredHost);
   }
   async function createAmazonListFromPdp(host, name, firstAsin) {
     const url = `https://${host}/dp/${String(firstAsin).toUpperCase()}`;
@@ -3177,14 +3154,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
       await setListQuantities(host, listId, items);
     } catch (_e) {
     }
-    const carts = await readCarts();
-    const target = carts.find((c) => c.id === cart.id);
-    if (target) {
-      target.amazonListId = listId;
-      target.amazonListUrl = listUrl;
-      if (added > 0) target.syncedAt = Date.now();
-      await writeCarts(carts);
-    }
     const firstFail = failures[0];
     const reason = added === 0 ? firstFail ? "First error: " + firstFail.error : "Nothing was added." : "";
     console.log("[Styx list-sync] saveCart done", {
@@ -3232,11 +3201,25 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
         } else if (/^(?:alexa\s+)?shopping list$/i.test(name)) {
           kind = "alexa";
         }
+        let count = null;
+        const hostEl = a.closest("li, [id*='wl-list'], .a-list-item") || a;
+        const countEl = (hostEl || a).querySelector(
+          '[id*="count"], .wl-list-entry-item-count, .a-color-secondary'
+        );
+        if (countEl) {
+          const m2 = (countEl.textContent || "").match(/\d+/);
+          if (m2) count = parseInt(m2[0], 10);
+        }
+        if (count === null) {
+          const hostText = hostEl ? hostEl.textContent || "" : "";
+          const countMatch = hostText.match(/\((\d+)\)/) || hostText.match(/(\d+)\s*items?/i);
+          if (countMatch) count = parseInt(countMatch[1], 10);
+        }
         out.push({
           listId: id,
           name,
           url: location.origin + "/hz/wishlist/ls/" + id,
-          count: null,
+          count,
           kind
         });
       });
@@ -3567,34 +3550,8 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             sendResponse(result || { ok: false, error: "No response" });
             break;
           }
-          case "MC_LIST_CARTS": {
-            const carts = await readCarts();
-            const ent = await readEntitlement();
-            const now = Date.now();
-            const access = computeCartAccess(carts, ent, now);
-            const premium = isPremiumActive(ent, now);
-            const annotated = carts.map((c) => ({
-              ...c,
-              access: access.editableIds.has(c.id) ? "editable" : "readonly"
-            }));
-            sendResponse({
-              ok: true,
-              carts: annotated,
-              entitlement: {
-                tier: premium ? "premium" : "free",
-                premiumUntil: ent.premiumUntil,
-                autoRenew: !!ent.autoRenew,
-                source: ent.source,
-                isPremium: premium,
-                limit: access.limit,
-                count: carts.length
-              }
-            });
-            break;
-          }
           case "MC_GET_ENTITLEMENT": {
             const ent = await readEntitlement();
-            const carts = await readCarts();
             const now = Date.now();
             const premium = isPremiumActive(ent, now);
             sendResponse({
@@ -3605,9 +3562,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
                 autoRenew: !!ent.autoRenew,
                 source: ent.source,
                 lastChecked: ent.lastChecked,
-                isPremium: premium,
-                limit: cartLimitFor(ent, now),
-                count: carts.length
+                isPremium: premium
               }
             });
             break;
@@ -3623,6 +3578,15 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             }
             const next = await writeEntitlement(devEnt);
             sendResponse({ ok: true, entitlement: next });
+            break;
+          }
+          case "MC_DEV_SYNC_ENTITLEMENT": {
+            if (!await isDevModeEnabled()) {
+              sendResponse({ ok: false, error: "Dev mode is not enabled." });
+              break;
+            }
+            await syncEntitlement();
+            sendResponse({ ok: true, entitlement: await readEntitlement() });
             break;
           }
           case "MC_REDEEM_PROMO": {
@@ -3661,308 +3625,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
           case "MC_REFRESH_ENTITLEMENT": {
             await syncEntitlement();
             sendResponse({ ok: true });
-            break;
-          }
-          case "MC_SAVE_CURRENT": {
-            {
-              const existing = await readCarts();
-              const ent = await readEntitlement();
-              const gate = canCreateSavedCart(existing, ent);
-              if (!gate.allowed) {
-                sendResponse({ ok: false, ...gate, error: gate.reason });
-                break;
-              }
-            }
-            let cart;
-            try {
-              cart = await scrapeCartInBackground();
-            } catch (scrapeErr) {
-              sendResponse({
-                ok: false,
-                error: scrapeErr && scrapeErr.message || "Could not read the Amazon cart page."
-              });
-              break;
-            }
-            if (!cart.items.length) {
-              sendResponse({
-                ok: false,
-                error: "Your Amazon cart looks empty \u2014 nothing to save."
-              });
-              break;
-            }
-            const carts = await readCarts();
-            {
-              const ent = await readEntitlement();
-              const gate = canCreateSavedCart(carts, ent);
-              if (!gate.allowed) {
-                sendResponse({ ok: false, ...gate, error: gate.reason });
-                break;
-              }
-            }
-            const now = Date.now();
-            carts.unshift({
-              id: makeId(),
-              name: msg.name || "Untitled cart",
-              host: cart.host,
-              savedAt: cart.capturedAt,
-              lastUsedAt: now,
-              items: cart.items
-            });
-            await writeCarts(carts);
-            sendResponse({ ok: true, count: cart.items.length });
-            break;
-          }
-          case "MC_RENAME_CART": {
-            const carts = await readCarts();
-            const target = carts.find((c) => c.id === msg.id);
-            if (!target) {
-              sendResponse({ ok: false, error: "Cart not found." });
-              break;
-            }
-            const ent = await readEntitlement();
-            const gate = canEditCart(target.id, carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-            target.name = msg.name || target.name;
-            target.lastUsedAt = Date.now();
-            await writeCarts(carts);
-            sendResponse({ ok: true });
-            break;
-          }
-          case "MC_DELETE_CART": {
-            const carts = await readCarts();
-            const next = carts.filter((c) => c.id !== msg.id);
-            await writeCarts(next);
-            sendResponse({ ok: true });
-            break;
-          }
-          case "MC_REMOVE_ITEM_FROM_CART": {
-            const carts = await readCarts();
-            const target = carts.find((c) => c.id === msg.id);
-            if (!target) {
-              sendResponse({ ok: false, error: "Cart not found." });
-              break;
-            }
-            const ent = await readEntitlement();
-            const gate = canEditCart(target.id, carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-            const before = target.items.length;
-            target.items = (target.items || []).filter((it) => it.asin !== msg.asin);
-            if (target.items.length === before) {
-              sendResponse({ ok: false, error: "Item not found in cart." });
-              break;
-            }
-            if (target.items.length === 0) {
-              const next = carts.filter((c) => c.id !== target.id);
-              await writeCarts(next);
-              sendResponse({ ok: true, cartDeleted: true });
-              break;
-            }
-            target.lastUsedAt = Date.now();
-            await writeCarts(carts);
-            sendResponse({ ok: true, remaining: target.items.length });
-            break;
-          }
-          case "MC_COMBINE_CARTS": {
-            const carts = await readCarts();
-            const source = carts.find((c) => c.id === msg.sourceId);
-            const target = carts.find((c) => c.id === msg.targetId);
-            if (!source || !target) {
-              sendResponse({ ok: false, error: "One of the carts could not be found." });
-              break;
-            }
-            if (source.id === target.id) {
-              sendResponse({ ok: false, error: "Pick two different carts." });
-              break;
-            }
-            if (!sameAmazonHost(source.host, target.host)) {
-              sendResponse({
-                ok: false,
-                error: `Can't merge across regions \u2014 "${source.name}" is on ${source.host} but "${target.name}" is on ${target.host}.`
-              });
-              break;
-            }
-            {
-              const ent = await readEntitlement();
-              const srcGate = canEditCart(source.id, carts, ent);
-              const tgtGate = canEditCart(target.id, carts, ent);
-              if (!srcGate.allowed || !tgtGate.allowed) {
-                const locked = !srcGate.allowed ? source.name : target.name;
-                sendResponse({
-                  ok: false,
-                  code: "CART_LOCKED",
-                  error: `Can't merge \u2014 "${locked}" is read-only. Renew Premium or delete other carts to free up a slot.`
-                });
-                break;
-              }
-            }
-            const targetByAsin = /* @__PURE__ */ new Map();
-            (target.items || []).forEach((it) => {
-              if (it && it.asin) targetByAsin.set(it.asin, it);
-            });
-            let added = 0;
-            let qtyBumped = 0;
-            (source.items || []).forEach((srcItem) => {
-              if (!srcItem || !srcItem.asin) return;
-              const existing = targetByAsin.get(srcItem.asin);
-              if (existing) {
-                const srcQty = Number(srcItem.quantity) || 1;
-                const tgtQty = Number(existing.quantity) || 1;
-                const merged = Math.max(srcQty, tgtQty);
-                if (merged !== tgtQty) {
-                  existing.quantity = merged;
-                  qtyBumped++;
-                }
-              } else {
-                target.items.push({ ...srcItem });
-                targetByAsin.set(srcItem.asin, target.items[target.items.length - 1]);
-                added++;
-              }
-            });
-            target.lastUsedAt = Date.now();
-            const next = carts.filter((c) => c.id !== source.id);
-            await writeCarts(next);
-            sendResponse({
-              ok: true,
-              target,
-              added,
-              qtyBumped,
-              sourceName: source.name,
-              targetName: target.name
-            });
-            break;
-          }
-          case "MC_MOVE_ITEM_BETWEEN_CARTS": {
-            const carts = await readCarts();
-            const source = carts.find((c) => c.id === msg.sourceId);
-            const target = carts.find((c) => c.id === msg.targetId);
-            if (!source || !target) {
-              sendResponse({ ok: false, error: "One of the carts could not be found." });
-              break;
-            }
-            if (source.id === target.id) {
-              sendResponse({ ok: false, error: "Pick a different cart." });
-              break;
-            }
-            if (!sameAmazonHost(source.host, target.host)) {
-              sendResponse({
-                ok: false,
-                error: `Can't move across regions \u2014 "${source.name}" is on ${source.host} but "${target.name}" is on ${target.host}.`
-              });
-              break;
-            }
-            {
-              const ent = await readEntitlement();
-              const srcGate = canEditCart(source.id, carts, ent);
-              const tgtGate = canEditCart(target.id, carts, ent);
-              if (!srcGate.allowed || !tgtGate.allowed) {
-                const locked = !srcGate.allowed ? source.name : target.name;
-                sendResponse({
-                  ok: false,
-                  code: "CART_LOCKED",
-                  error: `Can't move \u2014 "${locked}" is read-only. Renew Premium or delete other carts to free up a slot.`
-                });
-                break;
-              }
-            }
-            const moving = (source.items || []).find((it) => it && it.asin === msg.asin);
-            if (!moving) {
-              sendResponse({ ok: false, error: "Item not found in cart." });
-              break;
-            }
-            source.items = (source.items || []).filter((it) => it.asin !== msg.asin);
-            target.items = Array.isArray(target.items) ? target.items : [];
-            const existing = target.items.find((it) => it && it.asin === moving.asin);
-            let action;
-            if (existing) {
-              const moved = Number(moving.quantity) || 1;
-              const have = Number(existing.quantity) || 1;
-              existing.quantity = Math.max(1, Math.min(99, Math.max(moved, have)));
-              if (moving.variantLabel && !existing.variantLabel) {
-                existing.variantLabel = moving.variantLabel;
-              }
-              if (moving.image && !existing.image) existing.image = moving.image;
-              if (moving.title && (!existing.title || existing.title === "(untitled)")) {
-                existing.title = moving.title;
-              }
-              if (moving.price && !existing.price) existing.price = moving.price;
-              if (moving.url && !existing.url) existing.url = moving.url;
-              action = "merged";
-            } else {
-              target.items.unshift({ ...moving });
-              action = "added";
-            }
-            target.lastUsedAt = Date.now();
-            let sourceDeleted = false;
-            let nextCarts = carts;
-            if (source.items.length === 0) {
-              nextCarts = carts.filter((c) => c.id !== source.id);
-              sourceDeleted = true;
-            } else {
-              source.lastUsedAt = Date.now();
-            }
-            await writeCarts(nextCarts);
-            sendResponse({
-              ok: true,
-              action,
-              sourceDeleted,
-              sourceName: source.name,
-              targetName: target.name,
-              itemTitle: moving.title || moving.asin,
-              sourceRemaining: source.items.length,
-              targetCount: target.items.length
-            });
-            break;
-          }
-          case "MC_UPDATE_ITEM_QUANTITY": {
-            const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
-            const carts = await readCarts();
-            const target = carts.find((c) => c.id === msg.id);
-            if (!target) {
-              sendResponse({ ok: false, error: "Cart not found." });
-              break;
-            }
-            const ent = await readEntitlement();
-            const gate = canEditCart(target.id, carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-            const item = (target.items || []).find((it) => it.asin === msg.asin);
-            if (!item) {
-              sendResponse({ ok: false, error: "Item not found in cart." });
-              break;
-            }
-            item.quantity = qty;
-            target.lastUsedAt = Date.now();
-            await writeCarts(carts);
-            sendResponse({ ok: true, quantity: qty });
-            break;
-          }
-          case "MC_RESTORE_CART": {
-            const carts = await readCarts();
-            const target = carts.find((c) => c.id === msg.id);
-            if (!target) {
-              sendResponse({ ok: false, error: "Cart not found." });
-              break;
-            }
-            const ent = await readEntitlement();
-            const gate = canEditCart(target.id, carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-            target.lastUsedAt = Date.now();
-            await writeCarts(carts);
-            sendResponse({ ok: true, started: true, total: target.items.length });
-            setOpStatus(`Restoring "${target.name || "cart"}"`, "Starting\u2026");
-            openStatusWindow();
-            setTimeout(() => clearThenRestoreCart(target), 0);
             break;
           }
           case "MC_WISHLIST_ADD_ALL": {
@@ -4035,9 +3697,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             openStatusWindow();
             setTimeout(() => saveThenClearInBackground(
               {
-                // No cart.id → saveCartToAmazonList creates a new list and skips
-                // the saved-cart link persistence, so nothing lands in the
-                // legacy local store.
+                // No cart.id → saveCartToAmazonList always creates a new list.
                 host: scCart.host,
                 name: msg.name && String(msg.name).trim() || "Amazon cart",
                 items: scCart.items
@@ -4095,142 +3755,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             const next = await writeSettings({ uiSurface: surface });
             applyUiSurface(next.uiSurface);
             sendResponse({ ok: true, surface: next.uiSurface });
-            break;
-          }
-          case "MC_CREATE_EMPTY_CART": {
-            const name = (msg.name || "").trim() || "Untitled cart";
-            let host = "www.amazon.com";
-            const requestedHost = String(msg.host || "").trim().toLowerCase();
-            if (/(^|\.)amazon\./i.test(requestedHost)) {
-              host = requestedHost;
-            } else {
-              try {
-                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-                if (tab && tab.url) {
-                  const tabUrl = new URL(tab.url);
-                  if (/(^|\.)amazon\./i.test(tabUrl.hostname)) host = tabUrl.hostname;
-                }
-              } catch (_e) {
-              }
-            }
-            const carts = await readCarts();
-            {
-              const ent = await readEntitlement();
-              const gate = canCreateSavedCart(carts, ent);
-              if (!gate.allowed) {
-                sendResponse({ ok: false, ...gate, error: gate.reason });
-                break;
-              }
-            }
-            const newCart = {
-              id: makeId(),
-              name,
-              host,
-              savedAt: (/* @__PURE__ */ new Date()).toISOString(),
-              lastUsedAt: Date.now(),
-              items: []
-            };
-            carts.unshift(newCart);
-            await writeCarts(carts);
-            sendResponse({ ok: true, cart: newCart });
-            break;
-          }
-          case "MC_ADD_ITEM_TO_SAVED_CART": {
-            const item = msg.item || {};
-            if (!item.asin) {
-              sendResponse({ ok: false, error: "Item is missing ASIN." });
-              break;
-            }
-            const reqQty = Math.max(1, Math.min(99, Number(item.quantity) || 1));
-            const carts = await readCarts();
-            const target = carts.find((c) => c.id === msg.savedCartId);
-            if (!target) {
-              sendResponse({ ok: false, error: "Cart not found." });
-              break;
-            }
-            const ent = await readEntitlement();
-            const gate = canEditCart(target.id, carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-            target.items = Array.isArray(target.items) ? target.items : [];
-            const existing = target.items.find((it) => it && it.asin === item.asin);
-            let action;
-            if (existing) {
-              const merged = Math.max(1, Math.min(99, (Number(existing.quantity) || 1) + reqQty));
-              existing.quantity = merged;
-              if (item.variantLabel && !existing.variantLabel) {
-                existing.variantLabel = String(item.variantLabel).slice(0, 200);
-              }
-              if (item.image && !existing.image) {
-                existing.image = item.image;
-              }
-              if (item.title && (!existing.title || existing.title === "(untitled)")) {
-                existing.title = item.title;
-              }
-              if (item.price && !existing.price) {
-                existing.price = item.price;
-              }
-              if (item.url && !existing.url) {
-                existing.url = item.url;
-              }
-              action = "bumped";
-            } else {
-              target.items.unshift({
-                asin: item.asin,
-                title: item.title || "(untitled)",
-                quantity: reqQty,
-                price: item.price || "",
-                image: item.image || "",
-                url: item.url || "",
-                variantLabel: item.variantLabel ? String(item.variantLabel).slice(0, 200) : ""
-              });
-              action = "added";
-            }
-            target.lastUsedAt = Date.now();
-            await writeCarts(carts);
-            sendResponse({ ok: true, action, cartName: target.name, itemCount: target.items.length });
-            break;
-          }
-          case "MC_SAVE_CART_TO_LIST": {
-            console.log("[Styx list-sync] MC_SAVE_CART_TO_LIST received, cartId =", msg.cartId);
-            const carts = await readCarts();
-            const target = carts.find((c) => c.id === msg.cartId);
-            if (!target) {
-              sendResponse({ ok: false, error: "Cart not found." });
-              break;
-            }
-            if (!(target.items && target.items.length)) {
-              sendResponse({ ok: false, error: "This cart has no items to save." });
-              break;
-            }
-            const ent = await readEntitlement();
-            const gate = canEditCart(target.id, carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-            setOpStatus(`Saving "${target.name || "cart"}" to Amazon`, "Starting\u2026");
-            openStatusWindow();
-            let saveRes;
-            try {
-              saveRes = await saveCartToAmazonList(target);
-            } catch (e) {
-              saveRes = { ok: false, error: String(e && e.message || e) };
-            }
-            try {
-              await chrome.storage.local.set({ "mc.debug.lastSync": { at: Date.now(), ...saveRes } });
-            } catch (_e) {
-            }
-            if (saveRes && saveRes.ok) {
-              clearOpStatus(
-                saveRes.failed ? `Saved ${saveRes.added}/${saveRes.total} to "${target.name}". ${saveRes.failed} need a manual add.` : `Saved ${saveRes.added} item${saveRes.added === 1 ? "" : "s"} to your Amazon list.`
-              );
-            } else {
-              setOpStatus("Couldn't save to Amazon", saveRes && saveRes.error || "Try again.");
-            }
-            sendResponse(saveRes || { ok: false, error: "No result." });
             break;
           }
           case "MC_SAVE_LIVE_CART_TO_LIST": {
@@ -4296,10 +3820,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             break;
           }
           case "MC_LIST_AMAZON_LISTS": {
-            const rawLists = await listAmazonLists(msg.host);
-            const ent = await readEntitlement();
-            const access = computeListAccess(rawLists, ent);
-            rememberListAccess(access.lists);
+            const access = await listAmazonListsWithAccessCached(msg.host);
             sendResponse({
               ok: true,
               lists: access.lists,
@@ -4309,6 +3830,141 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
                 customCount: access.customCount
               }
             });
+            backfillListCounts(msg.host, access.lists);
+            break;
+          }
+          case "MC_GET_LIST_COUNTS": {
+            sendResponse({ ok: true, counts: await readRememberedListItemCounts() });
+            break;
+          }
+          case "MC_ENSURE_AMAZON_LISTS": {
+            const maxAgeMs = Number.isFinite(msg.maxAgeMs) ? msg.maxAgeMs : 3e5;
+            try {
+              const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+              const cache = got[AMAZON_LISTS_CACHE_KEY];
+              if (!msg.forceRefresh && cache && Array.isArray(cache.lists) && Date.now() - (cache.fetchedAt || 0) < maxAgeMs) {
+                sendResponse({ ok: true, ...cache, cached: true });
+                backfillListCounts(msg.host, cache.lists);
+                break;
+              }
+              const access = await listAmazonListsWithAccessCached(msg.host);
+              const fresh = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+              sendResponse({
+                ok: true,
+                ...fresh[AMAZON_LISTS_CACHE_KEY] || { lists: access.lists },
+                cached: false
+              });
+              backfillListCounts(msg.host, access.lists);
+            } catch (err) {
+              const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+              const cache = got[AMAZON_LISTS_CACHE_KEY];
+              if (cache && Array.isArray(cache.lists)) {
+                sendResponse({ ok: true, ...cache, cached: true, stale: true });
+              } else {
+                sendResponse({ ok: false, error: err && err.message || String(err) });
+              }
+            }
+            break;
+          }
+          case "MC_ADD_ITEM_TO_AMAZON_LIST": {
+            const listId = String(msg.listId || "").trim();
+            const asin = String(msg.asin || "").trim().toUpperCase();
+            if (!listId || !/^[A-Z0-9]{10}$/i.test(asin)) {
+              sendResponse({ ok: false, error: "Missing list id or ASIN." });
+              break;
+            }
+            const host = msg.host || await inferAmazonHost();
+            const listName = msg.name || "list";
+            await setUiBusy(true);
+            try {
+              setOpStatus(`Adding to ${listName}`, "Opening the product page\u2026");
+              const r = await addItemToList(host, listId, asin);
+              if (r && r.ok) {
+                const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
+                if (qty > 1) {
+                  try {
+                    await setListQuantities(host, listId, [{ asin, quantity: qty }]);
+                  } catch (_e) {
+                  }
+                }
+                await bumpRememberedListItemCount(listId, 1);
+                try {
+                  await listAmazonListsWithAccessCached(host);
+                } catch (_e) {
+                }
+                setOpStatus(`Adding to ${listName}`, "Done.");
+                sendResponse({ ok: true, listId, asin });
+              } else {
+                sendResponse({ ok: false, error: r && r.error || "Add to list failed." });
+              }
+            } catch (err) {
+              sendResponse({ ok: false, error: err && err.message || String(err) });
+            } finally {
+              await setUiBusy(false);
+            }
+            break;
+          }
+          case "MC_CREATE_AMAZON_LIST_WITH_ITEM": {
+            const asin = String(msg.asin || "").trim().toUpperCase();
+            const name = (msg.name || "").trim() || "Styx cart";
+            if (!/^[A-Z0-9]{10}$/i.test(asin)) {
+              sendResponse({ ok: false, error: "Missing ASIN." });
+              break;
+            }
+            const host = msg.host || await inferAmazonHost();
+            try {
+              const ent = await readEntitlement();
+              const access = computeListAccess(await listAmazonLists(host), ent);
+              if (!access.isPremium && access.customCount >= access.limit) {
+                sendResponse({
+                  ok: false,
+                  error: "Cart limit reached \u2014 upgrade to add more.",
+                  limitReached: true
+                });
+                break;
+              }
+            } catch (_e) {
+            }
+            await setUiBusy(true);
+            try {
+              setOpStatus(`Creating ${name}`, "Setting up your list\u2026");
+              const created = await createAmazonListFromPdp(host, name, asin);
+              if (created && created.listId) {
+                await rememberListItemCount(created.listId, 1);
+              }
+              const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
+              if (created && created.listId && qty > 1) {
+                try {
+                  await setListQuantities(host, created.listId, [{ asin, quantity: qty }]);
+                } catch (_e) {
+                }
+              }
+              try {
+                const snap = await listAmazonListsWithAccessCached(host);
+                if (created && created.listId && snap && Array.isArray(snap.lists)) {
+                  if (!snap.lists.some((l) => l.listId === created.listId)) {
+                    const ent = await readEntitlement();
+                    const isPrem = isPremiumActive(ent);
+                    snap.lists.push({
+                      listId: created.listId,
+                      name,
+                      url: amazonListUrl(host, created.listId),
+                      count: 1,
+                      kind: "custom",
+                      access: isPrem ? "editable" : snap.lists.length < FREE_CART_LIMIT ? "editable" : "locked"
+                    });
+                    await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
+                  }
+                }
+              } catch (_e) {
+              }
+              setOpStatus(`Creating ${name}`, "Done.");
+              sendResponse({ ok: true, listId: created && created.listId, name });
+            } catch (err) {
+              sendResponse({ ok: false, error: err && err.message || String(err) });
+            } finally {
+              await setUiBusy(false);
+            }
             break;
           }
           case "MC_GET_LIST_ACCESS": {
@@ -4355,37 +4011,100 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             sendResponse({ ok: true, list });
             break;
           }
-          case "MC_IMPORT_AMAZON_LIST": {
-            if (!msg.listId) {
-              sendResponse({ ok: false, error: "Missing list id." });
+          case "MC_DEV_EXPORT_BACKUP": {
+            if (!await isDevModeEnabled()) {
+              sendResponse({ ok: false, error: "Dev mode is not enabled." });
               break;
             }
-            const ent = await readEntitlement();
-            const gate = canCreateSavedCart(await readCarts(), ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
+            const host = msg.host || await inferAmazonHost();
+            const all = await chrome.storage.local.get(null);
+            const storage = {};
+            for (const k of Object.keys(all)) {
+              if (k.startsWith("mc.")) storage[k] = all[k];
+            }
+            const rawLists = await listAmazonLists(host);
+            const amazonLists = [];
+            for (let i = 0; i < rawLists.length; i++) {
+              const l = rawLists[i];
+              setOpStatus(
+                "Exporting backup",
+                `Reading list ${i + 1} of ${rawLists.length}: ${l.name}`
+              );
+              let items = [];
+              let readError = null;
+              try {
+                const read = await readAmazonList(l.listId, host, true);
+                items = read.items || [];
+              } catch (e) {
+                readError = String(e && e.message || e);
+              }
+              amazonLists.push({
+                listId: l.listId,
+                name: l.name,
+                kind: l.kind || "custom",
+                url: l.url,
+                itemCount: items.length,
+                items,
+                readError
+              });
+            }
+            setOpStatus("Exporting backup", "Done.");
+            sendResponse({
+              ok: true,
+              backup: {
+                app: "styx-multi-cart",
+                kind: "backup",
+                version: 1,
+                exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+                host,
+                storage,
+                amazonLists
+              }
+            });
+            break;
+          }
+          case "MC_DEV_RESTORE_BACKUP": {
+            if (!await isDevModeEnabled()) {
+              sendResponse({ ok: false, error: "Dev mode is not enabled." });
               break;
             }
-            const imported = await importAmazonListToCart(msg.listId, msg.host);
-            if (!imported.items.length) {
-              sendResponse({ ok: false, error: "That list has no items we could read." });
+            const backup = msg.backup;
+            if (!backup || !Array.isArray(backup.amazonLists)) {
+              sendResponse({ ok: false, error: "Invalid backup file." });
               break;
             }
-            const carts = await readCarts();
-            const newCart = {
-              id: makeId(),
-              name: imported.name || "Imported list",
-              host: imported.host,
-              savedAt: (/* @__PURE__ */ new Date()).toISOString(),
-              lastUsedAt: Date.now(),
-              items: imported.items,
-              amazonListId: msg.listId,
-              amazonListUrl: amazonListUrl(imported.host, msg.listId),
-              syncedAt: Date.now()
-            };
-            carts.unshift(newCart);
-            await writeCarts(carts);
-            sendResponse({ ok: true, cart: newCart, count: newCart.items.length });
+            const host = msg.host || backup.host || await inferAmazonHost();
+            const toRestore = backup.amazonLists.filter(
+              (l) => (l.kind || "custom") === "custom" && Array.isArray(l.items) && l.items.length
+            );
+            let restored = 0;
+            const failures = [];
+            for (let i = 0; i < toRestore.length; i++) {
+              const l = toRestore[i];
+              setOpStatus(
+                "Restoring backup",
+                `Recreating list ${i + 1} of ${toRestore.length}: ${l.name}`
+              );
+              try {
+                const r = await saveCartToAmazonList({
+                  name: l.name,
+                  host,
+                  items: l.items,
+                  amazonListId: null
+                });
+                if (r && r.ok) restored++;
+                else failures.push({ name: l.name, error: r && r.error || "save failed" });
+              } catch (e) {
+                failures.push({ name: l.name, error: String(e && e.message || e) });
+              }
+            }
+            setOpStatus("Restoring backup", "Done.");
+            sendResponse({
+              ok: true,
+              restored,
+              total: toRestore.length,
+              failures
+            });
             break;
           }
           default:

@@ -94,11 +94,30 @@ const IS_SAFARI = chrome.runtime
   .getURL("")
   .startsWith("safari-web-extension://");
 
-const STORAGE_KEY = "mc.carts.v1";
 const SETTINGS_KEY = "mc.settings.v1";
 const ENTITLEMENT_KEY = "mc.entitlement.v1";
 const DEV_FLAG_KEY = "mc.dev.v1";
+// Dev-only entitlement lock. When true, both entitlement sync paths (ExtPay
+// and Safari/StoreKit) short-circuit and leave `mc.entitlement.v1` exactly as
+// the debug panel / dev hotkey left it. This is what lets a forced `free`
+// state survive on an account that is actually paid — without it, the next
+// sync would restore premium mid-screenshot. Gated by dev mode; the key is
+// only ever set by the stripped debug UI, so production users never set it.
+const DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
 const PROMO_KEY = "mc.promos.v1"; // { [sha256(code)]: redeemedAtMs }
+// Snapshot of the user's Amazon lists (the real carts), written whenever we
+// list them so the on-page ATC picker can render list targets instantly
+// without driving Amazon on every click. Shape: { host, fetchedAt, lists }.
+const AMAZON_LISTS_CACHE_KEY = "mc.amazonlists.v1";
+
+// Per-list item counts, keyed by upper-case listId: { [listId]: count }. The
+// wishlist INDEX page rarely prints a reliable per-list count, so a fresh
+// listAmazonLists() scrape usually returns count:null. Whenever we DO learn a
+// list's true item count — reading it, creating it, adding to it — we persist
+// it here so both popup surfaces (toolbar window + floating modal) and the
+// on-page picker can show "N items" without a per-list fetch. Merged into every
+// listAmazonListsWithAccessCached() snapshot.
+const LIST_ITEM_COUNTS_KEY = "mc.listcounts.v1";
 
 // SHA-256 hashes of valid friends-and-family promo codes. Each grants 90 days
 // of Premium and is one-redemption-per-device (we record the hash in PROMO_KEY
@@ -121,9 +140,9 @@ const PROMO_HASHES = Object.freeze([
 ]);
 const PROMO_GRANT_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
-// Tier limits — keep in sync with lib/helpers.js. See docs/MONETIZATION_PLAN.md.
+// Free-tier list cap — keep in sync with lib/helpers.js (computeListAccess).
+// See docs/MONETIZATION_PLAN.md.
 const FREE_CART_LIMIT = 3;
-const PREMIUM_CART_LIMIT = 20;
 
 const DEFAULT_ENTITLEMENT = Object.freeze({
   tier: "free",
@@ -160,34 +179,6 @@ const DEFAULT_SETTINGS = {
   busy: false,
 };
 
-// ---- Storage helpers ------------------------------------------------------
-
-async function readCarts() {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  const carts = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
-  // Backfill lastUsedAt on carts saved before the entitlement layer existed.
-  // Mirrored from lib/helpers.js#backfillLastUsedAt — keep in sync.
-  for (const c of carts) {
-    if (c && !Number.isFinite(c.lastUsedAt)) {
-      const sa = Number(c.savedAt);
-      c.lastUsedAt = Number.isFinite(sa) ? sa : 0;
-    }
-  }
-  // Normalize the Amazon-list sync fields. Mirrored from
-  // lib/helpers.js#backfillCartSyncFields — keep in sync.
-  for (const c of carts) {
-    if (!c || typeof c !== "object") continue;
-    if (!("amazonListId" in c)) c.amazonListId = null;
-    if (!("amazonListUrl" in c)) c.amazonListUrl = null;
-    if (!("syncedAt" in c)) c.syncedAt = null;
-  }
-  return carts;
-}
-
-async function writeCarts(carts) {
-  await chrome.storage.local.set({ [STORAGE_KEY]: carts });
-}
-
 // ---- Entitlement (mirrored from lib/helpers.js + lib/storage.js) ----------
 // See docs/MONETIZATION_PLAN.md. This source is now bundled, so remaining
 // mirrored helpers can be replaced with imports in follow-up refactors.
@@ -212,6 +203,150 @@ async function writeEntitlement(patch) {
 async function isDevModeEnabled() {
   const r = await chrome.storage.local.get(DEV_FLAG_KEY);
   return r[DEV_FLAG_KEY] === true;
+}
+
+// True when a dev has pinned the entitlement (see DEV_ENT_LOCK_KEY). Checked at
+// the top of every entitlement sync so a forced free/premium state doesn't get
+// overwritten by the real ExtPay / StoreKit account.
+async function isDevEntitlementLocked() {
+  const r = await chrome.storage.local.get(DEV_ENT_LOCK_KEY);
+  return r[DEV_ENT_LOCK_KEY] === true;
+}
+
+// List the user's Amazon lists, annotate each with tier access, and cache the
+// snapshot for the on-page picker. Shared by MC_LIST_AMAZON_LISTS (popup) and
+// MC_ENSURE_AMAZON_LISTS (content script). Returns the access result.
+// Persist one list's true item count so later renders can show it without a
+// per-list fetch. Best-effort; a failed write just means the count stays hidden.
+async function rememberListItemCount(listId, count) {
+  if (!listId || typeof count !== "number" || !Number.isFinite(count) || count < 0) {
+    return;
+  }
+  try {
+    const key = String(listId).toUpperCase();
+    const got = await chrome.storage.local.get(LIST_ITEM_COUNTS_KEY);
+    const map =
+      got[LIST_ITEM_COUNTS_KEY] && typeof got[LIST_ITEM_COUNTS_KEY] === "object"
+        ? got[LIST_ITEM_COUNTS_KEY]
+        : {};
+    if (map[key] === count) return; // unchanged — skip the write
+    map[key] = count;
+    await chrome.storage.local.set({ [LIST_ITEM_COUNTS_KEY]: map });
+  } catch (_e) {
+    /* best-effort */
+  }
+}
+
+async function readRememberedListItemCounts() {
+  try {
+    const got = await chrome.storage.local.get(LIST_ITEM_COUNTS_KEY);
+    const map = got[LIST_ITEM_COUNTS_KEY];
+    return map && typeof map === "object" ? map : {};
+  } catch (_e) {
+    return {};
+  }
+}
+
+// Nudge a known count by `delta` (e.g. +1 after adding an item) so an
+// un-expanded card stays right without a fresh read. No-op if we don't yet
+// know the list's count — better to show "View items" than an invented number.
+async function bumpRememberedListItemCount(listId, delta) {
+  if (!listId || !Number.isFinite(delta)) return;
+  const counts = await readRememberedListItemCounts();
+  const key = String(listId).toUpperCase();
+  if (typeof counts[key] === "number") {
+    await rememberListItemCount(listId, Math.max(0, counts[key] + delta));
+  }
+}
+
+// --- Latent per-list count backfill --------------------------------------
+// The wishlist index gives labels fast but no reliable per-list count, and
+// reading every list up front would make the popup spin. So callers return the
+// labels immediately and kick this off: read each not-yet-counted list in a
+// background tab (active:false, invisible), persist the count, then merge the
+// results into the cached snapshot so both popup surfaces and the on-page
+// picker pick them up. Singleton — one pass at a time — and it only touches
+// lists we don't already have a count for, so once warm it does nothing.
+let _countBackfillRunning = false;
+async function backfillListCounts(host, lists) {
+  if (_countBackfillRunning) return;
+  _countBackfillRunning = true;
+  try {
+    const usedHost = host || (await inferAmazonHost());
+    const source =
+      Array.isArray(lists) && lists.length
+        ? lists
+        : await listAmazonLists(usedHost).catch(() => []);
+    const remembered = await readRememberedListItemCounts();
+    const pending = source.filter((l) => {
+      const key = l && l.listId ? String(l.listId).toUpperCase() : null;
+      return key && l.count == null && typeof remembered[key] !== "number";
+    });
+    let learnedAny = false;
+    for (const l of pending) {
+      try {
+        // readAmazonList persists the count via rememberListItemCount.
+        await readAmazonList(l.listId, usedHost);
+        learnedAny = true;
+      } catch (_e) {
+        /* one list failing shouldn't stop the rest */
+      }
+    }
+    if (learnedAny) {
+      try { await refreshSnapshotCounts(usedHost); } catch (_e) {}
+    }
+  } finally {
+    _countBackfillRunning = false;
+  }
+}
+
+// Merge the latest remembered counts into the cached list snapshot in place —
+// no Amazon driving — so the picker's cold-cache path shows them next open.
+async function refreshSnapshotCounts() {
+  const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+  const snap = got[AMAZON_LISTS_CACHE_KEY];
+  if (!snap || !Array.isArray(snap.lists)) return;
+  const remembered = await readRememberedListItemCounts();
+  let changed = false;
+  snap.lists = snap.lists.map((l) => {
+    const key = l.listId ? String(l.listId).toUpperCase() : null;
+    if (key && l.count == null && typeof remembered[key] === "number") {
+      changed = true;
+      return Object.assign({}, l, { count: remembered[key] });
+    }
+    return l;
+  });
+  if (changed) await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
+}
+
+async function listAmazonListsWithAccessCached(host) {
+  const rawLists = await listAmazonLists(host);
+  // Backfill counts the index scrape couldn't read from what we've learned
+  // before, so carts the user has opened/created still show "N items".
+  const remembered = await readRememberedListItemCounts();
+  const withCounts = rawLists.map((l) => {
+    const key = l.listId ? String(l.listId).toUpperCase() : null;
+    if (l.count == null && key && typeof remembered[key] === "number") {
+      return Object.assign({}, l, { count: remembered[key] });
+    }
+    return l;
+  });
+  const ent = await readEntitlement();
+  const access = computeListAccess(withCounts, ent);
+  rememberListAccess(access.lists);
+  const usedHost = host || (rawLists[0] && rawLists[0].url
+    ? new URL(rawLists[0].url).hostname
+    : null);
+  try {
+    await chrome.storage.local.set({
+      [AMAZON_LISTS_CACHE_KEY]: {
+        host: usedHost,
+        fetchedAt: Date.now(),
+        lists: access.lists,
+      },
+    });
+  } catch (_e) { /* cache write is best-effort */ }
+  return access;
 }
 
 // ---- Promo code redemption (friends-and-family trial) --------------------
@@ -366,6 +501,12 @@ if (chrome.action && chrome.action.onClicked) {
  */
 async function syncEntitlementFromExtPay() {
   if (!extpay) return;
+  // Dev entitlement lock pins whatever the debug UI set — don't let a real
+  // paid/unpaid account overwrite it (screenshots/video in a forced mode).
+  if (await isDevEntitlementLocked()) {
+    dlog("[Styx Multi-Cart] entitlement locked (dev); skipping ExtPay sync");
+    return;
+  }
   // ExtPay isn't wired up yet (placeholder ID). Calling getUser would hit a
   // non-existent extension and report "unpaid", which must not downgrade a
   // promo/dev grant. Skip entirely until a real EXTPAY_ID is set.
@@ -398,6 +539,11 @@ async function syncEntitlementFromExtPay() {
  */
 async function syncEntitlementFromNative() {
   if (!IS_SAFARI) return;
+  // See syncEntitlementFromExtPay: honor the dev entitlement lock here too.
+  if (await isDevEntitlementLocked()) {
+    dlog("[Styx Multi-Cart] entitlement locked (dev); skipping native sync");
+    return;
+  }
   let native;
   try {
     // Safari exposes the promise-style sendNativeMessage on `browser`; fall
@@ -500,64 +646,6 @@ function isPremiumActive(ent, nowMs = Date.now()) {
   return nowMs < Number(ent.premiumUntil);
 }
 
-function cartLimitFor(ent, nowMs = Date.now()) {
-  return isPremiumActive(ent, nowMs) ? PREMIUM_CART_LIMIT : FREE_CART_LIMIT;
-}
-
-function topNCartIdsByLastUsed(carts, n) {
-  if (!Array.isArray(carts) || n <= 0) return [];
-  const sorted = [...carts].sort((a, b) => {
-    const lu = (Number(b.lastUsedAt) || 0) - (Number(a.lastUsedAt) || 0);
-    if (lu !== 0) return lu;
-    const sa = (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0);
-    if (sa !== 0) return sa;
-    return String(a.id).localeCompare(String(b.id));
-  });
-  return sorted.slice(0, n).map((c) => c.id);
-}
-
-function computeCartAccess(carts, ent, nowMs = Date.now()) {
-  const limit = cartLimitFor(ent, nowMs);
-  const editableIds = new Set(topNCartIdsByLastUsed(carts, limit));
-  const readOnlyIds = new Set();
-  for (const c of carts || []) {
-    if (c && c.id && !editableIds.has(c.id)) readOnlyIds.add(c.id);
-  }
-  return { editableIds, readOnlyIds, limit };
-}
-
-function canCreateSavedCart(carts, ent, nowMs = Date.now()) {
-  const current = Array.isArray(carts) ? carts.length : 0;
-  const limit = cartLimitFor(ent, nowMs);
-  const premium = isPremiumActive(ent, nowMs);
-  if (current < limit) {
-    return { allowed: true, current, limit, remaining: limit - current, tier: premium ? "premium" : "free" };
-  }
-  return {
-    allowed: false,
-    code: premium ? "PREMIUM_LIMIT_REACHED" : "FREE_LIMIT_REACHED",
-    reason: premium
-      ? `You've reached the maximum of ${limit} saved carts.`
-      : `Free plan is limited to ${limit} carts. Upgrade to Premium for unlimited carts.`,
-    current,
-    limit,
-    remaining: 0,
-    tier: premium ? "premium" : "free",
-  };
-}
-
-function canEditCart(cartId, carts, ent, nowMs = Date.now()) {
-  const { editableIds } = computeCartAccess(carts, ent, nowMs);
-  if (editableIds.has(cartId)) return { allowed: true };
-  return {
-    allowed: false,
-    code: "CART_LOCKED",
-    reason: isPremiumActive(ent, nowMs)
-      ? "This cart exceeds your plan's limit."
-      : "Renew Premium to edit this cart, or delete other carts to free up a slot.",
-  };
-}
-
 // ---- Amazon-list tier access -------------------------------------------------
 //
 // The product treats Amazon lists as "carts". On the free tier only the first
@@ -595,19 +683,6 @@ function rememberListAccess(annotatedLists) {
   _lastListAccess = { byId, at: Date.now() };
 }
 
-/**
- * Bump lastUsedAt on a cart. Pass a pre-read carts array if you already have
- * one (avoids a redundant read). Returns true if the cart existed.
- */
-async function touchCartLastUsed(cartId, nowMs = Date.now(), carts = null) {
-  const list = carts || (await readCarts());
-  const target = list.find((c) => c && c.id === cartId);
-  if (!target) return false;
-  target.lastUsedAt = nowMs;
-  await writeCarts(list);
-  return true;
-}
-
 async function readSettings() {
   const result = await chrome.storage.local.get(SETTINGS_KEY);
   const stored = result[SETTINGS_KEY];
@@ -619,12 +694,6 @@ async function writeSettings(patch) {
   const next = Object.assign({}, current, patch || {});
   await chrome.storage.local.set({ [SETTINGS_KEY]: next });
   return next;
-}
-
-function makeId() {
-  return (
-    Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8)
-  );
 }
 
 // ---- Upsell choice memory (24 h TTL) --------------------------------------
@@ -2873,103 +2942,9 @@ async function restoreCart(savedCart, onProgress) {
   return _restoreResult;
 }
 
-async function clearThenRestoreCart(target) {
-  try {
-    const currentCount = await getActiveAmazonCartCount(target.host);
-    if (currentCount !== 0) {
-      const cleared = await clearAmazonCart(target.host);
-      if (!cleared || !cleared.ok) {
-        dwarn(
-          "[Styx Multi-Cart] restore could not clear existing cart",
-          cleared
-        );
-        return;
-      }
-      // Let Amazon's servers settle before we start adding new items,
-      // so restored items don't pile on top of a cart Amazon hasn't
-      // finished emptying yet. Show a transitional status during this pause.
-      setOpStatus(`Restoring "${target.name || 'cart'}"`, "Preparing…");
-      try {
-        const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (active && isAmazonUrl(active.url)) {
-          await showStatus(active.id, 'Preparing to restore…', 'loading');
-        }
-      } catch (_e) { /* best-effort */ }
-      await sleep(2000);
-    }
-
-    // Fast path: hit Amazon's batch add endpoint, which renders a
-    // confirmation page listing every ASIN and commits them all on a
-    // single button click. Anything the batch endpoint can't add (login
-    // redirect, captcha, dropped variant, page format change) falls
-    // through to the per-item engine, which is slower but proven.
-    const bulk = await restoreCartBulk(target);
-
-    // User explicitly declined the per-item fallback in the bulk
-    // reconciliation prompt — respect that and stop. Bulk already
-    // painted a partial-result toast. Must come BEFORE the success path
-    // because declined returns missing:[] too, but we don't want to
-    // navigate them away from wherever they are.
-    if (bulk.ok && bulk.userDeclinedFallback) {
-      dinfo(
-        `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
-          `user declined per-item fallback`
-      );
-      return;
-    }
-
-    // User abandoned the bulk confirm page (closed tab / 5-min timeout).
-    // No automatic fallback — they walked away on purpose.
-    if (!bulk.ok && bulk.userAbandoned) {
-      dinfo("[Styx Multi-Cart] user abandoned bulk confirm — not falling back");
-      return;
-    }
-
-    if (bulk.ok && bulk.missing.length === 0) {
-      // Everything landed in one shot. Land the user on the cart view
-      // and paint the done toast.
-      const host = bulk.host || target.host || "www.amazon.com";
-      const doneMsg = `Cart restored — ${bulk.added} item${bulk.added === 1 ? '' : 's'} added`;
-      clearOpStatus(doneMsg);
-      try {
-        if (bulk.helperTabId) {
-          await chrome.tabs.update(bulk.helperTabId, {
-            url: `https://${host}/gp/cart/view.html`,
-            active: true,
-          });
-          await waitForTabReload(bulk.helperTabId, 15000);
-          await showStatus(bulk.helperTabId, doneMsg, 'done');
-        }
-      } catch (_e) { /* tab may have closed — fine */ }
-      return;
-    }
-
-    // Otherwise: bulk had a hard failure (couldn't navigate, scripting
-    // error, etc.) OR partial success where the user chose "Restore one
-    // by one". Drive the remainder through the per-item engine.
-    const fallbackItems = (bulk.missing && bulk.missing.length)
-      ? bulk.missing
-      : target.items;
-    if (!bulk.ok) {
-      dinfo(
-        "[Styx Multi-Cart] bulk restore failed, falling back to per-item:",
-        bulk.error
-      );
-    } else {
-      dinfo(
-        `[Styx Multi-Cart] bulk added ${bulk.added}/${bulk.total}; ` +
-          `user opted to per-item-fill ${bulk.missing.length} missing`
-      );
-    }
-    await restoreCart({ ...target, items: fallbackItems });
-  } catch (err) {
-    console.error("[Styx Multi-Cart] restore failed", err);
-  }
-}
-
 // Add every item scraped from an Amazon wishlist page to the live Amazon
-// cart. Unlike clearThenRestoreCart this is purely ADDITIVE — it never
-// clears the existing cart — but it reuses the same proven bulk-add engine
+// cart. This is purely ADDITIVE — it never clears the existing cart — and
+// it reuses the same proven bulk-add engine
 // (and per-item fallback) that powers cart restore. Items arrive from
 // observer.js as { asin, quantity, title, url }.
 /**
@@ -4362,6 +4337,7 @@ async function readAmazonList(listId, preferredHost, forceRefresh = false) {
     cached &&
     Date.now() - cached.cachedAt < AMAZON_LIST_READ_CACHE_MS
   ) {
+    rememberListItemCount(listId, (cached.value.items || []).length);
     return cached.value;
   }
   const url = amazonListUrl(host, listId);
@@ -4394,12 +4370,8 @@ async function readAmazonList(listId, preferredHost, forceRefresh = false) {
     }));
   const value = { host, name: data.name || "Amazon list", listId, url, items };
   amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+  rememberListItemCount(listId, items.length);
   return value;
-}
-
-/** Read a list for the legacy local-cart import flow. */
-async function importAmazonListToCart(listId, preferredHost) {
-  return readAmazonList(listId, preferredHost);
 }
 
 /**
@@ -4582,17 +4554,8 @@ async function saveCartToAmazonListImpl(cart, opts = {}) {
   //    UI doesn't expose an inline quantity input.
   try { await setListQuantities(host, listId, items); } catch (_e) { /* non-fatal */ }
 
-  // 4. Persist the list link so re-saving updates instead of duplicating.
-  //    Only stamp syncedAt (which drives the "Synced" badge) when something
-  //    actually landed — a 0-item save must not masquerade as synced.
-  const carts = await readCarts();
-  const target = carts.find((c) => c.id === cart.id);
-  if (target) {
-    target.amazonListId = listId;
-    target.amazonListUrl = listUrl;
-    if (added > 0) target.syncedAt = Date.now();
-    await writeCarts(carts);
-  }
+  // (No local-cart link persistence: Amazon lists are the source of truth now,
+  //  and every caller passes an id-less cart, so nothing to write back.)
 
   const firstFail = failures[0];
   const reason =
@@ -4672,11 +4635,26 @@ function pageScrapeAmazonLists() {
       } else if (/^(?:alexa\s+)?shopping list$/i.test(name)) {
         kind = "alexa";
       }
+      let count = null;
+      const hostEl = a.closest("li, [id*='wl-list'], .a-list-item") || a;
+      const countEl = (hostEl || a).querySelector(
+        '[id*="count"], .wl-list-entry-item-count, .a-color-secondary'
+      );
+      if (countEl) {
+        const m = (countEl.textContent || "").match(/\d+/);
+        if (m) count = parseInt(m[0], 10);
+      }
+      if (count === null) {
+        const hostText = hostEl ? (hostEl.textContent || "") : "";
+        const countMatch = hostText.match(/\((\d+)\)/) || hostText.match(/(\d+)\s*items?/i);
+        if (countMatch) count = parseInt(countMatch[1], 10);
+      }
+
       out.push({
         listId: id,
         name,
         url: location.origin + "/hz/wishlist/ls/" + id,
-        count: null,
+        count,
         kind,
       });
     });
@@ -5101,39 +5079,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
-        case "MC_LIST_CARTS": {
-          const carts = await readCarts();
-          const ent = await readEntitlement();
-          const now = Date.now();
-          const access = computeCartAccess(carts, ent, now);
-          const premium = isPremiumActive(ent, now);
-          // Annotate each cart with access state so the popup can render
-          // locked/read-only carts without recomputing the rule client-side.
-          const annotated = carts.map((c) => ({
-            ...c,
-            access: access.editableIds.has(c.id) ? "editable" : "readonly",
-          }));
-          sendResponse({
-            ok: true,
-            carts: annotated,
-            entitlement: {
-              tier: premium ? "premium" : "free",
-              premiumUntil: ent.premiumUntil,
-              autoRenew: !!ent.autoRenew,
-              source: ent.source,
-              isPremium: premium,
-              limit: access.limit,
-              count: carts.length,
-            },
-          });
-          break;
-        }
-
         case "MC_GET_ENTITLEMENT": {
           // Convenience read for the popup's status badge / paywall trigger.
-          // Returns the raw entitlement plus derived booleans and limits.
+          // Returns the raw entitlement plus derived booleans. Cart counts come
+          // from the Amazon-lists snapshot now, not a local store.
           const ent = await readEntitlement();
-          const carts = await readCarts();
           const now = Date.now();
           const premium = isPremiumActive(ent, now);
           sendResponse({
@@ -5145,8 +5095,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               source: ent.source,
               lastChecked: ent.lastChecked,
               isPremium: premium,
-              limit: cartLimitFor(ent, now),
-              count: carts.length,
             },
           });
           break;
@@ -5176,6 +5124,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           }
           const next = await writeEntitlement(devEnt);
           sendResponse({ ok: true, entitlement: next });
+          break;
+        }
+
+        case "MC_DEV_SYNC_ENTITLEMENT": {
+          // Dev-only: force an immediate entitlement sync from the real
+          // account (ExtPay or StoreKit). Used by the debug panel's "Unlock"
+          // after clearing DEV_ENT_LOCK_KEY, to snap back to the true tier.
+          if (!(await isDevModeEnabled())) {
+            sendResponse({ ok: false, error: "Dev mode is not enabled." });
+            break;
+          }
+          await syncEntitlement();
+          sendResponse({ ok: true, entitlement: await readEntitlement() });
           break;
         }
 
@@ -5238,361 +5199,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // ignores the result and lets the caller re-query MC_GET_ENTITLEMENT.
           await syncEntitlement();
           sendResponse({ ok: true });
-          break;
-        }
-
-        case "MC_SAVE_CURRENT": {
-          // Scrape the cart from a background tab so the user doesn't have to
-          // be on the cart page. scrapeCartInBackground reuses an existing cart
-          // tab if one is open, or opens /gp/cart/view.html silently and closes
-          // it when done — the user stays on their current page throughout.
-
-          // Tier gate: check cart count vs. free/premium limit BEFORE scraping
-          // so we don't waste a tab-open/scrape cycle just to refuse the save.
-          {
-            const existing = await readCarts();
-            const ent = await readEntitlement();
-            const gate = canCreateSavedCart(existing, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-          }
-
-          let cart;
-          try {
-            cart = await scrapeCartInBackground();
-          } catch (scrapeErr) {
-            sendResponse({
-              ok: false,
-              error: (scrapeErr && scrapeErr.message) || "Could not read the Amazon cart page.",
-            });
-            break;
-          }
-          if (!cart.items.length) {
-            sendResponse({
-              ok: false,
-              error: "Your Amazon cart looks empty — nothing to save.",
-            });
-            break;
-          }
-          const carts = await readCarts();
-          // Re-check the gate after scraping — defensive, in case another
-          // popup action created a cart concurrently.
-          {
-            const ent = await readEntitlement();
-            const gate = canCreateSavedCart(carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-          }
-          const now = Date.now();
-          carts.unshift({
-            id: makeId(),
-            name: msg.name || "Untitled cart",
-            host: cart.host,
-            savedAt: cart.capturedAt,
-            lastUsedAt: now,
-            items: cart.items,
-          });
-          await writeCarts(carts);
-          sendResponse({ ok: true, count: cart.items.length });
-          break;
-        }
-
-        case "MC_RENAME_CART": {
-          const carts = await readCarts();
-          const target = carts.find((c) => c.id === msg.id);
-          if (!target) {
-            sendResponse({ ok: false, error: "Cart not found." });
-            break;
-          }
-          const ent = await readEntitlement();
-          const gate = canEditCart(target.id, carts, ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
-            break;
-          }
-          target.name = msg.name || target.name;
-          target.lastUsedAt = Date.now();
-          await writeCarts(carts);
-          sendResponse({ ok: true });
-          break;
-        }
-
-        case "MC_DELETE_CART": {
-          const carts = await readCarts();
-          const next = carts.filter((c) => c.id !== msg.id);
-          await writeCarts(next);
-          sendResponse({ ok: true });
-          break;
-        }
-
-        case "MC_REMOVE_ITEM_FROM_CART": {
-          const carts = await readCarts();
-          const target = carts.find((c) => c.id === msg.id);
-          if (!target) {
-            sendResponse({ ok: false, error: "Cart not found." });
-            break;
-          }
-          const ent = await readEntitlement();
-          const gate = canEditCart(target.id, carts, ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
-            break;
-          }
-          const before = target.items.length;
-          target.items = (target.items || []).filter((it) => it.asin !== msg.asin);
-          if (target.items.length === before) {
-            sendResponse({ ok: false, error: "Item not found in cart." });
-            break;
-          }
-          if (target.items.length === 0) {
-            // Last item removed — delete the cart entirely.
-            const next = carts.filter((c) => c.id !== target.id);
-            await writeCarts(next);
-            sendResponse({ ok: true, cartDeleted: true });
-            break;
-          }
-          target.lastUsedAt = Date.now();
-          await writeCarts(carts);
-          sendResponse({ ok: true, remaining: target.items.length });
-          break;
-        }
-
-        case "MC_COMBINE_CARTS": {
-          // Move every item from sourceId into targetId. Duplicate ASINs
-          // resolve via max quantity (per user spec). Source cart is then
-          // deleted. Returns the merged target cart.
-          const carts = await readCarts();
-          const source = carts.find((c) => c.id === msg.sourceId);
-          const target = carts.find((c) => c.id === msg.targetId);
-          if (!source || !target) {
-            sendResponse({ ok: false, error: "One of the carts could not be found." });
-            break;
-          }
-          if (source.id === target.id) {
-            sendResponse({ ok: false, error: "Pick two different carts." });
-            break;
-          }
-          if (!sameAmazonHost(source.host, target.host)) {
-            sendResponse({
-              ok: false,
-              error: `Can't merge across regions — "${source.name}" is on ${source.host} but "${target.name}" is on ${target.host}.`,
-            });
-            break;
-          }
-
-          // Tier gate: both source and target must be editable. Merging into
-          // a locked cart would be a write; merging from a locked cart would
-          // resurrect data the user hasn't paid to maintain.
-          {
-            const ent = await readEntitlement();
-            const srcGate = canEditCart(source.id, carts, ent);
-            const tgtGate = canEditCart(target.id, carts, ent);
-            if (!srcGate.allowed || !tgtGate.allowed) {
-              const locked = !srcGate.allowed ? source.name : target.name;
-              sendResponse({
-                ok: false,
-                code: "CART_LOCKED",
-                error: `Can't merge — "${locked}" is read-only. Renew Premium or delete other carts to free up a slot.`,
-              });
-              break;
-            }
-          }
-
-          const targetByAsin = new Map();
-          (target.items || []).forEach((it) => {
-            if (it && it.asin) targetByAsin.set(it.asin, it);
-          });
-          let added = 0;
-          let qtyBumped = 0;
-          (source.items || []).forEach((srcItem) => {
-            if (!srcItem || !srcItem.asin) return;
-            const existing = targetByAsin.get(srcItem.asin);
-            if (existing) {
-              const srcQty = Number(srcItem.quantity) || 1;
-              const tgtQty = Number(existing.quantity) || 1;
-              const merged = Math.max(srcQty, tgtQty);
-              if (merged !== tgtQty) {
-                existing.quantity = merged;
-                qtyBumped++;
-              }
-            } else {
-              target.items.push({ ...srcItem });
-              targetByAsin.set(srcItem.asin, target.items[target.items.length - 1]);
-              added++;
-            }
-          });
-
-          // Drop the source cart from the list. Bump target lastUsedAt so a
-          // freshly-merged cart stays editable through a later lapse.
-          target.lastUsedAt = Date.now();
-          const next = carts.filter((c) => c.id !== source.id);
-          await writeCarts(next);
-          sendResponse({
-            ok: true,
-            target,
-            added,
-            qtyBumped,
-            sourceName: source.name,
-            targetName: target.name,
-          });
-          break;
-        }
-
-        case "MC_MOVE_ITEM_BETWEEN_CARTS": {
-          // Move a single item (by ASIN) out of one saved cart and into
-          // another. Mirrors the combine merge rules: cross-region moves are
-          // refused and a duplicate ASIN in the target keeps the higher
-          // quantity. If the move empties the source cart, that cart is
-          // deleted (same as removing its last item).
-          const carts = await readCarts();
-          const source = carts.find((c) => c.id === msg.sourceId);
-          const target = carts.find((c) => c.id === msg.targetId);
-          if (!source || !target) {
-            sendResponse({ ok: false, error: "One of the carts could not be found." });
-            break;
-          }
-          if (source.id === target.id) {
-            sendResponse({ ok: false, error: "Pick a different cart." });
-            break;
-          }
-          if (!sameAmazonHost(source.host, target.host)) {
-            sendResponse({
-              ok: false,
-              error: `Can't move across regions — "${source.name}" is on ${source.host} but "${target.name}" is on ${target.host}.`,
-            });
-            break;
-          }
-
-          // Tier gate: both carts must be editable — the move writes to each.
-          {
-            const ent = await readEntitlement();
-            const srcGate = canEditCart(source.id, carts, ent);
-            const tgtGate = canEditCart(target.id, carts, ent);
-            if (!srcGate.allowed || !tgtGate.allowed) {
-              const locked = !srcGate.allowed ? source.name : target.name;
-              sendResponse({
-                ok: false,
-                code: "CART_LOCKED",
-                error: `Can't move — "${locked}" is read-only. Renew Premium or delete other carts to free up a slot.`,
-              });
-              break;
-            }
-          }
-
-          const moving = (source.items || []).find((it) => it && it.asin === msg.asin);
-          if (!moving) {
-            sendResponse({ ok: false, error: "Item not found in cart." });
-            break;
-          }
-
-          // Pull it out of the source.
-          source.items = (source.items || []).filter((it) => it.asin !== msg.asin);
-
-          // Land it in the target, merging by ASIN. Duplicates keep the
-          // higher quantity (same rule the combine UI advertises).
-          target.items = Array.isArray(target.items) ? target.items : [];
-          const existing = target.items.find((it) => it && it.asin === moving.asin);
-          let action;
-          if (existing) {
-            const moved = Number(moving.quantity) || 1;
-            const have = Number(existing.quantity) || 1;
-            existing.quantity = Math.max(1, Math.min(99, Math.max(moved, have)));
-            if (moving.variantLabel && !existing.variantLabel) {
-              existing.variantLabel = moving.variantLabel;
-            }
-            if (moving.image && !existing.image) existing.image = moving.image;
-            if (moving.title && (!existing.title || existing.title === "(untitled)")) {
-              existing.title = moving.title;
-            }
-            if (moving.price && !existing.price) existing.price = moving.price;
-            if (moving.url && !existing.url) existing.url = moving.url;
-            action = "merged";
-          } else {
-            target.items.unshift({ ...moving });
-            action = "added";
-          }
-          target.lastUsedAt = Date.now();
-
-          // If the source is now empty, drop it from the list entirely.
-          let sourceDeleted = false;
-          let nextCarts = carts;
-          if (source.items.length === 0) {
-            nextCarts = carts.filter((c) => c.id !== source.id);
-            sourceDeleted = true;
-          } else {
-            source.lastUsedAt = Date.now();
-          }
-
-          await writeCarts(nextCarts);
-          sendResponse({
-            ok: true,
-            action,
-            sourceDeleted,
-            sourceName: source.name,
-            targetName: target.name,
-            itemTitle: moving.title || moving.asin,
-            sourceRemaining: source.items.length,
-            targetCount: target.items.length,
-          });
-          break;
-        }
-
-        case "MC_UPDATE_ITEM_QUANTITY": {
-          const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
-          const carts = await readCarts();
-          const target = carts.find((c) => c.id === msg.id);
-          if (!target) {
-            sendResponse({ ok: false, error: "Cart not found." });
-            break;
-          }
-          const ent = await readEntitlement();
-          const gate = canEditCart(target.id, carts, ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
-            break;
-          }
-          const item = (target.items || []).find((it) => it.asin === msg.asin);
-          if (!item) {
-            sendResponse({ ok: false, error: "Item not found in cart." });
-            break;
-          }
-          item.quantity = qty;
-          target.lastUsedAt = Date.now();
-          await writeCarts(carts);
-          sendResponse({ ok: true, quantity: qty });
-          break;
-        }
-
-        case "MC_RESTORE_CART": {
-          const carts = await readCarts();
-          const target = carts.find((c) => c.id === msg.id);
-          if (!target) {
-            sendResponse({ ok: false, error: "Cart not found." });
-            break;
-          }
-          // Restore is a "write" against Amazon's live cart and per the
-          // monetization spec, locked (read-only) carts cannot move-to-Amazon.
-          const ent = await readEntitlement();
-          const gate = canEditCart(target.id, carts, ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
-            break;
-          }
-          // Bump lastUsedAt synchronously — restoring counts as a "use" and we
-          // want the cart to stay editable through any later lapse.
-          target.lastUsedAt = Date.now();
-          await writeCarts(carts);
-          // Acknowledge immediately so the popup doesn't time out — this
-          // can take a long time for large carts. The popup will likely
-          // close before we finish; that's fine.
-          sendResponse({ ok: true, started: true, total: target.items.length });
-          setOpStatus(`Restoring "${target.name || 'cart'}"`, "Starting…");
-          openStatusWindow(); // non-blocking — don't await
-          setTimeout(() => clearThenRestoreCart(target), 0);
           break;
         }
 
@@ -5670,9 +5276,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           //
           // Both are deliberately UNGATED. This is the free on-ramp — the
           // same ungated driver the cart-page "Save cart to a new list"
-          // button uses. Do not reintroduce a canCreateSavedCart check here;
-          // the saved cart is an Amazon list, not one of the legacy local
-          // carts that limit counts.
+          // button uses. The saved cart is a brand-new Amazon list.
           const scClearAfter = msg.type === "MC_SAVE_AND_CLEAR";
 
           // Capture the origin page NOW, before scraping, so we can return
@@ -5710,9 +5314,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           openStatusWindow(); // non-blocking — don't await
           setTimeout(() => saveThenClearInBackground(
             {
-              // No cart.id → saveCartToAmazonList creates a new list and skips
-              // the saved-cart link persistence, so nothing lands in the
-              // legacy local store.
+              // No cart.id → saveCartToAmazonList always creates a new list.
               host: scCart.host,
               name: (msg.name && String(msg.name).trim()) || "Amazon cart",
               items: scCart.items,
@@ -5780,167 +5382,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const next = await writeSettings({ uiSurface: surface });
           applyUiSurface(next.uiSurface);
           sendResponse({ ok: true, surface: next.uiSurface });
-          break;
-        }
-
-        case "MC_CREATE_EMPTY_CART": {
-          // Create a saved cart with no items. Used by the popup's
-          // "Create new" button. The ATC intercept on Amazon pages
-          // can then fill it via MC_ADD_ITEM_TO_SAVED_CART.
-          const name = (msg.name || "").trim() || "Untitled cart";
-
-          // Default host to www.amazon.com. Callers that create a cart as
-          // part of a same-region workflow (for example, Move item -> Create
-          // new cart) may pass an explicit Amazon host; otherwise prefer the
-          // active tab's Amazon hostname.
-          let host = "www.amazon.com";
-          const requestedHost = String(msg.host || "").trim().toLowerCase();
-          if (/(^|\.)amazon\./i.test(requestedHost)) {
-            host = requestedHost;
-          } else {
-            try {
-              const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-              if (tab && tab.url) {
-                const tabUrl = new URL(tab.url);
-                if (/(^|\.)amazon\./i.test(tabUrl.hostname)) host = tabUrl.hostname;
-              }
-            } catch (_e) {
-              // Tab query can fail in some contexts; the default host is fine.
-            }
-          }
-
-          const carts = await readCarts();
-          // Tier gate — refuse before mutating storage.
-          {
-            const ent = await readEntitlement();
-            const gate = canCreateSavedCart(carts, ent);
-            if (!gate.allowed) {
-              sendResponse({ ok: false, ...gate, error: gate.reason });
-              break;
-            }
-          }
-          const newCart = {
-            id: makeId(),
-            name,
-            host,
-            savedAt: new Date().toISOString(),
-            lastUsedAt: Date.now(),
-            items: [],
-          };
-          carts.unshift(newCart);
-          await writeCarts(carts);
-          sendResponse({ ok: true, cart: newCart });
-          break;
-        }
-
-        case "MC_ADD_ITEM_TO_SAVED_CART": {
-          // Add a single product-page item to an existing saved cart.
-          // Used by the in-page ATC picker (observer.js) when the user
-          // chooses to send a click to a saved cart instead of Amazon's
-          // live cart.
-          const item = msg.item || {};
-          if (!item.asin) {
-            sendResponse({ ok: false, error: "Item is missing ASIN." });
-            break;
-          }
-          const reqQty = Math.max(1, Math.min(99, Number(item.quantity) || 1));
-          const carts = await readCarts();
-          const target = carts.find((c) => c.id === msg.savedCartId);
-          if (!target) {
-            sendResponse({ ok: false, error: "Cart not found." });
-            break;
-          }
-          const ent = await readEntitlement();
-          const gate = canEditCart(target.id, carts, ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
-            break;
-          }
-          target.items = Array.isArray(target.items) ? target.items : [];
-          const existing = target.items.find((it) => it && it.asin === item.asin);
-          let action;
-          if (existing) {
-            const merged = Math.max(1, Math.min(99, (Number(existing.quantity) || 1) + reqQty));
-            existing.quantity = merged;
-            // Refresh variantLabel if we have a new one and the existing
-            // row is missing it (e.g., item was originally added from a
-            // tile that didn't expose variant info).
-            if (item.variantLabel && !existing.variantLabel) {
-              existing.variantLabel = String(item.variantLabel).slice(0, 200);
-            }
-            if (item.image && !existing.image) {
-              existing.image = item.image;
-            }
-            if (item.title && (!existing.title || existing.title === "(untitled)")) {
-              existing.title = item.title;
-            }
-            if (item.price && !existing.price) {
-              existing.price = item.price;
-            }
-            if (item.url && !existing.url) {
-              existing.url = item.url;
-            }
-            action = "bumped";
-          } else {
-            target.items.unshift({
-              asin: item.asin,
-              title: item.title || "(untitled)",
-              quantity: reqQty,
-              price: item.price || "",
-              image: item.image || "",
-              url: item.url || "",
-              variantLabel: item.variantLabel ? String(item.variantLabel).slice(0, 200) : "",
-            });
-            action = "added";
-          }
-          target.lastUsedAt = Date.now();
-          await writeCarts(carts);
-          sendResponse({ ok: true, action, cartName: target.name, itemCount: target.items.length });
-          break;
-        }
-
-        case "MC_SAVE_CART_TO_LIST": {
-          console.log("[Styx list-sync] MC_SAVE_CART_TO_LIST received, cartId =", msg.cartId);
-          // Mirror a saved cart into an Amazon wish list so it syncs across
-          // devices. Long-running (creates a list + opens a tab per item), so
-          // we ack immediately and report progress through the status window.
-          const carts = await readCarts();
-          const target = carts.find((c) => c.id === msg.cartId);
-          if (!target) {
-            sendResponse({ ok: false, error: "Cart not found." });
-            break;
-          }
-          if (!(target.items && target.items.length)) {
-            sendResponse({ ok: false, error: "This cart has no items to save." });
-            break;
-          }
-          const ent = await readEntitlement();
-          const gate = canEditCart(target.id, carts, ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
-            break;
-          }
-          setOpStatus(`Saving "${target.name || "cart"}" to Amazon`, "Starting…");
-          openStatusWindow(); // non-blocking
-          // Await the whole flow and return the real result so the popup can
-          // show what happened (the popup uses a long timeout for this call).
-          let saveRes;
-          try {
-            saveRes = await saveCartToAmazonList(target);
-          } catch (e) {
-            saveRes = { ok: false, error: String((e && e.message) || e) };
-          }
-          try { await chrome.storage.local.set({ "mc.debug.lastSync": { at: Date.now(), ...saveRes } }); } catch (_e) {}
-          if (saveRes && saveRes.ok) {
-            clearOpStatus(
-              saveRes.failed
-                ? `Saved ${saveRes.added}/${saveRes.total} to "${target.name}". ${saveRes.failed} need a manual add.`
-                : `Saved ${saveRes.added} item${saveRes.added === 1 ? "" : "s"} to your Amazon list.`
-            );
-          } else {
-            setOpStatus("Couldn't save to Amazon", (saveRes && saveRes.error) || "Try again.");
-          }
-          sendResponse(saveRes || { ok: false, error: "No result." });
           break;
         }
 
@@ -6017,10 +5458,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // Read the user's Amazon wish lists for the popup dashboard, then
           // annotate each with tier access (editable/locked) so the popup can
           // gray + paywall locked custom carts.
-          const rawLists = await listAmazonLists(msg.host);
-          const ent = await readEntitlement();
-          const access = computeListAccess(rawLists, ent);
-          rememberListAccess(access.lists);
+          const access = await listAmazonListsWithAccessCached(msg.host);
           sendResponse({
             ok: true,
             lists: access.lists,
@@ -6030,6 +5468,163 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               customCount: access.customCount,
             },
           });
+          // Labels are out; fill any missing counts in the background. The
+          // popup polls MC_GET_LIST_COUNTS to show them as they land.
+          backfillListCounts(msg.host, access.lists);
+          break;
+        }
+
+        case "MC_GET_LIST_COUNTS": {
+          // Cheap, no Amazon driving: the latest remembered per-list counts.
+          // Polled by the popup while the background backfill fills them in.
+          sendResponse({ ok: true, counts: await readRememberedListItemCounts() });
+          break;
+        }
+
+        case "MC_ENSURE_AMAZON_LISTS": {
+          // Content-script entry point: return the cached Amazon-list snapshot
+          // if it's fresh enough, otherwise refresh it (drives Amazon once).
+          // The on-page ATC picker calls this so it can offer list targets.
+          const maxAgeMs = Number.isFinite(msg.maxAgeMs) ? msg.maxAgeMs : 300000;
+          try {
+            const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+            const cache = got[AMAZON_LISTS_CACHE_KEY];
+            if (
+              !msg.forceRefresh &&
+              cache &&
+              Array.isArray(cache.lists) &&
+              Date.now() - (cache.fetchedAt || 0) < maxAgeMs
+            ) {
+              sendResponse({ ok: true, ...cache, cached: true });
+              // Warm any still-missing counts so the picker fills in over opens.
+              backfillListCounts(msg.host, cache.lists);
+              break;
+            }
+            const access = await listAmazonListsWithAccessCached(msg.host);
+            const fresh = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+            sendResponse({
+              ok: true,
+              ...(fresh[AMAZON_LISTS_CACHE_KEY] || { lists: access.lists }),
+              cached: false,
+            });
+            backfillListCounts(msg.host, access.lists);
+          } catch (err) {
+            // On failure, hand back any stale cache rather than nothing.
+            const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+            const cache = got[AMAZON_LISTS_CACHE_KEY];
+            if (cache && Array.isArray(cache.lists)) {
+              sendResponse({ ok: true, ...cache, cached: true, stale: true });
+            } else {
+              sendResponse({ ok: false, error: (err && err.message) || String(err) });
+            }
+          }
+          break;
+        }
+
+        case "MC_ADD_ITEM_TO_AMAZON_LIST": {
+          // Add one item to an existing Amazon list by driving Amazon's own
+          // Add-to-List chooser on the item's product page. Backs the on-page
+          // picker's list rows.
+          const listId = String(msg.listId || "").trim();
+          const asin = String(msg.asin || "").trim().toUpperCase();
+          if (!listId || !/^[A-Z0-9]{10}$/i.test(asin)) {
+            sendResponse({ ok: false, error: "Missing list id or ASIN." });
+            break;
+          }
+          const host = msg.host || (await inferAmazonHost());
+          const listName = msg.name || "list";
+          await setUiBusy(true);
+          try {
+            setOpStatus(`Adding to ${listName}`, "Opening the product page…");
+            const r = await addItemToList(host, listId, asin);
+            if (r && r.ok) {
+              const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
+              if (qty > 1) {
+                try {
+                  await setListQuantities(host, listId, [{ asin, quantity: qty }]);
+                } catch (_e) { /* qty is best-effort */ }
+              }
+              // Keep the shown count right, then refresh the cached snapshot.
+              await bumpRememberedListItemCount(listId, 1);
+              try { await listAmazonListsWithAccessCached(host); } catch (_e) {}
+              setOpStatus(`Adding to ${listName}`, "Done.");
+              sendResponse({ ok: true, listId, asin });
+            } else {
+              sendResponse({ ok: false, error: (r && r.error) || "Add to list failed." });
+            }
+          } catch (err) {
+            sendResponse({ ok: false, error: (err && err.message) || String(err) });
+          } finally {
+            await setUiBusy(false);
+          }
+          break;
+        }
+
+        case "MC_CREATE_AMAZON_LIST_WITH_ITEM": {
+          // "Create new cart" from the picker, in lists mode: create a fresh
+          // Amazon list seeded with this item (createAmazonListFromPdp adds the
+          // first item as part of creation). Tier-gated like any new cart.
+          const asin = String(msg.asin || "").trim().toUpperCase();
+          const name = (msg.name || "").trim() || "Styx cart";
+          if (!/^[A-Z0-9]{10}$/i.test(asin)) {
+            sendResponse({ ok: false, error: "Missing ASIN." });
+            break;
+          }
+          const host = msg.host || (await inferAmazonHost());
+          // Gate on the CUSTOM list count against the tier limit.
+          try {
+            const ent = await readEntitlement();
+            const access = computeListAccess(await listAmazonLists(host), ent);
+            if (!access.isPremium && access.customCount >= access.limit) {
+              sendResponse({
+                ok: false,
+                error: "Cart limit reached — upgrade to add more.",
+                limitReached: true,
+              });
+              break;
+            }
+          } catch (_e) { /* if the gate check fails, let creation proceed */ }
+          await setUiBusy(true);
+          try {
+            setOpStatus(`Creating ${name}`, "Setting up your list…");
+            const created = await createAmazonListFromPdp(host, name, asin);
+            // Seeded with exactly this one item — persist so the new cart shows
+            // "1 item" and it survives the next full list re-scrape (which reads
+            // count:null off the index page).
+            if (created && created.listId) {
+              await rememberListItemCount(created.listId, 1);
+            }
+            const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
+            if (created && created.listId && qty > 1) {
+              try {
+                await setListQuantities(host, created.listId, [{ asin, quantity: qty }]);
+              } catch (_e) { /* best-effort */ }
+            }
+            try {
+              const snap = await listAmazonListsWithAccessCached(host);
+              if (created && created.listId && snap && Array.isArray(snap.lists)) {
+                if (!snap.lists.some((l) => l.listId === created.listId)) {
+                  const ent = await readEntitlement();
+                  const isPrem = isPremiumActive(ent);
+                  snap.lists.push({
+                    listId: created.listId,
+                    name,
+                    url: amazonListUrl(host, created.listId),
+                    count: 1,
+                    kind: "custom",
+                    access: isPrem ? "editable" : (snap.lists.length < FREE_CART_LIMIT ? "editable" : "locked"),
+                  });
+                  await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
+                }
+              }
+            } catch (_e) {}
+            setOpStatus(`Creating ${name}`, "Done.");
+            sendResponse({ ok: true, listId: created && created.listId, name });
+          } catch (err) {
+            sendResponse({ ok: false, error: (err && err.message) || String(err) });
+          } finally {
+            await setUiBusy(false);
+          }
           break;
         }
 
@@ -6091,39 +5686,114 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
-        case "MC_IMPORT_AMAZON_LIST": {
-          // Pull an existing Amazon list into a new local cart (cross-device
-          // recall). Tier-gated like any other new-cart creation.
-          if (!msg.listId) {
-            sendResponse({ ok: false, error: "Missing list id." });
+        case "MC_DEV_EXPORT_BACKUP": {
+          // Dev-only. Snapshot everything needed to recreate the current cart
+          // state: the mc.* storage blobs plus every Amazon list's items
+          // (read one list at a time by driving Amazon — slow but complete).
+          // Used to back up before clearing lists for marketing screenshots,
+          // then restore via MC_DEV_RESTORE_BACKUP.
+          if (!(await isDevModeEnabled())) {
+            sendResponse({ ok: false, error: "Dev mode is not enabled." });
             break;
           }
-          const ent = await readEntitlement();
-          const gate = canCreateSavedCart(await readCarts(), ent);
-          if (!gate.allowed) {
-            sendResponse({ ok: false, ...gate, error: gate.reason });
+          const host = msg.host || (await inferAmazonHost());
+          const all = await chrome.storage.local.get(null);
+          const storage = {};
+          for (const k of Object.keys(all)) {
+            if (k.startsWith("mc.")) storage[k] = all[k];
+          }
+          const rawLists = await listAmazonLists(host);
+          const amazonLists = [];
+          for (let i = 0; i < rawLists.length; i++) {
+            const l = rawLists[i];
+            setOpStatus(
+              "Exporting backup",
+              `Reading list ${i + 1} of ${rawLists.length}: ${l.name}`
+            );
+            let items = [];
+            let readError = null;
+            try {
+              const read = await readAmazonList(l.listId, host, true);
+              items = read.items || [];
+            } catch (e) {
+              readError = String((e && e.message) || e);
+            }
+            amazonLists.push({
+              listId: l.listId,
+              name: l.name,
+              kind: l.kind || "custom",
+              url: l.url,
+              itemCount: items.length,
+              items,
+              readError,
+            });
+          }
+          setOpStatus("Exporting backup", "Done.");
+          sendResponse({
+            ok: true,
+            backup: {
+              app: "styx-multi-cart",
+              kind: "backup",
+              version: 1,
+              exportedAt: new Date().toISOString(),
+              host,
+              storage,
+              amazonLists,
+            },
+          });
+          break;
+        }
+
+        case "MC_DEV_RESTORE_BACKUP": {
+          // Dev-only. Recreate each custom Amazon list from a backup file by
+          // driving Amazon's Add-to-List chooser (saveCartToAmazonList). System
+          // lists (Wish List / Alexa, kind !== "custom") are skipped — they
+          // can't be recreated. Storage blobs in the file are NOT written back
+          // here; that stays a manual step to avoid clobbering entitlement.
+          if (!(await isDevModeEnabled())) {
+            sendResponse({ ok: false, error: "Dev mode is not enabled." });
             break;
           }
-          const imported = await importAmazonListToCart(msg.listId, msg.host);
-          if (!imported.items.length) {
-            sendResponse({ ok: false, error: "That list has no items we could read." });
+          const backup = msg.backup;
+          if (!backup || !Array.isArray(backup.amazonLists)) {
+            sendResponse({ ok: false, error: "Invalid backup file." });
             break;
           }
-          const carts = await readCarts();
-          const newCart = {
-            id: makeId(),
-            name: imported.name || "Imported list",
-            host: imported.host,
-            savedAt: new Date().toISOString(),
-            lastUsedAt: Date.now(),
-            items: imported.items,
-            amazonListId: msg.listId,
-            amazonListUrl: amazonListUrl(imported.host, msg.listId),
-            syncedAt: Date.now(),
-          };
-          carts.unshift(newCart);
-          await writeCarts(carts);
-          sendResponse({ ok: true, cart: newCart, count: newCart.items.length });
+          const host = msg.host || backup.host || (await inferAmazonHost());
+          const toRestore = backup.amazonLists.filter(
+            (l) =>
+              (l.kind || "custom") === "custom" &&
+              Array.isArray(l.items) &&
+              l.items.length
+          );
+          let restored = 0;
+          const failures = [];
+          for (let i = 0; i < toRestore.length; i++) {
+            const l = toRestore[i];
+            setOpStatus(
+              "Restoring backup",
+              `Recreating list ${i + 1} of ${toRestore.length}: ${l.name}`
+            );
+            try {
+              const r = await saveCartToAmazonList({
+                name: l.name,
+                host,
+                items: l.items,
+                amazonListId: null,
+              });
+              if (r && r.ok) restored++;
+              else failures.push({ name: l.name, error: (r && r.error) || "save failed" });
+            } catch (e) {
+              failures.push({ name: l.name, error: String((e && e.message) || e) });
+            }
+          }
+          setOpStatus("Restoring backup", "Done.");
+          sendResponse({
+            ok: true,
+            restored,
+            total: toRestore.length,
+            failures,
+          });
           break;
         }
 

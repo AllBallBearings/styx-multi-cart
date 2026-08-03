@@ -1666,10 +1666,56 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
 
 .mc-confirm-card {
   max-width: 320px;
+  padding: 16px 16px 14px;
 }
 
 .mc-confirm-card .mc-modal-sub {
   white-space: pre-line;
+  margin-bottom: 0;
+  line-height: 1.45;
+}
+
+/* Confirm dialogs lay their actions out on a grid instead of the shared
+   wrapping flex row. Three long labels ("Save & Clear" / "Just Clear" /
+   "Cancel") overflow the 320px card, and flex-wrap + flex-end left them
+   ragged: two buttons on the first line, an orphan Cancel right-aligned
+   underneath. The grid gives every button the same width and a predictable
+   position. */
+.mc-confirm-card .mc-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.mc-confirm-card .mc-modal-actions .mc-btn {
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+/* Three actions (the optional alt affirmative is visible): stack full-width,
+   recommended path first, so nothing wraps and the choice reads top-to-bottom.
+   Degrades to the 2-column grid without :has() support — still not ragged. */
+.mc-confirm-card .mc-modal-actions:has(#mc-confirm-alt:not([hidden])) {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+/* Cancel is the escape hatch, not a peer of the two real choices — de-weight
+   it once it sits in its own stacked row. */
+.mc-confirm-card
+  .mc-modal-actions:has(#mc-confirm-alt:not([hidden]))
+  #mc-confirm-cancel {
+  border-color: transparent;
+  font-weight: 500;
+  height: 30px;
+  margin-top: 2px;
+}
+
+.mc-confirm-card .mc-btn:focus-visible {
+  outline: 2px solid var(--mc-accent);
+  outline-offset: 2px;
 }
 
 .mc-confirm-emphasis {

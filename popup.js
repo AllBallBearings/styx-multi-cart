@@ -382,10 +382,25 @@
 
     $promptModal.hidden = false;
     $promptModal.removeAttribute("inert");
-    setTimeout(() => {
-      $promptInput.focus();
-      $promptInput.select();
-    }, 0);
+    // The floating in-page modal renders this popup inside an iframe on
+    // amazon.com. A lone setTimeout(0) focus can miss when the iframe hasn't
+    // taken frame-focus yet (or the host page grabs it back), leaving a caret
+    // that swallows no keystrokes. Grab the window first and retry a few times
+    // so the input reliably becomes the active element. Mirrors the on-page
+    // picker's create-name field, which needs the same treatment.
+    const focusPromptInput = () => {
+      try {
+        window.focus();
+      } catch (_e) {}
+      try {
+        $promptInput.focus();
+        $promptInput.select();
+      } catch (_e) {}
+    };
+    focusPromptInput();
+    setTimeout(focusPromptInput, 0);
+    setTimeout(focusPromptInput, 60);
+    requestAnimationFrame(focusPromptInput);
 
     return new Promise((resolve) => {
       promptPending = {
@@ -1033,7 +1048,9 @@
     } catch (_e) { /* non-fatal — generic copy below */ }
     const these =
       count && count > 0
-        ? `these ${count} item${count === 1 ? "" : "s"}`
+        ? count === 1
+          ? "this item"
+          : `these ${count} items`
         : "these items";
 
     const choice = await confirmDialog({
@@ -1734,6 +1751,7 @@
       (unavailableCount
         ? ` · ${unavailableCount} unavailable`
         : "");
+    card.dataset.countKnown = "1"; // real count is in — the poll can skip it
     const status = card.querySelector(".mc-amazon-list-load-status");
     status.hidden = true;
     status.textContent = "";
@@ -1793,10 +1811,25 @@
     if (forceItems) node.dataset.forceRefresh = "1";
     const nameEl = node.querySelector(".mc-amazon-list-name");
     nameEl.textContent = list.name || "Amazon list";
-    const host = fullHost.replace(/^www\./, "");
     const metaEl = node.querySelector(".mc-amazon-list-meta");
     const open = node.querySelector(".mc-amazon-list-open");
     open.href = list.url || "#";
+    // Show the item count when we already know it. It's often unknown at first
+    // paint (the wishlist index page prints no reliable count), so fall back to
+    // the "View items" affordance and let the background count backfill fill it
+    // in latently (pollListCounts). `data-count-known` marks cards the poll can
+    // skip. updateAmazonListCard replaces this with "N items · M qty" on expand.
+    const countEl = node.querySelector(".mc-item-count");
+    // Guard null/"" explicitly — Number(null) and Number("") are both 0, which
+    // would mislabel a count-less list as "0 items".
+    const listCount =
+      list.count == null || list.count === "" ? NaN : Number(list.count);
+    if (Number.isFinite(listCount) && listCount >= 0) {
+      countEl.textContent = `${listCount} item${listCount === 1 ? "" : "s"}`;
+      node.dataset.countKnown = "1";
+    } else {
+      countEl.textContent = "View items";
+    }
     if (list.access === "locked") {
       // Free-tier cart beyond the limit: gray it out, drop the add-all action,
       // and route clicks to the paywall (handled in the list click listener).
@@ -1804,10 +1837,14 @@
       node.dataset.locked = "1";
       const addAll = node.querySelector(".mc-amazon-list-addall");
       if (addAll) addAll.remove();
-      metaEl.textContent = `${host} · Premium cart — upgrade to use`;
+      // The only meta worth showing: why the cart is grayed out.
+      metaEl.textContent = "Premium cart — upgrade to use";
+      metaEl.hidden = false;
       nameEl.setAttribute("aria-label", `Unlock ${list.name || "this cart"} with Premium`);
     } else {
-      metaEl.textContent = `${host} · Amazon list`;
+      // "host · Amazon list" told the user nothing — drop it entirely.
+      metaEl.textContent = "";
+      metaEl.hidden = true;
       nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
     }
     amazonListCache.set(list.listId, Object.assign({}, list));
@@ -1849,12 +1886,53 @@
         $amazonLists.appendChild(renderAmazonListCard(list, forceRefresh))
       );
       amazonListsLoaded = true;
+      // Labels are up. The service worker fills missing counts in the
+      // background (invisible tabs); poll the cheap counts map and drop each
+      // number in as it lands, so the user never waits on a spinner.
+      pollListCounts();
     })();
 
     try {
       await amazonListsLoadPromise;
     } finally {
       amazonListsLoadPromise = null;
+    }
+  }
+
+  // Latently fill card counts the first render didn't know. Polls the SW's
+  // cached counts (no Amazon driving) and updates each card as its count
+  // appears, stopping once every card is known or after a hard cap so it can't
+  // spin forever. Re-entrant-safe: a fresh call cancels the previous timer.
+  let countPollTimer = null;
+  function stopCountPolling() {
+    if (countPollTimer) {
+      clearTimeout(countPollTimer);
+      countPollTimer = null;
+    }
+  }
+  async function pollListCounts(attempt = 0) {
+    stopCountPolling();
+    if (!$amazonLists) return;
+    const cards = Array.from(
+      $amazonLists.querySelectorAll(".mc-amazon-list-card")
+    );
+    const pending = cards.filter((c) => c.dataset.countKnown !== "1");
+    if (!pending.length || attempt > 20) return; // all in, or gave up (~30s)
+
+    const res = await send({ type: "MC_GET_LIST_COUNTS" });
+    const counts = (res && res.ok && res.counts) || {};
+    pending.forEach((card) => {
+      const id = String(card.dataset.listId || "").toUpperCase();
+      const n = counts[id];
+      if (typeof n === "number") {
+        const el = card.querySelector(".mc-item-count");
+        if (el) el.textContent = `${n} item${n === 1 ? "" : "s"}`;
+        card.dataset.countKnown = "1";
+      }
+    });
+
+    if (cards.some((c) => c.dataset.countKnown !== "1")) {
+      countPollTimer = setTimeout(() => pollListCounts(attempt + 1), 1500);
     }
   }
 
@@ -2101,6 +2179,10 @@
 
   const DEV_FLAG_KEY = "mc.dev.v1";
   const ENT_KEY = "mc.entitlement.v1";
+  // Pins the forced entitlement so the SW's ExtPay/StoreKit sync won't revert
+  // it (see DEV_ENT_LOCK_KEY in src/background/index.js). Set whenever a debug
+  // preset or the flip hotkey forces a tier; cleared by "Unlock (use real)".
+  const DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
 
   /* MC_DEBUG_ENT_START */
   const DAY_MS = 86400000;
@@ -2168,8 +2250,11 @@
   async function refreshDebugEntDisplay() {
     if (!$debugEntState) return;
     try {
-      const got = await chrome.storage.local.get(ENT_KEY);
-      $debugEntState.textContent = formatEntForDisplay(got[ENT_KEY]);
+      const got = await chrome.storage.local.get([ENT_KEY, DEV_ENT_LOCK_KEY]);
+      const locked = got[DEV_ENT_LOCK_KEY] === true;
+      $debugEntState.textContent =
+        formatEntForDisplay(got[ENT_KEY]) +
+        `\nlock:        ${locked ? "ON (dev-pinned)" : "off"}`;
     } catch (e) {
       $debugEntState.textContent = `error: ${e.message}`;
     }
@@ -2257,11 +2342,29 @@
         }
         return;
       }
+      if (action === "unlock") {
+        try {
+          await chrome.storage.local.remove(DEV_ENT_LOCK_KEY);
+          // Snap the stored entitlement back to the real account.
+          await send({ type: "MC_DEV_SYNC_ENTITLEMENT" });
+          await refreshDebugEntDisplay();
+          await refresh();
+          toast("Entitlement unlocked — using real account", "ok");
+        } catch (err) {
+          toast(`Unlock failed: ${err.message}`, "error");
+        }
+        return;
+      }
       const presets = entPresets(now);
       const next = presets[action];
       if (!next) return;
       try {
-        await chrome.storage.local.set({ [ENT_KEY]: next });
+        // Pin it so the SW's real-account sync doesn't overwrite the forced
+        // state — the whole point for screenshots/video.
+        await chrome.storage.local.set({
+          [ENT_KEY]: next,
+          [DEV_ENT_LOCK_KEY]: true,
+        });
         // Reset dismissed UI on entitlement state change so banners come back.
         uiDismissed = { tierStrip: null, lapsedBanner: null };
         await chrome.storage.local.set({
@@ -2269,13 +2372,160 @@
         });
         await refreshDebugEntDisplay();
         await refresh();
-        toast(`Entitlement → ${action}`, "ok");
+        toast(`Entitlement → ${action} (locked)`, "ok");
       } catch (err) {
         toast(`Failed: ${err.message}`, "error");
       }
     });
   }
+
+  // Secret fast toggle: Ctrl/Cmd+Alt+P flips Premium ⇄ Free instantly and
+  // pins it (lock on), without opening the debug panel — so screenshots and
+  // video stay clean. Same dev-mode gate as Ctrl+Alt+D; e.code keeps it
+  // working regardless of macOS Option-key remapping.
+  document.addEventListener("keydown", async (e) => {
+    if (!devModeEnabled) return;
+    const isFlip =
+      (e.ctrlKey || e.metaKey) && e.altKey && e.code === "KeyP";
+    if (!isFlip) return;
+    e.preventDefault();
+    try {
+      const got = await chrome.storage.local.get(ENT_KEY);
+      const cur = got[ENT_KEY];
+      const premiumNow =
+        cur &&
+        cur.tier === "premium" &&
+        (cur.premiumUntil == null || cur.premiumUntil > Date.now());
+      const target = premiumNow ? "free" : "premium";
+      const next = entPresets(Date.now())[target];
+      await chrome.storage.local.set({
+        [ENT_KEY]: next,
+        [DEV_ENT_LOCK_KEY]: true,
+      });
+      uiDismissed = { tierStrip: null, lapsedBanner: null };
+      await chrome.storage.local.set({ [DISMISS_KEY]: uiDismissed });
+      await refreshDebugEntDisplay();
+      await refresh();
+      toast(`Entitlement → ${target} (locked)`, "ok");
+    } catch (err) {
+      toast(`Flip failed: ${err.message}`, "error");
+    }
+  });
   /* MC_DEBUG_ENT_END */
+
+  // ---- Dev backup / restore ----------------------------------------------
+  // Not inside the entitlement strip markers: this ships (dev-gated behind the
+  // Debug panel) and is the seed of a future user-facing "move my carts"
+  // feature. Export snapshots storage + every Amazon list's items to a JSON
+  // file; restore recreates custom lists on Amazon from such a file.
+  const $devExport = document.getElementById("mc-dev-export");
+  const $devRestore = document.getElementById("mc-dev-restore");
+  const $devRestoreFile = document.getElementById("mc-dev-restore-file");
+  const $devBackupState = document.getElementById("mc-dev-backup-state");
+
+  function setBackupState(text) {
+    if (!$devBackupState) return;
+    $devBackupState.hidden = false;
+    $devBackupState.textContent = text;
+  }
+
+  if ($devExport) {
+    $devExport.addEventListener("click", () => {
+      withLoading($devExport, async () => {
+        setBackupState("Exporting… reading each list, watch the status window.");
+        // Generous timeout: export navigates one Amazon tab per list.
+        const res = await send({ type: "MC_DEV_EXPORT_BACKUP" }, 600000);
+        if (!res.ok) {
+          setBackupState(`Export failed: ${res.error}`);
+          toast(res.error || "Export failed", "error");
+          return;
+        }
+        const backup = res.backup;
+        const listCount = backup.amazonLists.length;
+        const itemCount = backup.amazonLists.reduce(
+          (n, l) => n + (l.itemCount || 0),
+          0
+        );
+        const blob = new Blob([JSON.stringify(backup, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const ts = new Date()
+          .toISOString()
+          .replace(/[:T]/g, "-")
+          .slice(0, 19);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `styx-backup-${ts}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        setBackupState(`Exported ${listCount} list(s), ${itemCount} item(s).`);
+        toast(`Backup exported (${listCount} lists)`, "ok");
+      });
+    });
+  }
+
+  if ($devRestore && $devRestoreFile) {
+    $devRestore.addEventListener("click", () => $devRestoreFile.click());
+    $devRestoreFile.addEventListener("change", async () => {
+      const file = $devRestoreFile.files && $devRestoreFile.files[0];
+      $devRestoreFile.value = ""; // let the same file be picked again later
+      if (!file) return;
+      let backup;
+      try {
+        backup = JSON.parse(await file.text());
+      } catch (_e) {
+        toast("Could not parse that file", "error");
+        return;
+      }
+      if (
+        !backup ||
+        backup.app !== "styx-multi-cart" ||
+        !Array.isArray(backup.amazonLists)
+      ) {
+        toast("Not a Styx backup file", "error");
+        return;
+      }
+      const customCount = backup.amazonLists.filter(
+        (l) =>
+          (l.kind || "custom") === "custom" &&
+          Array.isArray(l.items) &&
+          l.items.length
+      ).length;
+      const ok = await confirmDialog({
+        title: "Restore backup?",
+        message:
+          `This recreates ${customCount} custom list(s) on Amazon by driving ` +
+          `Add-to-List for every item — slow, and it creates NEW lists ` +
+          `(it won't merge into existing ones). Continue?`,
+        okLabel: "Restore",
+        cancelLabel: "Cancel",
+      });
+      if (!ok) return;
+      withLoading($devRestore, async () => {
+        setBackupState("Restoring… watch the status window.");
+        // Very generous timeout: restore drives Add-to-List per item.
+        const res = await send(
+          { type: "MC_DEV_RESTORE_BACKUP", backup },
+          1800000
+        );
+        if (!res.ok) {
+          setBackupState(`Restore failed: ${res.error}`);
+          toast(res.error || "Restore failed", "error");
+          return;
+        }
+        const failed = res.failures && res.failures.length;
+        const summary =
+          `Restored ${res.restored}/${res.total} list(s)` +
+          (failed ? `, ${res.failures.length} failed` : "");
+        setBackupState(summary);
+        toast(summary, failed ? "error" : "ok");
+        await refresh();
+      });
+    });
+  }
 
   // Assemble a paste-able diagnostic report: extension version + state
   // snapshot + the cross-context log ring (SW, content scripts, popup). The
