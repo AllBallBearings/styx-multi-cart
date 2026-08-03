@@ -12,15 +12,23 @@
   // it can fill the panel's width/height instead of the fixed popup size.
   // ("panel" is the legacy in-page-iframe value, kept for safety.)
   const _surface = new URLSearchParams(location.search).get("surface");
-  if (_surface === "sidepanel" || _surface === "panel") {
+  if (
+    _surface === "sidepanel" ||
+    _surface === "panel" ||
+    _surface === "floating"
+  ) {
     document.documentElement.dataset.surface = _surface;
   }
 
-  // In the side panel, window.close() tears the entire panel down — the user
-  // then has to reopen it from the toolbar. Only the fixed-size popup should
-  // auto-dismiss to "get out of the way" after an op; the panel sits beside
-  // the page and never covers it. Guard every close() call with this.
-  const IS_PANEL_SURFACE = _surface === "sidepanel" || _surface === "panel";
+  // In the side panel (and the floating modal iframe), window.close() would
+  // tear the whole surface down — the user then has to reopen it. Only the
+  // fixed-size toolbar popup should auto-dismiss to "get out of the way" after
+  // an op; the panel/modal stays put beside/over the page. Guard every close()
+  // call with this. (window.close() is a no-op inside an iframe anyway, but we
+  // skip the auto-dismiss flows so the modal doesn't try to vanish mid-task.)
+  const IS_FLOATING_SURFACE = _surface === "floating";
+  const IS_PANEL_SURFACE =
+    _surface === "sidepanel" || _surface === "panel" || IS_FLOATING_SURFACE;
 
   // Safari serves extension pages from safari-web-extension://. On Safari the
   // premium unlock is an App Store In-App Purchase handled by the native host
@@ -77,8 +85,10 @@
   const $qtyPopVal = $qtyPop.querySelector(".mc-qty-pop-val");
   const $interceptToggle = document.getElementById("mc-intercept-toggle");
   const $relabelToggle = document.getElementById("mc-relabel-toggle");
+  const $fabpulseToggle = document.getElementById("mc-fabpulse-toggle");
   const $sidepanelToggle = document.getElementById("mc-sidepanel-toggle");
   const $gotoCarts = document.getElementById("mc-goto-carts");
+  const $saveForLater = document.getElementById("mc-save-for-later");
   const $displaySection = document.getElementById(
     "mc-settings-display-section"
   );
@@ -98,13 +108,13 @@
   const $paywallModal = document.getElementById("mc-paywall-modal");
   const $paywallTitle = document.getElementById("mc-paywall-title");
   const $paywallSub = document.getElementById("mc-paywall-sub");
-  const $paywallStub = document.getElementById("mc-paywall-stub");
 
   // Confirm-dialog refs (in-popup replacement for window.confirm).
   const $confirmModal = document.getElementById("mc-confirm-modal");
   const $confirmTitle = document.getElementById("mc-confirm-title");
   const $confirmBody = document.getElementById("mc-confirm-body");
   const $confirmOk = document.getElementById("mc-confirm-ok");
+  const $confirmAlt = document.getElementById("mc-confirm-alt");
   const $confirmCancel = document.getElementById("mc-confirm-cancel");
 
   // Prompt-dialog refs (in-popup replacement for window.prompt).
@@ -162,7 +172,7 @@
   let currentEntitlement = {
     tier: "free",
     isPremium: false,
-    limit: 2,
+    limit: 3,
     count: 0,
     premiumUntil: null,
     autoRenew: false,
@@ -239,12 +249,17 @@
   let confirmPending = null;
 
   function confirmDialog(opts) {
+    // Resolves "ok" | "alt" | false. Strings rather than booleans so a dialog
+    // can offer a second affirmative action; every caller that only cares
+    // about yes/no still works, because "ok"/"alt" are truthy and cancel is
+    // still false.
     const {
       title = "Are you sure?",
       message = "",
       emphasis = null,
       okLabel = "OK",
       cancelLabel = "Cancel",
+      altLabel = null,
       destructive = false,
     } = opts || {};
 
@@ -270,10 +285,25 @@
     $confirmCancel.textContent = cancelLabel;
     $confirmOk.classList.toggle("mc-btn-danger", !!destructive);
 
+    // Optional second affirmative. When present it becomes the primary action
+    // and the OK button steps down to a secondary style, so the recommended
+    // path (e.g. "Save & Clear") reads as the default rather than the
+    // destructive one.
+    $confirmAlt.hidden = !altLabel;
+    if (altLabel) {
+      $confirmAlt.textContent = altLabel;
+      $confirmOk.classList.remove("mc-btn-primary");
+      $confirmOk.classList.add("mc-btn-ghost");
+    } else {
+      $confirmOk.classList.add("mc-btn-primary");
+      $confirmOk.classList.remove("mc-btn-ghost");
+    }
+
     $confirmModal.hidden = false;
     $confirmModal.removeAttribute("inert");
-    // Give the OK button focus so Enter == confirm.
-    setTimeout(() => $confirmOk.focus(), 0);
+    // Focus the primary action so Enter picks it: the alt button when it
+    // exists, otherwise OK.
+    setTimeout(() => (altLabel ? $confirmAlt : $confirmOk).focus(), 0);
 
     return new Promise((resolve) => {
       confirmPending = {
@@ -283,6 +313,7 @@
           $confirmModal.hidden = true;
           $confirmModal.setAttribute("inert", "");
           $confirmOk.classList.remove("mc-btn-danger");
+          $confirmAlt.hidden = true;
           resolve(value);
         },
       };
@@ -292,7 +323,9 @@
   $confirmModal.addEventListener("click", (e) => {
     const action = e.target.closest("[data-action]")?.dataset.action;
     if (action === "confirm-ok") {
-      confirmPending?.resolve(true);
+      confirmPending?.resolve("ok");
+    } else if (action === "confirm-alt") {
+      confirmPending?.resolve("alt");
     } else if (action === "confirm-cancel") {
       confirmPending?.resolve(false);
     }
@@ -625,9 +658,13 @@
         const a = document.createElement("a");
         a.className = "mc-sync-link";
         a.href = cart.amazonListUrl;
-        a.target = "_blank";
-        a.rel = "noopener";
         a.textContent = "View list";
+        // Navigate the existing Amazon tab in place (same as the per-list
+        // "View on Amazon" link) rather than opening a new tab.
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          openInActiveTab(a.href);
+        });
         syncEl.appendChild(a);
       }
       if (saveBtn) saveBtn.textContent = "Update Amazon List";
@@ -697,7 +734,7 @@
   function renderTierStrip(carts) {
     const ent = currentEntitlement;
     const count = carts.length;
-    const limit = ent.limit || 2;
+    const limit = ent.limit || 3;
     const premium = !!ent.isPremium;
     const now = Date.now();
 
@@ -732,7 +769,7 @@
 
   /**
    * Lapsed banner: shown when a free-tier user has read-only carts visible
-   * (i.e., they were premium, kept >2 carts, and the subscription lapsed).
+   * (i.e., they were premium, kept >3 carts, and the subscription lapsed).
    * Per spec, this banner is persistent and only disappears on renewal or
    * cart cleanup.
    */
@@ -807,6 +844,25 @@
     });
   }
 
+  async function loadFabPulseSetting() {
+    if (!$fabpulseToggle) return;
+    const res = await send({ type: "MC_GET_FAB_PULSE" });
+    if (res && res.ok) $fabpulseToggle.checked = res.enabled !== false;
+  }
+
+  if ($fabpulseToggle) {
+    $fabpulseToggle.addEventListener("change", async () => {
+      const enabled = $fabpulseToggle.checked;
+      const res = await send({ type: "MC_SET_FAB_PULSE", enabled });
+      if (!res || !res.ok) {
+        $fabpulseToggle.checked = !enabled; // revert on failure
+        toast((res && res.error) || "Could not save setting", "error");
+        return;
+      }
+      toast(enabled ? "Floating button will pulse." : "Floating button pulse off.");
+    });
+  }
+
   // ---- "Go to Carts": open the Amazon lists page -------------------------
 
   if ($gotoCarts) {
@@ -825,6 +881,25 @@
         toast("Couldn't open your carts", "error");
       }
     });
+  }
+
+  // Navigate the user's EXISTING Amazon tab to `url` (per-list "View on Amazon"
+  // links). The popup surface can be a floating iframe on the Amazon page, the
+  // side panel, or a compact popover — in all three the active tab in the
+  // current window is the Amazon tab to move, so we update it in place rather
+  // than spawning a new tab. (A plain <a> can't do this: inside the floating
+  // iframe a same-tab link would try to load Amazon INTO the iframe, which
+  // Amazon blocks, and target=_blank always forks a new tab.)
+  async function openInActiveTab(url) {
+    if (!url || url === "#") return;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.id != null) {
+        await chrome.tabs.update(tab.id, { url });
+        return;
+      }
+    } catch (_e) { /* fall through to a new tab */ }
+    try { await chrome.tabs.create({ url }); } catch (_e) { /* give up quietly */ }
   }
 
   // ---- Settings: open as side panel vs popup (Chrome only) ---------------
@@ -948,13 +1023,47 @@
   });
 
   $clear.addEventListener("click", async () => {
-    const ok = await confirmDialog({
-      title: "Clear Amazon cart?",
-      message: "Are you sure you want to clear your current Amazon cart?",
-      okLabel: "Clear Amazon Cart",
+    // Name the stakes when we can — "Save these 12 items" lands far harder
+    // than "these items". Falls back to generic wording if there's no active
+    // Amazon tab to count from.
+    let count = null;
+    try {
+      const c = await send({ type: "MC_GET_CART_COUNT" });
+      if (c && c.ok && Number.isFinite(c.count)) count = c.count;
+    } catch (_e) { /* non-fatal — generic copy below */ }
+    const these =
+      count && count > 0
+        ? count === 1
+          ? "this item"
+          : `these ${count} items`
+        : "these items";
+
+    const choice = await confirmDialog({
+      title: "Clear your Amazon cart?",
+      message:
+        `Save ${these} for a later checkout and they'll be waiting in your ` +
+        `Amazon account — or just clear it. Your Saved for Later stays ` +
+        `untouched either way.`,
+      altLabel: "Save & Clear",
+      okLabel: "Just Clear",
+      cancelLabel: "Cancel",
       destructive: true,
     });
-    if (!ok) return;
+    if (!choice) return;
+
+    if (choice === "alt") {
+      withLoading($clear, async () => {
+        const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
+        if (res.ok) {
+          toast("Saving your cart to a new Amazon list, then clearing it…");
+          if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
+        } else if (!handleEntitlementError(res)) {
+          toast(res.error || "Could not save cart", "error");
+        }
+      });
+      return;
+    }
+
     withLoading($clear, async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
@@ -972,6 +1081,27 @@
       }
     });
   });
+
+  // Save the live Amazon cart into a new cart WITHOUT clearing it — the
+  // same driver as "Save & Clear", minus the clear step.
+  if ($saveForLater) {
+    $saveForLater.addEventListener("click", () => {
+      withLoading($saveForLater, async () => {
+        const res = await send({
+          type: "MC_SAVE_FOR_LATER",
+          name: defaultName(),
+        });
+        if (res.ok) {
+          toast(
+            `Saving ${res.saving} item${res.saving === 1 ? "" : "s"} to a new cart — your Amazon cart stays as it is.`
+          );
+          if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
+        } else if (!handleEntitlementError(res)) {
+          toast(res.error || "Could not save cart", "error");
+        }
+      });
+    });
+  }
 
   // ---- Combine mode ------------------------------------------------------
 
@@ -1508,8 +1638,8 @@
       const ok = await confirmDialog({
         title: isUpdate ? "Update Amazon list?" : "Save to Amazon list?",
         message: isUpdate
-          ? `Re-sync "${cartName}" to its Amazon wish list. Styx opens Amazon tabs to add the items — keep them open until it finishes.`
-          : `Create a private Amazon wish list named "${cartName}" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.`,
+          ? `Re-sync "${cartName}" to its Amazon list. Styx opens Amazon tabs to add the items — keep them open until it finishes.`
+          : `Create a private Amazon list named "${cartName}" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.`,
         okLabel: isUpdate ? "Update" : "Save to Amazon",
       });
       if (!ok) return;
@@ -1665,11 +1795,23 @@
     if (forceItems) node.dataset.forceRefresh = "1";
     const nameEl = node.querySelector(".mc-amazon-list-name");
     nameEl.textContent = list.name || "Amazon list";
-    nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
-    node.querySelector(".mc-amazon-list-meta").textContent =
-      `${fullHost.replace(/^www\./, "")} · Amazon Wish List`;
+    const host = fullHost.replace(/^www\./, "");
+    const metaEl = node.querySelector(".mc-amazon-list-meta");
     const open = node.querySelector(".mc-amazon-list-open");
     open.href = list.url || "#";
+    if (list.access === "locked") {
+      // Free-tier cart beyond the limit: gray it out, drop the add-all action,
+      // and route clicks to the paywall (handled in the list click listener).
+      node.classList.add("mc-amazon-list-locked");
+      node.dataset.locked = "1";
+      const addAll = node.querySelector(".mc-amazon-list-addall");
+      if (addAll) addAll.remove();
+      metaEl.textContent = `${host} · Premium cart — upgrade to use`;
+      nameEl.setAttribute("aria-label", `Unlock ${list.name || "this cart"} with Premium`);
+    } else {
+      metaEl.textContent = `${host} · Amazon list`;
+      nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
+    }
     amazonListCache.set(list.listId, Object.assign({}, list));
     return node;
   }
@@ -1733,6 +1875,24 @@
       const li = (btn || e.target).closest("li.mc-amazon-list-card");
       if (!li) return;
 
+      // "View on Amazon": navigate the existing Amazon tab in place instead of
+      // letting the anchor open a new tab. Handled before the lock check so it
+      // works for locked carts too (opening the real list stays allowed).
+      const openLink = e.target.closest(".mc-amazon-list-open");
+      if (openLink) {
+        e.preventDefault();
+        openInActiveTab(openLink.href);
+        return;
+      }
+
+      // Locked (free-tier over-limit) cart: any interaction except the
+      // View-on-Amazon link opens the paywall. Amazon functionality (opening
+      // the real list) stays available.
+      if (li.dataset.locked === "1") {
+        openPaywall("limit");
+        return;
+      }
+
       // Click anywhere on the card body toggles expand/collapse — but not on
       // the View-on-Amazon link, the add-all icon, or item-tile controls.
       if (!btn) {
@@ -1785,6 +1945,7 @@
           type: "MC_WISHLIST_ADD_ALL",
           items: availableItems,
           host: list.host || li.dataset.host,
+          listId: li.dataset.listId,
         });
         if (res.ok) {
           toast(`Adding ${availableItems.length} item${availableItems.length === 1 ? "" : "s"} to your Amazon cart…`);
@@ -1942,6 +2103,10 @@
 
   const DEV_FLAG_KEY = "mc.dev.v1";
   const ENT_KEY = "mc.entitlement.v1";
+  // Pins the forced entitlement so the SW's ExtPay/StoreKit sync won't revert
+  // it (see DEV_ENT_LOCK_KEY in src/background/index.js). Set whenever a debug
+  // preset or the flip hotkey forces a tier; cleared by "Unlock (use real)".
+  const DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
 
   /* MC_DEBUG_ENT_START */
   const DAY_MS = 86400000;
@@ -2009,8 +2174,11 @@
   async function refreshDebugEntDisplay() {
     if (!$debugEntState) return;
     try {
-      const got = await chrome.storage.local.get(ENT_KEY);
-      $debugEntState.textContent = formatEntForDisplay(got[ENT_KEY]);
+      const got = await chrome.storage.local.get([ENT_KEY, DEV_ENT_LOCK_KEY]);
+      const locked = got[DEV_ENT_LOCK_KEY] === true;
+      $debugEntState.textContent =
+        formatEntForDisplay(got[ENT_KEY]) +
+        `\nlock:        ${locked ? "ON (dev-pinned)" : "off"}`;
     } catch (e) {
       $debugEntState.textContent = `error: ${e.message}`;
     }
@@ -2098,11 +2266,29 @@
         }
         return;
       }
+      if (action === "unlock") {
+        try {
+          await chrome.storage.local.remove(DEV_ENT_LOCK_KEY);
+          // Snap the stored entitlement back to the real account.
+          await send({ type: "MC_DEV_SYNC_ENTITLEMENT" });
+          await refreshDebugEntDisplay();
+          await refresh();
+          toast("Entitlement unlocked — using real account", "ok");
+        } catch (err) {
+          toast(`Unlock failed: ${err.message}`, "error");
+        }
+        return;
+      }
       const presets = entPresets(now);
       const next = presets[action];
       if (!next) return;
       try {
-        await chrome.storage.local.set({ [ENT_KEY]: next });
+        // Pin it so the SW's real-account sync doesn't overwrite the forced
+        // state — the whole point for screenshots/video.
+        await chrome.storage.local.set({
+          [ENT_KEY]: next,
+          [DEV_ENT_LOCK_KEY]: true,
+        });
         // Reset dismissed UI on entitlement state change so banners come back.
         uiDismissed = { tierStrip: null, lapsedBanner: null };
         await chrome.storage.local.set({
@@ -2110,13 +2296,160 @@
         });
         await refreshDebugEntDisplay();
         await refresh();
-        toast(`Entitlement → ${action}`, "ok");
+        toast(`Entitlement → ${action} (locked)`, "ok");
       } catch (err) {
         toast(`Failed: ${err.message}`, "error");
       }
     });
   }
+
+  // Secret fast toggle: Ctrl/Cmd+Alt+P flips Premium ⇄ Free instantly and
+  // pins it (lock on), without opening the debug panel — so screenshots and
+  // video stay clean. Same dev-mode gate as Ctrl+Alt+D; e.code keeps it
+  // working regardless of macOS Option-key remapping.
+  document.addEventListener("keydown", async (e) => {
+    if (!devModeEnabled) return;
+    const isFlip =
+      (e.ctrlKey || e.metaKey) && e.altKey && e.code === "KeyP";
+    if (!isFlip) return;
+    e.preventDefault();
+    try {
+      const got = await chrome.storage.local.get(ENT_KEY);
+      const cur = got[ENT_KEY];
+      const premiumNow =
+        cur &&
+        cur.tier === "premium" &&
+        (cur.premiumUntil == null || cur.premiumUntil > Date.now());
+      const target = premiumNow ? "free" : "premium";
+      const next = entPresets(Date.now())[target];
+      await chrome.storage.local.set({
+        [ENT_KEY]: next,
+        [DEV_ENT_LOCK_KEY]: true,
+      });
+      uiDismissed = { tierStrip: null, lapsedBanner: null };
+      await chrome.storage.local.set({ [DISMISS_KEY]: uiDismissed });
+      await refreshDebugEntDisplay();
+      await refresh();
+      toast(`Entitlement → ${target} (locked)`, "ok");
+    } catch (err) {
+      toast(`Flip failed: ${err.message}`, "error");
+    }
+  });
   /* MC_DEBUG_ENT_END */
+
+  // ---- Dev backup / restore ----------------------------------------------
+  // Not inside the entitlement strip markers: this ships (dev-gated behind the
+  // Debug panel) and is the seed of a future user-facing "move my carts"
+  // feature. Export snapshots storage + every Amazon list's items to a JSON
+  // file; restore recreates custom lists on Amazon from such a file.
+  const $devExport = document.getElementById("mc-dev-export");
+  const $devRestore = document.getElementById("mc-dev-restore");
+  const $devRestoreFile = document.getElementById("mc-dev-restore-file");
+  const $devBackupState = document.getElementById("mc-dev-backup-state");
+
+  function setBackupState(text) {
+    if (!$devBackupState) return;
+    $devBackupState.hidden = false;
+    $devBackupState.textContent = text;
+  }
+
+  if ($devExport) {
+    $devExport.addEventListener("click", () => {
+      withLoading($devExport, async () => {
+        setBackupState("Exporting… reading each list, watch the status window.");
+        // Generous timeout: export navigates one Amazon tab per list.
+        const res = await send({ type: "MC_DEV_EXPORT_BACKUP" }, 600000);
+        if (!res.ok) {
+          setBackupState(`Export failed: ${res.error}`);
+          toast(res.error || "Export failed", "error");
+          return;
+        }
+        const backup = res.backup;
+        const listCount = backup.amazonLists.length;
+        const itemCount = backup.amazonLists.reduce(
+          (n, l) => n + (l.itemCount || 0),
+          0
+        );
+        const blob = new Blob([JSON.stringify(backup, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const ts = new Date()
+          .toISOString()
+          .replace(/[:T]/g, "-")
+          .slice(0, 19);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `styx-backup-${ts}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        setBackupState(`Exported ${listCount} list(s), ${itemCount} item(s).`);
+        toast(`Backup exported (${listCount} lists)`, "ok");
+      });
+    });
+  }
+
+  if ($devRestore && $devRestoreFile) {
+    $devRestore.addEventListener("click", () => $devRestoreFile.click());
+    $devRestoreFile.addEventListener("change", async () => {
+      const file = $devRestoreFile.files && $devRestoreFile.files[0];
+      $devRestoreFile.value = ""; // let the same file be picked again later
+      if (!file) return;
+      let backup;
+      try {
+        backup = JSON.parse(await file.text());
+      } catch (_e) {
+        toast("Could not parse that file", "error");
+        return;
+      }
+      if (
+        !backup ||
+        backup.app !== "styx-multi-cart" ||
+        !Array.isArray(backup.amazonLists)
+      ) {
+        toast("Not a Styx backup file", "error");
+        return;
+      }
+      const customCount = backup.amazonLists.filter(
+        (l) =>
+          (l.kind || "custom") === "custom" &&
+          Array.isArray(l.items) &&
+          l.items.length
+      ).length;
+      const ok = await confirmDialog({
+        title: "Restore backup?",
+        message:
+          `This recreates ${customCount} custom list(s) on Amazon by driving ` +
+          `Add-to-List for every item — slow, and it creates NEW lists ` +
+          `(it won't merge into existing ones). Continue?`,
+        okLabel: "Restore",
+        cancelLabel: "Cancel",
+      });
+      if (!ok) return;
+      withLoading($devRestore, async () => {
+        setBackupState("Restoring… watch the status window.");
+        // Very generous timeout: restore drives Add-to-List per item.
+        const res = await send(
+          { type: "MC_DEV_RESTORE_BACKUP", backup },
+          1800000
+        );
+        if (!res.ok) {
+          setBackupState(`Restore failed: ${res.error}`);
+          toast(res.error || "Restore failed", "error");
+          return;
+        }
+        const failed = res.failures && res.failures.length;
+        const summary =
+          `Restored ${res.restored}/${res.total} list(s)` +
+          (failed ? `, ${res.failures.length} failed` : "");
+        setBackupState(summary);
+        toast(summary, failed ? "error" : "ok");
+        await refresh();
+      });
+    });
+  }
 
   // Assemble a paste-able diagnostic report: extension version + state
   // snapshot + the cross-context log ring (SW, content scripts, popup). The
@@ -2234,7 +2567,10 @@
 
   function openPaywall(trigger) {
     if (trigger === "limit") {
-      $paywallTitle.textContent = "You've used both free carts";
+      // Derive from the entitlement rather than hard-coding — a changed
+      // FREE_CART_LIMIT must not leave this headline quietly lying.
+      const freeLimit = (currentEntitlement && currentEntitlement.limit) || 3;
+      $paywallTitle.textContent = `You've used all ${freeLimit} free carts`;
       $paywallSub.textContent =
         "Upgrade to Premium to save more — your existing carts stay exactly as they are.";
     } else if (trigger === "renew") {
@@ -2247,7 +2583,6 @@
         "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.";
     }
     // ExtensionPay is wired; each plan button deep-links its own checkout.
-    $paywallStub.hidden = true;
     resetPaywallButtons();
 
     $paywallModal.hidden = false;
@@ -2640,9 +2975,10 @@
       return true;
     }
     if (res.code === "PREMIUM_LIMIT_REACHED") {
+      // Only reachable via the legacy local-cart path (Amazon-list carts are
+      // uncapped on Premium), so don't quote a number the lists path contradicts.
       toast(
-        res.error ||
-          `You've reached the 20-cart limit. Delete or merge carts to free up space.`,
+        res.error || `You've reached the cart limit. Delete or merge carts to free up space.`,
         "error"
       );
       return true;
@@ -2667,6 +3003,7 @@
     refresh();
     loadInterceptSetting();
     loadRelabelSetting();
+    loadFabPulseSetting();
     loadSurfaceSetting();
     // Fire-and-forget: ask the background to re-sync entitlement from
     // ExtensionPay. If the user just returned from a successful checkout,

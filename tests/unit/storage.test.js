@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
-  readCarts,
-  writeCarts,
   readSettings,
   writeSettings,
   getUpsellChoices,
@@ -9,7 +7,6 @@ import {
   getRecordedUpsellChoice,
 } from "../../lib/storage.js";
 import {
-  STORAGE_KEY,
   SETTINGS_KEY,
   UPSELL_CHOICES_KEY,
   DEFAULT_SETTINGS,
@@ -57,32 +54,6 @@ function installStorageBackend() {
 
 beforeEach(() => {
   chrome.flush();
-});
-
-describe("readCarts / writeCarts", () => {
-  it("returns [] when nothing has been stored", async () => {
-    installStorageBackend();
-    await expect(readCarts()).resolves.toEqual([]);
-  });
-
-  it("round-trips an array through write+read", async () => {
-    installStorageBackend();
-    const carts = [{ id: "a", name: "Cart A", items: [] }];
-    await writeCarts(carts);
-    await expect(readCarts()).resolves.toEqual(carts);
-  });
-
-  it("guards against non-array stored values", async () => {
-    const store = installStorageBackend();
-    store.set(STORAGE_KEY, { not: "an array" });
-    await expect(readCarts()).resolves.toEqual([]);
-  });
-
-  it("writes under the canonical storage key", async () => {
-    const store = installStorageBackend();
-    await writeCarts([{ id: "x" }]);
-    expect(store.get(STORAGE_KEY)).toEqual([{ id: "x" }]);
-  });
 });
 
 describe("readSettings / writeSettings", () => {

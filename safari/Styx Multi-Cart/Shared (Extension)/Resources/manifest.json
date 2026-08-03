@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Styx Multi-Cart",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
-  "description": "Save, switch, and restore multiple Amazon shopping carts. Local-only storage, no tracking, no account required.",
+  "description": "One click to clear your Amazon cart \u2014 or save it for a later checkout. Free, unlimited, no tracking.",
   "permissions": [
     "storage",
     "activeTab",
@@ -169,6 +169,40 @@
         "ExtPay.js"
       ],
       "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "icons/*.png"
+      ],
+      "matches": [
+        "*://amazon.com/*",
+        "*://*.amazon.com/*",
+        "*://amazon.co.uk/*",
+        "*://*.amazon.co.uk/*",
+        "*://amazon.ca/*",
+        "*://*.amazon.ca/*",
+        "*://amazon.com.au/*",
+        "*://*.amazon.com.au/*",
+        "*://amazon.de/*",
+        "*://*.amazon.de/*",
+        "*://amazon.fr/*",
+        "*://*.amazon.fr/*",
+        "*://amazon.it/*",
+        "*://*.amazon.it/*",
+        "*://amazon.es/*",
+        "*://*.amazon.es/*",
+        "*://amazon.co.jp/*",
+        "*://*.amazon.co.jp/*",
+        "*://amazon.in/*",
+        "*://*.amazon.in/*",
+        "*://amazon.com.mx/*",
+        "*://*.amazon.com.mx/*",
+        "*://amazon.com.br/*",
+        "*://*.amazon.com.br/*"
+      ]
     }
   ]
 }

@@ -109,19 +109,19 @@ def draw_small():
     draw.text((text_x, 100), "Multi-Cart", font=sub_title_font, fill=ORANGE)
     draw.text(
         (text_x, 140),
-        "All your Amazon lists.",
+        "Clear your Amazon cart.",
         font=tagline_font,
         fill=WHITE_PRIMARY,
     )
     draw.text(
         (text_x, 165),
-        "One click to cart.",
+        "Or save it for later.",
         font=tagline_font,
         fill=WHITE_PRIMARY,
     )
     draw.text(
         (text_x, 215),
-        "Local-only · No tracking",
+        "Free & unlimited · No tracking",
         font=sub_font,
         fill=WHITE_SECONDARY,
     )
@@ -158,8 +158,8 @@ def draw_marquee():
     text_x = 460
     draw.text((text_x, 126), "Styx", font=title_font, fill=WHITE_PRIMARY)
     draw.text((text_x, 210), "Multi-Cart", font=product_font, fill=ORANGE)
-    draw.text((text_x, 296), "All your Amazon lists.", font=tagline_font, fill=WHITE_PRIMARY)
-    draw.text((text_x, 360), "One click to cart.", font=tagline_font, fill=WHITE_PRIMARY)
+    draw.text((text_x, 296), "Clear your Amazon cart.", font=tagline_font, fill=WHITE_PRIMARY)
+    draw.text((text_x, 360), "Or save it for later.", font=tagline_font, fill=WHITE_PRIMARY)
 
     # Keep edges defined on light gray Chrome Web Store backgrounds.
     draw.rectangle([0, 0, w - 1, h - 1], outline=(255, 255, 255, 18), width=2)

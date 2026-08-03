@@ -556,7 +556,10 @@
     const raw = (
       el.getAttribute && (el.getAttribute("title") || el.getAttribute("aria-label"))
     ) || el.textContent || "";
-    const text = String(raw).replace(/\s+/g, " ").trim();
+    let text = String(raw).replace(/\s+/g, " ").trim();
+    // Sponsored search tiles prefix the accessible name with "Sponsored Ad - ";
+    // strip it so saved items read as the plain product name.
+    text = text.replace(/^sponsored(?:\s+ad)?\s*[-–—:]\s*/i, "").trim();
     if (!text) return "";
     if (isGenericTileTitle(text)) return "";
     if (/^(?:add|move)\s+to\s+(?:cart|basket)\b/i.test(text)) return "";
@@ -697,6 +700,135 @@
     };
   }
 
+  // Last product tile the user engaged with, remembered so we can attribute a
+  // subsequent Amazon variant-picker modal (which carries no tile context) back
+  // to the right product. See maybeStashTile / buildItemFromAtcModal.
+  let _lastTileAtc = null;
+  const TILE_STASH_TTL_MS = 120000; // 2 min — long enough to pick a size
+
+  /**
+   * Record the product tile behind a click, so that when a multi-variant item
+   * on search results opens Amazon's "choose a size" modal (whose Add-to-cart
+   * button has no ASIN in its ancestor chain), we can still recover which
+   * product it was. Cheap: only does work when the click is inside a tile that
+   * exposes a data-asin.
+   */
+  function maybeStashTile(target) {
+    if (!target || !target.closest) return;
+    const tile = target.closest(
+      "[data-component-type='s-search-result'][data-asin], [data-asin]"
+    );
+    if (!tile) return;
+    const asin = firstValidAsin(tile.getAttribute("data-asin"));
+    if (!asin) return;
+    try {
+      const item = buildItemFromTile(tile, asin);
+      if (item && item.asin) {
+        _lastTileAtc = Object.assign({}, item, { ts: Date.now() });
+      }
+    } catch (_e) { /* best-effort */ }
+  }
+
+  /**
+   * True when a control lives inside Amazon's add-to-cart / variant-picker
+   * popover or an equivalent modal, rather than a normal page tile/PDP.
+   */
+  function isInsideAtcModal(el) {
+    if (!el || !el.closest) return false;
+    return !!el.closest(
+      ".a-popover, .a-popover-wrapper, [data-a-popover], [id^='a-popover'], " +
+        "[role='dialog'], .a-modal-scroller, form[action*='add-to-cart' i], " +
+        "form[action*='cart/add' i]"
+    );
+  }
+
+  /** Read the variant label the user picked in the modal's Size dropdown. */
+  function getVariantLabelFromModal(scope) {
+    if (!scope) return "";
+    const prompt = scope.querySelector(".a-dropdown-prompt");
+    if (prompt && prompt.textContent) return prompt.textContent.trim().slice(0, 200);
+    const select = scope.querySelector("select");
+    if (select && select.selectedIndex >= 0 && select.options[select.selectedIndex]) {
+      const t = select.options[select.selectedIndex].textContent;
+      if (t) return t.trim().slice(0, 200);
+    }
+    return "";
+  }
+
+  /**
+   * Resolve the ASIN for an Add-to-cart click inside Amazon's variant-picker
+   * modal. The modal reflects the CHILD (chosen-size) ASIN in a few places;
+   * prefer those, then fall back to the parent ASIN from the tile we stashed
+   * when the modal opened.
+   */
+  function getAsinFromAtcModal(btn) {
+    const scope =
+      btn.closest(
+        ".a-popover, .a-popover-wrapper, [data-a-popover], [id^='a-popover'], " +
+          "[role='dialog'], .a-modal-scroller, form[action*='cart' i]"
+      ) || document;
+    // 1. Hidden ASIN input in the modal's add-to-cart form (child variant).
+    const asinInput = scope.querySelector(
+      "input[name='ASIN'], input[name='asin'], input[name*='asin' i][value]"
+    );
+    if (asinInput) {
+      const a = firstValidAsin(asinInput.value);
+      if (a) return a;
+    }
+    // 2. Selected <option> in the size dropdown — value or data-asin.
+    const select = scope.querySelector("select");
+    if (select && select.selectedIndex >= 0 && select.options[select.selectedIndex]) {
+      const opt = select.options[select.selectedIndex];
+      const a =
+        firstValidAsin(opt.value) ||
+        firstValidAsin(opt.getAttribute("data-asin"));
+      if (a) return a;
+    }
+    // 3. A product link inside the modal.
+    const link = scope.querySelector(
+      "a[href*='/dp/'], a[href*='/gp/product/']"
+    );
+    if (link) {
+      const a = findAsinInUrl(link.getAttribute("href"));
+      if (a) return a;
+    }
+    // 4. data-asin on any modal container.
+    const marked = scope.querySelector && scope.querySelector("[data-asin]");
+    if (marked) {
+      const a = firstValidAsin(marked.getAttribute("data-asin"));
+      if (a) return a;
+    }
+    return null;
+  }
+
+  /**
+   * Build a cart item for an Add-to-cart click inside the variant-picker modal.
+   * Uses the modal's own ASIN when readable, otherwise the stashed tile's
+   * parent ASIN. Enriches title/image/price from the stashed tile, since the
+   * modal exposes little of that reliably.
+   */
+  function buildItemFromAtcModal(btn) {
+    if (!isInsideAtcModal(btn)) return null;
+    const stash =
+      _lastTileAtc && Date.now() - _lastTileAtc.ts < TILE_STASH_TTL_MS
+        ? _lastTileAtc
+        : null;
+    const asin = getAsinFromAtcModal(btn) || (stash && stash.asin) || null;
+    if (!asin) return null;
+    const variantLabel = getVariantLabelFromModal(
+      btn.closest(".a-popover, [role='dialog'], form") || document
+    );
+    return {
+      asin: String(asin).toUpperCase(),
+      title: (stash && stash.title) || getProductTitle() || "(item)",
+      quantity: getQuantityFromAtcButton(btn),
+      price: (stash && stash.price) || "",
+      image: (stash && stash.image) || "",
+      url: `https://${location.hostname}/dp/${asin}`,
+      variantLabel: variantLabel || (stash && stash.variantLabel) || "",
+    };
+  }
+
   /**
    * Pick the best scraping strategy for the click.
    *  1. Find the ASIN by walking up the click target's ancestors (most
@@ -706,7 +838,9 @@
    *  3. Scrape title/image/price from the tile.
    *  4. If we're on a /dp/ page and steps 1-3 failed, fall back to the
    *     page-global scrapers.
-   *  5. As a last resort, if we have the ASIN but no usable tile, return
+   *  5. Amazon's variant-picker modal (search multi-variant): recover from
+   *     the modal + the stashed tile.
+   *  6. As a last resort, if we have the ASIN but no usable tile, return
    *     a minimal item so the picker can still open.
    */
   function buildItemForClick(btn) {
@@ -753,6 +887,12 @@
     }
     const pageItem = buildItemFromProductPage();
     if (pageItem) return pageItem;
+    // Amazon's variant-picker modal (search results, multi-variant items): the
+    // Add-to-cart button carries no ASIN in its ancestor chain and there's no
+    // /dp/ page context. Recover from the modal + the tile we stashed when the
+    // sheet opened, so the click still routes to a Styx cart.
+    const modalItem = buildItemFromAtcModal(btn);
+    if (modalItem) return modalItem;
     return null;
   }
 
@@ -870,57 +1010,17 @@
     interceptAtc: true,
     theme: null,
   };
-  let _cartsCache = [];
+  // Snapshot of the user's Amazon lists (the real carts), mirrored from the
+  // SW's mc.amazonlists.v1 cache. The picker offers these as targets; the
+  // per-list `access` field carries lock state. See MC_ENSURE_AMAZON_LISTS.
+  const AMAZON_LISTS_CACHE_KEY = "mc.amazonlists.v1";
+  let _amazonListsCache = { fetchedAt: 0, host: null, lists: [] };
   let _storageHydrated = false;
   let _storageHydrationPromise = null;
-  // Entitlement mirror — see lib/helpers.js / background.js for the source of
-  // truth. Constants duplicated for the same "service-worker can't import
-  // ESM" reason the other mirrors exist.
-  const FREE_CART_LIMIT = 2;
-  const PREMIUM_CART_LIMIT = 20;
-  let _entitlementCache = {
-    tier: "free",
-    premiumUntil: null,
-    autoRenew: false,
-    source: null,
-    lastChecked: 0,
-  };
-
-  function isPremiumActive(ent, nowMs) {
-    if (!ent || ent.tier !== "premium") return false;
-    // null premiumUntil on a premium tier === lifetime (never expires).
-    // Mirrors isPremiumActive in lib/helpers.js + background.js.
-    if (ent.premiumUntil == null) return true;
-    return nowMs < Number(ent.premiumUntil);
-  }
-
-  function cartLimitFor(ent, nowMs) {
-    return isPremiumActive(ent, nowMs) ? PREMIUM_CART_LIMIT : FREE_CART_LIMIT;
-  }
 
   /**
-   * Returns a Set of cart IDs that are currently editable, given the
-   * current entitlement and the cart list. Mirrors computeCartAccess in
-   * lib/helpers.js. Lapsed-premium and free-tier users with more carts
-   * than their limit only get the top-N by lastUsedAt as editable.
-   */
-  function editableCartIds(carts, ent, nowMs) {
-    if (!Array.isArray(carts) || carts.length === 0) return new Set();
-    const n = cartLimitFor(ent, nowMs);
-    const sorted = [...carts].sort((a, b) => {
-      const lu = (Number(b.lastUsedAt) || 0) - (Number(a.lastUsedAt) || 0);
-      if (lu !== 0) return lu;
-      const sa = (Number(b.savedAt) || 0) - (Number(a.savedAt) || 0);
-      if (sa !== 0) return sa;
-      return String(a.id).localeCompare(String(b.id));
-    });
-    return new Set(sorted.slice(0, n).map((c) => c.id));
-  }
-
-  /**
-   * Two-group sort: editable carts alphabetically first, then read-only
-   * carts alphabetically. Used by the picker AND mirrored in popup.js so
-   * the user's cart order is consistent across surfaces.
+   * Two-group sort: editable lists alphabetically first, then read-only
+   * lists alphabetically. Used by the picker so target order is stable.
    */
   function sortCartsForDisplay(carts, editableSet) {
     const cmpName = (a, b) =>
@@ -965,15 +1065,14 @@
   // repositioning that used to live here were removed for that reason.
 
   // Read directly from chrome.storage.local. The content script has access
-  // to it without round-tripping through the service worker, which removes
-  // the race where clicking ATC before MC_LIST_CARTS responds caused the
-  // intercept to fall through with an empty carts cache.
+  // to it without round-tripping through the service worker, so settings and
+  // the Amazon-lists snapshot are available before the first ATC click.
   function hydrateCachesFromStorage() {
     if (_storageHydrationPromise) return _storageHydrationPromise;
     _storageHydrationPromise = new Promise((resolve) => {
       try {
         chrome.storage.local.get(
-          ["mc.settings.v1", "mc.carts.v1", "mc.entitlement.v1"],
+          ["mc.settings.v1", AMAZON_LISTS_CACHE_KEY],
           (result) => {
             if (chrome.runtime.lastError) {
               dwarn("[Styx ATC] storage.get failed:", chrome.runtime.lastError.message);
@@ -986,18 +1085,15 @@
               _settingsCache = Object.assign({}, _settingsCache, settings);
               applyPickerTheme(document.getElementById(PICKER_ID));
             }
-            const carts = result["mc.carts.v1"];
-            if (Array.isArray(carts)) _cartsCache = carts;
-            const ent = result["mc.entitlement.v1"];
-            if (ent && typeof ent === "object") {
-              _entitlementCache = Object.assign({}, _entitlementCache, ent);
+            const listSnap = result[AMAZON_LISTS_CACHE_KEY];
+            if (listSnap && Array.isArray(listSnap.lists)) {
+              _amazonListsCache = listSnap;
             }
             dlog(
               "[Styx ATC] caches hydrated:",
               {
                 interceptAtc: _settingsCache.interceptAtc,
-                cartCount: _cartsCache.length,
-                tier: _entitlementCache.tier,
+                listCount: (_amazonListsCache.lists || []).length,
               }
             );
             _storageHydrated = true;
@@ -1022,6 +1118,7 @@
         if (next && typeof next === "object") {
           _settingsCache = Object.assign({}, _settingsCache, next);
           applyPickerTheme(document.getElementById(PICKER_ID));
+          applyFabPulse(); // live-toggle the floating-button pulse
           // Apply or undo the "Lists → Carts" rebrand live on the lists page.
           if (isWishlistPage()) {
             if (relabelEnabled()) relabelStyxCarts();
@@ -1029,15 +1126,9 @@
           }
         }
       }
-      if (changes["mc.carts.v1"]) {
-        const next = changes["mc.carts.v1"].newValue;
-        _cartsCache = Array.isArray(next) ? next : [];
-      }
-      if (changes["mc.entitlement.v1"]) {
-        const next = changes["mc.entitlement.v1"].newValue;
-        if (next && typeof next === "object") {
-          _entitlementCache = Object.assign({}, _entitlementCache, next);
-        }
+      if (changes[AMAZON_LISTS_CACHE_KEY]) {
+        const next = changes[AMAZON_LISTS_CACHE_KEY].newValue;
+        if (next && Array.isArray(next.lists)) _amazonListsCache = next;
       }
     });
   }
@@ -1083,6 +1174,11 @@
     document.addEventListener(
       "click",
       async (e) => {
+        // Remember the tile behind every click (cheap, no-op off tiles) so a
+        // multi-variant item that opens Amazon's size modal can be attributed
+        // back to its product when the modal's Add-to-cart is later clicked.
+        maybeStashTile(e.target);
+
         const btn = findAtcButton(e.target);
         if (!btn) return;
 
@@ -1091,7 +1187,7 @@
         dlog("[Styx ATC] click on ATC button", {
           interceptAtc: _settingsCache.interceptAtc,
           restoring: !!_settingsCache.restoring,
-          cartCount: _cartsCache.length,
+          listCount: (_amazonListsCache.lists || []).length,
           bypass: btn.dataset.styxBypass === "1",
         });
 
@@ -1141,11 +1237,10 @@
           replayHeldClick();
           return;
         }
-        if (!Array.isArray(_cartsCache) || !_cartsCache.length) {
-          dlog("[Styx ATC] no saved carts → falling through");
-          replayHeldClick();
-          return;
-        }
+        // No local-cart / list-presence gate: the picker fetches the user's
+        // Amazon lists on open (fetch-then-show), so intercept whenever it's
+        // enabled and we can read the item. A user with zero lists still gets
+        // the picker's "Create new cart" + escape hatch.
 
         const item = buildItemForClick(btn);
         if (!item) {
@@ -1348,7 +1443,7 @@
     if (document.getElementById(PICKER_STYLE_ID)) return;
     const css = `
       #${PICKER_ID} {
-        position: fixed; inset: 0; z-index: 2147483646;
+        position: fixed; inset: 0; z-index: 2147483647 !important;
         display: flex; align-items: center; justify-content: center;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
@@ -1422,6 +1517,18 @@
         overflow-y: auto; flex: 1;
         display: flex; flex-direction: column; gap: 6px;
       }
+      #${PICKER_ID} .styx-pk-loading,
+      #${PICKER_ID} .styx-pk-empty {
+        padding: 14px 10px; text-align: center;
+        color: #9aa4b0; font-size: 13px;
+      }
+      #${PICKER_ID} .styx-pk-loading::after {
+        content: ""; display: inline-block; width: 12px; height: 12px;
+        margin-left: 8px; vertical-align: -2px;
+        border: 2px solid #3a424c; border-top-color: #ff9900;
+        border-radius: 50%; animation: styx-pk-spin 0.7s linear infinite;
+      }
+      @keyframes styx-pk-spin { to { transform: rotate(360deg); } }
       #${PICKER_ID} .styx-pk-row {
         appearance: none; width: 100%; text-align: left;
         background: #1f242b; border: 1px solid #2a3038;
@@ -1572,11 +1679,13 @@
         font-size: 12px; color: #8a93a0; line-height: 1.4;
       }
       #${PICKER_ID} .styx-pk-create-input {
-        appearance: none; width: 100%;
+        appearance: none; -webkit-appearance: none; width: 100%;
         background: #11151a; color: #f3efe6;
         border: 1px solid #2a3038; border-radius: 8px;
         padding: 9px 10px; font-size: 13px; font-family: inherit;
         outline: none;
+        user-select: text !important; -webkit-user-select: text !important;
+        pointer-events: auto !important;
         transition: border-color 120ms ease, box-shadow 120ms ease;
       }
       #${PICKER_ID} .styx-pk-create-input:focus {
@@ -1703,6 +1812,9 @@
         background: #ffffff;
         color: #131a22;
         border-color: #c9bfae;
+        user-select: text !important;
+        -webkit-user-select: text !important;
+        pointer-events: auto !important;
       }
     `;
     const style = document.createElement("style");
@@ -1726,7 +1838,7 @@
    * Phase 3 will replace the CTA's "Coming soon" stub with an
    * ExtensionPay.openPaymentPage() call.
    */
-  function showPickerUpgradeScreen(root) {
+  function showPickerUpgradeScreen(root, reason = "locked") {
     const modal = root.querySelector(".styx-pk-modal");
     if (!modal) return;
     // Preserve the existing innerHTML so Back can restore it without
@@ -1734,17 +1846,20 @@
     if (!modal.dataset.styxOriginalHtml) {
       modal.dataset.styxOriginalHtml = modal.innerHTML;
     }
+    const isLimit = reason === "limit";
+    const title = isLimit ? "Cart Limit Reached" : "Renew Premium";
+    const sub = isLimit
+      ? "You've reached the free limit of 3 carts. Upgrade to Premium to create unlimited carts and unlock full editing!"
+      : "This cart is read-only on the free plan. Upgrade to Premium to add items to all your saved carts!";
+
     modal.innerHTML = `
       <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
       <div class="styx-pk-upgrade">
-        <div class="styx-pk-upgrade-title">Renew Premium</div>
-        <div class="styx-pk-upgrade-sub">
-          This cart is read-only because your Premium has lapsed. Renew to
-          add to all your saved carts again — they're still here, untouched.
-        </div>
+        <div class="styx-pk-upgrade-title">${title}</div>
+        <div class="styx-pk-upgrade-sub">${sub}</div>
         <div class="styx-pk-upgrade-plan">
           <ul class="styx-pk-upgrade-features">
-            <li><b>Unlimited carts</b></li>
+            <li>Unlimited carts</li>
             <li>Edit, restore, rename, merge — full functionality</li>
             <li>Cancel anytime; carts stay readable</li>
           </ul>
@@ -1771,6 +1886,73 @@
     delete modal.dataset.styxOriginalHtml;
   }
 
+  // Standalone Premium upgrade overlay for the on-page wishlist "Send All"
+  // button. Reuses the picker's styx-pk-* styling (scoped under #__styx-picker)
+  // and wires its own close + plan handlers. Shown when a free-tier user tries
+  // to push a LOCKED custom cart to their Amazon cart.
+  function openWishlistUpgrade() {
+    injectPickerStyles();
+    dismissPicker(); // clear any existing overlay reusing PICKER_ID
+    const root = document.createElement("div");
+    root.id = PICKER_ID;
+    root.innerHTML = `
+      <div class="styx-pk-backdrop" data-styx-action="cancel"></div>
+      <div class="styx-pk-modal">
+        <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+        <div class="styx-pk-brand">
+          <svg class="styx-pk-brand-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131a22"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/></g><circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/></g><circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/></g><circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
+          <span class="styx-pk-brand-name">Styx Multi-Cart</span>
+        </div>
+        <div class="styx-pk-upgrade">
+          <div class="styx-pk-upgrade-title">Premium cart</div>
+          <div class="styx-pk-upgrade-sub">
+            This cart is locked on the free plan. Upgrade to send it to your
+            Amazon cart and unlock all your carts.
+          </div>
+          <div class="styx-pk-upgrade-plan">
+            <ul class="styx-pk-upgrade-features">
+              <li>Use <b>all</b> your Amazon-list carts</li>
+              <li>Send any cart to your Amazon cart</li>
+              <li>Cancel anytime</li>
+            </ul>
+          </div>
+          <div class="styx-pk-upgrade-actions">
+            <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="annual">
+              <span class="styx-pk-upgrade-cta-label">Annual</span>
+              <span class="styx-pk-upgrade-cta-price">$9.99 / yr</span>
+            </button>
+            <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="lifetime">
+              <span class="styx-pk-upgrade-cta-label">Lifetime</span>
+              <span class="styx-pk-upgrade-cta-price">$19.99 once</span>
+            </button>
+            <button type="button" class="styx-pk-upgrade-back" data-styx-action="cancel">← Not now</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(root);
+    applyPickerTheme(root);
+    root.addEventListener("click", (e) => {
+      const actEl = e.target.closest("[data-styx-action]");
+      if (!actEl) return;
+      const act = actEl.dataset.styxAction;
+      if (act === "cancel") {
+        root.remove();
+        return;
+      }
+      if (act === "upgrade-go") {
+        const plan = actEl.getAttribute("data-styx-plan") || "annual";
+        const buttons = root.querySelectorAll(".styx-pk-upgrade-cta");
+        buttons.forEach((b) => (b.disabled = true));
+        sendRequest({ type: "MC_OPEN_PAYMENT_PAGE", plan })
+          .then((res) => {
+            if (!res || !res.ok) buttons.forEach((b) => (b.disabled = false));
+            else root.remove();
+          })
+          .catch(() => buttons.forEach((b) => (b.disabled = false)));
+      }
+    });
+  }
+
   /**
    * Swap the picker body to an inline "Create new cart" form. Lets the
    * user spin up a fresh cart mid-shop without leaving the product page.
@@ -1778,7 +1960,8 @@
    * single flow, then surfaces the same confirm overlay used by row
    * clicks. Back returns to the cart list without losing context.
    */
-  function showPickerCreateScreen(root, item, qty) {
+  function showPickerCreateScreen(root, item, qty, ctx) {
+    const createHost = (ctx && ctx.host) || null;
     const modal = root.querySelector(".styx-pk-modal");
     if (!modal) return;
     if (!modal.dataset.styxOriginalHtml) {
@@ -1794,10 +1977,12 @@
         <input
           type="text"
           class="styx-pk-create-input"
+          tabindex="0"
           placeholder="e.g. Birthday gifts"
           maxlength="80"
           autocomplete="off"
           spellcheck="false"
+          autofocus
         />
         <div class="styx-pk-create-err" aria-live="polite"></div>
         <div class="styx-pk-create-actions">
@@ -1812,17 +1997,43 @@
     const submitBtn = modal.querySelector("[data-styx-create-submit]");
     const backBtn = modal.querySelector(".styx-pk-create-back");
     if (input) {
+      const doFocus = () => {
+        try {
+          input.focus();
+        } catch (_e) {}
+      };
       // Defer focus so the swap animation doesn't eat it.
-      setTimeout(() => { try { input.focus(); input.select(); } catch (_e) {} }, 0);
-      input.addEventListener("input", () => {
-        input.classList.remove("styx-pk-create-error");
-        if (errSlot) errSlot.textContent = "";
-      });
+      setTimeout(doFocus, 0);
+      setTimeout(doFocus, 50);
+      requestAnimationFrame(doFocus);
+
+      const stopProp = (e) => e.stopPropagation();
       input.addEventListener("keydown", (e) => {
+        e.stopPropagation();
         if (e.key === "Enter") {
           e.preventDefault();
           submitCreate();
         }
+      });
+      input.addEventListener("keyup", stopProp);
+      input.addEventListener("keypress", stopProp);
+      input.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        doFocus();
+      });
+      input.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        doFocus();
+      });
+      input.addEventListener("click", (e) => {
+        e.stopPropagation();
+        doFocus();
+      });
+      input.addEventListener("focus", stopProp);
+
+      input.addEventListener("input", () => {
+        input.classList.remove("styx-pk-create-error");
+        if (errSlot) errSlot.textContent = "";
       });
     }
 
@@ -1838,42 +2049,29 @@
       submitBtn && submitBtn.setAttribute("disabled", "");
       backBtn && backBtn.setAttribute("disabled", "");
 
-      const createRes = await sendRequest({
-        type: "MC_CREATE_EMPTY_CART",
+      // Create a new Amazon list seeded with this item (one SW round-trip that
+      // drives Amazon). The new list IS the cart — there is no local store.
+      if (errSlot) errSlot.textContent = "Creating your list — watch the status window…";
+      const res = await sendRequest({
+        type: "MC_CREATE_AMAZON_LIST_WITH_ITEM",
         name,
+        host: createHost,
+        asin: item.asin,
+        quantity: qty,
       });
-      if (!createRes || !createRes.ok) {
-        // Free-tier cart-count limit (or any other gated denial) — surface
-        // the existing upgrade screen so the user gets a real CTA instead
-        // of an inline error.
-        const looksLikeGate =
-          createRes && (createRes.upsell || /premium|limit|locked|tier/i.test(String(createRes.reason || createRes.error || "")));
-        if (looksLikeGate) {
-          showPickerUpgradeScreen(root);
+      if (!res || !res.ok) {
+        if (res && res.limitReached) {
+          showPickerUpgradeScreen(root, "limit");
           return;
         }
-        if (errSlot) errSlot.textContent = (createRes && createRes.error) || "Could not create cart.";
+        if (errSlot) errSlot.textContent = (res && res.error) || "Could not create list.";
         submitBtn && submitBtn.removeAttribute("disabled");
         backBtn && backBtn.removeAttribute("disabled");
         return;
       }
-
-      const newCart = createRes.cart;
-      const addRes = await sendRequest({
-        type: "MC_ADD_ITEM_TO_SAVED_CART",
-        savedCartId: newCart.id,
-        item: Object.assign({}, item, { quantity: qty }),
-      });
-      if (!addRes || !addRes.ok) {
-        if (errSlot) errSlot.textContent = (addRes && addRes.error) || "Cart created, but could not add the item.";
-        submitBtn && submitBtn.removeAttribute("disabled");
-        backBtn && backBtn.removeAttribute("disabled");
-        return;
-      }
-
       const confirm = document.createElement("div");
       confirm.className = "styx-pk-confirm";
-      confirm.textContent = `Added to "${newCart.name}" ✓`;
+      confirm.textContent = `Added to "${name}" ✓`;
       modal.appendChild(confirm);
       setTimeout(dismissPicker, 1200);
     }
@@ -1914,6 +2112,71 @@
     }
   }
 
+  // The picker always offers the user's Amazon lists (the real carts) from the
+  // SW snapshot. Empty targets mean the snapshot hasn't warmed yet; the caller
+  // fetches it (MC_ENSURE_AMAZON_LISTS) and re-renders.
+  function parseCartCount(val) {
+    if (val == null || val === "") return null;
+    const n = Number(val);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  function buildPickerTargets() {
+    const lists =
+      _amazonListsCache && Array.isArray(_amazonListsCache.lists)
+        ? _amazonListsCache.lists
+        : [];
+    const targets = lists.map((l) => ({
+      id: String(l.listId),
+      name: l.name || "Amazon list",
+      count: parseCartCount(l.count),
+      isList: true,
+      kind: l.kind || "custom",
+      access: l.access || "editable",
+    }));
+    const editableSet = new Set(
+      targets.filter((t) => t.access === "editable").map((t) => t.id)
+    );
+    return {
+      targets,
+      editableSet,
+      host: (_amazonListsCache && _amazonListsCache.host) || null,
+    };
+  }
+
+  function renderTargetRows(sortedCarts, ctx) {
+    return sortedCarts
+      .map((cart) => {
+        const count = parseCartCount(cart.count);
+        const countText = count !== null
+          ? `${count} ${count === 1 ? "item" : "items"}`
+          : "Cart";
+        const isEditable = ctx.editableSet.has(cart.id);
+        const rowClass = isEditable
+          ? "styx-pk-row styx-pk-editable"
+          : "styx-pk-row styx-pk-locked";
+        const ariaAttr = isEditable
+          ? ""
+          : 'aria-disabled="true" title="Locked — click to renew Premium"';
+        const readOnlyPill = isEditable
+          ? ""
+          : `<span class="styx-pk-row-readonly">Read-only</span>`;
+        const metaBits = [readOnlyPill, countText].filter(Boolean).join(" · ");
+        const countHtml = `<div class="styx-pk-row-count">${metaBits}</div>`;
+        return `
+          <li>
+            <button type="button" class="${rowClass}" data-cart-id="${escapeHtml(cart.id)}" data-cart-name="${escapeHtml(cart.name)}" data-list-id="${escapeHtml(cart.id)}" ${ariaAttr}>
+              <div class="styx-pk-row-main">
+                <div class="styx-pk-row-name">${escapeHtml(cart.name)}</div>
+                ${countHtml}
+              </div>
+              <div class="styx-pk-row-thumbs"></div>
+            </button>
+          </li>`;
+      })
+      .join("");
+  }
+
   function openCartPicker(originalAtcButton, item) {
     injectPickerStyles();
     dismissPicker(); // never stack two pickers
@@ -1927,52 +2190,16 @@
     const qty = Math.max(1, Math.min(99, Number(item.quantity) || 1));
     const priceBit = item.price ? `${escapeHtml(item.price)} · ` : "";
 
-    // Compute which carts are editable right now, then sort: editable A–Z
-    // first, then read-only A–Z below. Locked rows are kept visible (and
-    // clickable) so users can tap them to see the renewal CTA.
-    const editable = editableCartIds(_cartsCache, _entitlementCache, Date.now());
-    const sortedCarts = sortCartsForDisplay(_cartsCache, editable);
+    // Targets are the user's Amazon lists (the real carts). `ctx` is closed
+    // over by the click handler below and passed to the create-new screen.
+    // On a cold cache (no snapshot yet) targets are empty — show a loading
+    // row while the MC_ENSURE_AMAZON_LISTS fetch below fills them in.
+    let ctx = buildPickerTargets();
+    const sortedCarts = sortCartsForDisplay(ctx.targets, ctx.editableSet);
 
-    const cartsHtml = sortedCarts
-      .map((cart) => {
-        const totalQty = (cart.items || []).reduce(
-          (n, it) => n + (Number(it.quantity) || 1),
-          0
-        );
-        const itemWord = cart.items && cart.items.length === 1 ? "item" : "items";
-        const thumbs = (cart.items || [])
-          .slice(0, 3)
-          .filter((it) => isUsablePickerThumb(it && it.image))
-          .map(
-            (it) =>
-              `<img class="styx-pk-row-thumb" src="${escapeHtml(it.image)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()" />`
-          )
-          .join("");
-        const isEditable = editable.has(cart.id);
-        // Locked rows: stay clickable (no `disabled` attribute) so a click
-        // surfaces the renewal CTA. aria-disabled + the .styx-pk-locked
-        // class give us the visual + a11y treatment.
-        const rowClass = isEditable
-          ? "styx-pk-row styx-pk-editable"
-          : "styx-pk-row styx-pk-locked";
-        const ariaAttr = isEditable
-          ? ""
-          : 'aria-disabled="true" title="Locked — click to renew Premium"';
-        const readOnlyPill = isEditable
-          ? ""
-          : `<span class="styx-pk-row-readonly">Read-only</span>`;
-        return `
-          <li>
-            <button type="button" class="${rowClass}" data-cart-id="${escapeHtml(cart.id)}" data-cart-name="${escapeHtml(cart.name)}" ${ariaAttr}>
-              <div class="styx-pk-row-main">
-                <div class="styx-pk-row-name">${escapeHtml(cart.name)}</div>
-                <div class="styx-pk-row-count">${readOnlyPill}${(cart.items || []).length} ${itemWord} · ${totalQty} qty</div>
-              </div>
-              <div class="styx-pk-row-thumbs">${thumbs}</div>
-            </button>
-          </li>`;
-      })
-      .join("");
+    const cartsHtml = sortedCarts.length
+      ? renderTargetRows(sortedCarts, ctx)
+      : `<li class="styx-pk-loading" aria-live="polite">Loading your Amazon lists…</li>`;
 
     const thumbHtml = isUsablePickerThumb(item.image)
       ? `<img class="styx-pk-thumb" src="${escapeHtml(item.image)}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" />`
@@ -1993,7 +2220,7 @@
             <div class="styx-pk-sub">${priceBit}Qty <b>${qty}</b></div>
           </div>
         </div>
-        <div class="styx-pk-prompt">Add to which saved cart?</div>
+        <div class="styx-pk-prompt">Add to which cart?</div>
         <ul class="styx-pk-list">${cartsHtml}</ul>
         <button type="button" class="styx-pk-create-row" data-styx-action="create-new">+ Create new cart</button>
         <div class="styx-pk-footer">
@@ -2004,6 +2231,29 @@
 
     document.body.appendChild(root);
     document.addEventListener("keydown", onPickerKeydown, true);
+
+    // Refresh the Amazon-list snapshot in the background: fills the list in if
+    // the cache was cold, and keeps counts current. Only re-renders while the
+    // main list screen is showing (not a swapped-in create/upgrade screen).
+    sendRequest({ type: "MC_ENSURE_AMAZON_LISTS", maxAgeMs: 120000 }).then((res) => {
+      if (document.getElementById(PICKER_ID) !== root) return;
+      if (res && res.ok && Array.isArray(res.lists)) {
+        _amazonListsCache = {
+          fetchedAt: res.fetchedAt || Date.now(),
+          host: res.host || null,
+          lists: res.lists,
+        };
+      }
+      const modal = root.querySelector(".styx-pk-modal");
+      if (modal && modal.dataset.styxOriginalHtml) return; // on a sub-screen
+      const ul = root.querySelector(".styx-pk-list");
+      if (!ul) return;
+      ctx = buildPickerTargets();
+      const sorted = sortCartsForDisplay(ctx.targets, ctx.editableSet);
+      ul.innerHTML = sorted.length
+        ? renderTargetRows(sorted, ctx)
+        : `<li class="styx-pk-empty">No Amazon lists yet — create one below.</li>`;
+    });
 
     root.addEventListener("click", async (e) => {
       const action = e.target.closest("[data-styx-action]");
@@ -2037,7 +2287,13 @@
             }
           });
         } else if (action.dataset.styxAction === "create-new") {
-          showPickerCreateScreen(root, item, qty);
+          const targets = ctx && ctx.targets ? ctx.targets : [];
+          const hasLocked = targets.some((t) => t.access === "locked");
+          if (hasLocked) {
+            showPickerUpgradeScreen(root, "limit");
+            return;
+          }
+          showPickerCreateScreen(root, item, qty, ctx);
         } else if (action.dataset.styxAction === "create-back") {
           hidePickerCreateScreen(root);
         }
@@ -2066,12 +2322,24 @@
       );
       pickerRows.forEach((r) => r.setAttribute("disabled", ""));
 
-      const cartId = row.dataset.cartId;
       const cartName = row.dataset.cartName || "cart";
+      const listId = row.dataset.listId || null;
+
+      // Every row is an Amazon list. The Add-to-List flow is slow (helper tab),
+      // so reflect that in the header before the round-trip.
+      const sub = root.querySelector(".styx-pk-sub");
+      if (sub) {
+        sub.textContent = `Adding to "${cartName}" — watch the status window…`;
+        sub.style.color = "";
+      }
+
       const res = await sendRequest({
-        type: "MC_ADD_ITEM_TO_SAVED_CART",
-        savedCartId: cartId,
-        item: Object.assign({}, item, { quantity: qty }),
+        type: "MC_ADD_ITEM_TO_AMAZON_LIST",
+        listId,
+        host: ctx.host,
+        asin: item.asin,
+        quantity: qty,
+        name: cartName,
       });
 
       if (!res || !res.ok) {
@@ -2165,24 +2433,50 @@
     const spacer = document.createElement("span");
     spacer.className = "a-letter-space";
 
+    injectStyxBrandButtonStyles();
     const btn = document.createElement("span");
     btn.id = STYX_WL_BTN_ID;
-    btn.className = "a-button a-button-primary";
+    btn.className = "styx-brand-btn";
+    btn.setAttribute("role", "button");
+    btn.tabIndex = 0;
     btn.style.marginLeft = "12px";
-    btn.style.verticalAlign = "middle";
     btn.innerHTML =
-      '<span class="a-button-inner">' +
-      '<a class="a-button-text" role="button" href="#" style="white-space:nowrap;">' +
-      STYX_WL_LABEL +
-      "</a></span>";
+      STYX_MARK_SVG("styx-btn-mark") +
+      '<span class="a-button-text">' + STYX_WL_LABEL + "</span>";
 
     // Insert "<spacer><button>" right after the list title.
     title.parentNode.insertBefore(btn, title.nextSibling);
     title.parentNode.insertBefore(spacer, btn);
 
+    // Tier gate: if this list is a LOCKED custom cart (free tier, over the
+    // 3-cart limit), gray the button and route clicks to the upgrade overlay
+    // instead of pushing to the Amazon cart. Access comes from the cached
+    // snapshot; on a cache miss it stays unlocked (fail-open).
+    const wlMatch = location.pathname.match(/\/wishlist\/ls\/([A-Z0-9]{7,})/i);
+    const wlListId = wlMatch ? wlMatch[1].toUpperCase() : null;
+    let wlLocked = false;
+    if (wlListId) {
+      sendRequest({
+        type: "MC_GET_LIST_ACCESS",
+        listId: wlListId,
+        host: location.hostname,
+      })
+        .then((res) => {
+          if (res && res.ok && res.access === "locked") {
+            wlLocked = true;
+            btn.classList.add("styx-locked");
+          }
+        })
+        .catch(() => {});
+    }
+
     btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (wlLocked) {
+        openWishlistUpgrade();
+        return;
+      }
       if (btn.dataset.busy === "1") return;
 
       const items = scrapeWishlistItems();
@@ -2200,6 +2494,7 @@
         type: "MC_WISHLIST_ADD_ALL",
         items,
         host: location.hostname,
+        listId: wlListId,
       });
 
       if (!res || !res.ok) {
@@ -2220,8 +2515,160 @@
       }, 5000);
     });
 
+    // Docked copy in the lower-right that appears once this button scrolls off.
+    setupWishlistSticky();
+
     dlog("[Styx ATC] wishlist Send-All button injected");
     return true;
+  }
+
+  // ---- Docked "Send All" copy (rides beside the floating FAB) -------------
+  //
+  // The in-title "Send All to Amazon Cart" button scrolls away on long lists.
+  // We mirror it as a fixed pill docked to the LEFT of the floating Styx FAB
+  // (lower-right), shown only while the real button is off-screen AND the FAB
+  // is visible — so the pair travels together and the pill vanishes when the
+  // modal opens over that corner. Clicks forward to the real button so all the
+  // send/lock/busy logic lives in exactly one place.
+  const STYX_WL_STICKY_ID = "styx-wishlist-sticky";
+  const STYX_WL_STICKY_STYLE_ID = "styx-wishlist-sticky-style";
+  let _wlOrigOffscreen = false;
+  let _wlStickyIO = null;      // IntersectionObserver on the real button
+  let _wlStickyStateMO = null; // mirrors the real button's label + lock/busy
+
+  function injectWishlistStickyStyles() {
+    if (document.getElementById(STYX_WL_STICKY_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYX_WL_STICKY_STYLE_ID;
+    // Geometry mirrors the FAB (injectFloatingStyles): FAB is 56px square at
+    // right/bottom 20px, z-index 2147483640. Pill docks 12px to its left and
+    // shares its bottom + z-index. Kept as literals to avoid a TDZ on the
+    // FAB_* consts, which are declared later in this file.
+    style.textContent = `
+      #${STYX_WL_STICKY_ID}.styx-brand-btn {
+        position: fixed; right: 88px; bottom: 20px;
+        height: 56px; padding: 0 20px; gap: 8px;
+        border-radius: 28px; font-size: 14px; line-height: 1;
+        z-index: 2147483640;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+        animation: styx-wl-sticky-in .18s ease-out;
+      }
+      /* Id+attr specificity beats .styx-brand-btn's display:inline-flex, which
+         would otherwise defeat the plain [hidden] attribute. */
+      #${STYX_WL_STICKY_ID}.styx-brand-btn[hidden] { display: none; }
+      #${STYX_WL_STICKY_ID} .styx-btn-mark { width: 18px; height: 18px; }
+      #${STYX_WL_STICKY_ID} .a-button-text {
+        font-size: 14px !important; line-height: 1 !important;
+      }
+      @keyframes styx-wl-sticky-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #${STYX_WL_STICKY_ID}.styx-brand-btn { animation: none; }
+      }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function ensureWishlistStickyButton() {
+    const existing = document.getElementById(STYX_WL_STICKY_ID);
+    if (existing) return existing;
+    if (!document.body) return null;
+
+    injectStyxBrandButtonStyles();
+    injectWishlistStickyStyles();
+
+    const btn = document.createElement("span");
+    btn.id = STYX_WL_STICKY_ID;
+    btn.className = "styx-brand-btn";
+    btn.setAttribute("role", "button");
+    btn.tabIndex = 0;
+    btn.hidden = true; // updateWishlistStickyVisibility reveals it
+    btn.innerHTML =
+      STYX_MARK_SVG("styx-btn-mark") +
+      '<span class="a-button-text">' + STYX_WL_LABEL + "</span>";
+
+    // Forward activation to the real button — one source of truth for the
+    // scrape/lock/busy/send flow. Guard against a stray self-reference.
+    const forward = () => {
+      const real = document.getElementById(STYX_WL_BTN_ID);
+      if (real && real !== btn) real.click();
+    };
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      forward();
+    });
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        forward();
+      }
+    });
+
+    document.body.appendChild(btn);
+    return btn;
+  }
+
+  // Copy the real button's visible label and lock/busy classes onto the pill
+  // so state (e.g. "Adding 7…", locked gray) stays identical.
+  function syncWishlistStickyFromReal() {
+    const real = document.getElementById(STYX_WL_BTN_ID);
+    const btn = document.getElementById(STYX_WL_STICKY_ID);
+    if (!real || !btn) return;
+    const realLabel = real.querySelector(".a-button-text");
+    const btnLabel = btn.querySelector(".a-button-text");
+    if (realLabel && btnLabel) btnLabel.textContent = realLabel.textContent;
+    btn.classList.toggle("styx-locked", real.classList.contains("styx-locked"));
+    btn.classList.toggle("a-button-disabled", real.classList.contains("a-button-disabled"));
+  }
+
+  // Visible only when the real button is scrolled off AND the FAB is showing
+  // (i.e. the modal isn't open over the corner). FAB id must match FAB_ID.
+  function updateWishlistStickyVisibility() {
+    const btn = document.getElementById(STYX_WL_STICKY_ID);
+    if (!btn) return;
+    const real = document.getElementById(STYX_WL_BTN_ID);
+    if (!real) { btn.hidden = true; return; }
+    const fab = document.getElementById("__styx-fab");
+    const fabVisible = !!fab && !fab.hidden;
+    btn.hidden = !(_wlOrigOffscreen && fabVisible);
+  }
+
+  function setupWishlistSticky() {
+    const btn = ensureWishlistStickyButton();
+    if (!btn) return;
+    const real = document.getElementById(STYX_WL_BTN_ID);
+    if (!real) return;
+
+    if (_wlStickyStateMO) _wlStickyStateMO.disconnect();
+    _wlStickyStateMO = new MutationObserver(syncWishlistStickyFromReal);
+    _wlStickyStateMO.observe(real, {
+      attributes: true,
+      attributeFilter: ["class"],
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    syncWishlistStickyFromReal();
+
+    if (_wlStickyIO) _wlStickyIO.disconnect();
+    _wlStickyIO = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) _wlOrigOffscreen = !en.isIntersecting;
+        updateWishlistStickyVisibility();
+      },
+      { threshold: 0 }
+    );
+    _wlStickyIO.observe(real);
+
+    // The FAB is injected later (initFloatingUi) and toggles its own hidden
+    // state when the modal opens/closes; it fires "styx:fabvis" so we can ride
+    // along without reaching into that scope.
+    window.removeEventListener("styx:fabvis", updateWishlistStickyVisibility);
+    window.addEventListener("styx:fabvis", updateWishlistStickyVisibility);
+    updateWishlistStickyVisibility();
   }
 
   function initWishlist() {
@@ -2297,6 +2744,140 @@
     // 3. The open list's detail heading.
     const detail = document.getElementById("profile-list-name");
     if (detail) relabelNode(detail, rebrandListName);
+
+    // 4. Each list item's NATIVE "Add to Cart" button → "Add to Amazon Cart".
+    // Amazon fires this via data-action="cta-add-to-cart" (not the label text),
+    // so renaming the visible <a> is display-only. Reverts with the rest when
+    // the rebrand toggle is turned off. The control swaps to a quantity stepper
+    // once added, so the debounced observer re-runs this when it swaps back.
+    document
+      .querySelectorAll(
+        "#g-items li[data-itemid] [data-action='cta-add-to-cart'] a.a-button-text, " +
+          "#g-items li[data-itemid] [id^='pab-declarative-'] a.a-button-text"
+      )
+      .forEach((el) =>
+        relabelNode(el, (orig) =>
+          orig.toLowerCase() === "add to cart" ? "Add to Amazon Cart" : orig
+        )
+      );
+  }
+
+  // Relabel the list names inside the PDP "Add to List" chooser popover (each
+  // row is `#atwl-list-name-<listId>`). Amazon adds by the row's listId, not
+  // its text, so renaming the visible label is display-only and safe.
+  function relabelPdpListChooser() {
+    if (!relabelEnabled()) return;
+    document
+      .querySelectorAll('[id^="atwl-list-name-"]')
+      .forEach((el) => relabelNode(el, rebrandListName));
+  }
+
+  // Relabel a leaf element whose whole trimmed text exactly equals `from`.
+  // Scoped to a root so we never touch matching strings elsewhere on the page.
+  function relabelLeafPhrase(root, from, to) {
+    root.querySelectorAll("*").forEach((el) => {
+      if (el.children.length) return; // leaf text only
+      if ((el.textContent || "").trim() === from) relabelNode(el, () => to);
+    });
+  }
+
+  // Relabel a leaf whose text STARTS WITH `prefixRe`, swapping the matched
+  // prefix for `replacement` and keeping the tail (e.g. "List name (required)"
+  // → "Styx Cart name (required)"). Reversible via relabelNode.
+  function relabelLeafPrefix(root, prefixRe, replacement) {
+    root.querySelectorAll("*").forEach((el) => {
+      if (el.children.length) return; // leaf text only
+      const t = (el.textContent || "").trim();
+      const m = t.match(prefixRe);
+      if (!m || m.index !== 0) return;
+      const next = replacement + t.slice(m[0].length);
+      relabelNode(el, () => next);
+    });
+  }
+
+  // Relabel the Amazon "Add to List" popover / confirmation modal to match the
+  // Lists→Carts rebrand:
+  //   • header "Add to List"            → "Add to Styx Cart"
+  //   • "View Your List" button         → "View Your Styx Cart"
+  //   • "N items added to <List>"       → list name gets " Cart" (rebrandListName)
+  // Text-only + reversible (relabelNode stashes originals). Scoped to the
+  // visible atwl popover so nothing else on the page is affected.
+  function relabelAtlModal() {
+    if (!relabelEnabled()) return;
+    document.querySelectorAll(".a-popover-modal, .a-popover").forEach((pop) => {
+      if (!pop.offsetWidth && !pop.offsetHeight) return; // hidden template
+      const isAtl =
+        pop.querySelector('[id^="atwl-"], [class*="atwl"]') ||
+        /\b(Add to List|Add to Styx Cart)\b/.test(pop.textContent || "");
+      if (!isAtl) return;
+
+      // Fixed phrases first so the list-name pass below skips these nodes.
+      relabelLeafPhrase(pop, "Add to List", "Add to Styx Cart");
+      relabelLeafPhrase(pop, "View Your List", "View Your Styx Cart");
+
+      // Confirmation header: Amazon renders "N item(s) added to" and the list
+      // name as SIBLING spans (class huc-atwl-header-main), not nested. Rebrand
+      // the name span — every header span that isn't the count/"added to"
+      // prefix. Also covers the name being a link, in case the markup shifts.
+      const PREFIX_RE = /item[s]?\s+added\s+to|^\s*\d+\s+item/i;
+      pop
+        .querySelectorAll(
+          '.huc-atwl-header-main, [class*="atwl-header"] a[href*="wishlist"]'
+        )
+        .forEach((el) => {
+          if (el.children.length) return; // leaf text only
+          const t = (el.textContent || "").trim();
+          if (!t || PREFIX_RE.test(t)) return; // skip the "N items added to" bit
+          relabelNode(el, rebrandListName);
+        });
+    });
+  }
+
+  // Relabel Amazon's native "Create a new list or registry" modal so it reads
+  // as creating a Styx Cart (with "Amazon list" kept in parens for clarity):
+  //   • title  "Create a new list or registry" → "Create a new Styx Cart (Amazon list)"
+  //   • field  "List name (required)"          → "Styx Cart name (required)"
+  // Text-only + reversible; scoped to the visible modal via its title text.
+  function relabelCreateListModal() {
+    if (!relabelEnabled()) return;
+    document
+      .querySelectorAll(".a-popover-modal, .a-popover, [role='dialog'], .a-modal")
+      .forEach((pop) => {
+        if (!pop.offsetWidth && !pop.offsetHeight) return; // hidden template
+        if (!/Create a new list or registry/i.test(pop.textContent || "")) return;
+        relabelLeafPhrase(
+          pop,
+          "Create a new list or registry",
+          "Create a new Styx Cart (Amazon list)"
+        );
+        // "List name" / "List name (required)" → "Styx Cart name …"
+        relabelLeafPrefix(pop, /^List name/i, "Styx Cart name");
+      });
+  }
+
+  // One pass over every Amazon Add-to-List surface (chooser rows + confirmation
+  // modal). Called on init and from the debounced popover observer.
+  function relabelPdpAtl() {
+    relabelPdpListChooser();
+    relabelAtlModal();
+  }
+
+  // Watch for Amazon's create-list modal on any page (it appears from the PDP
+  // chooser and the lists page) and rebrand it. Top-frame only; debounced;
+  // scans only the handful of popover/dialog containers so it's cheap.
+  function initCreateListRelabel() {
+    if (window.top !== window) return;
+    if (!document.body) return;
+    relabelCreateListModal();
+    let timer = 0;
+    const mo = new MutationObserver(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = 0;
+        relabelCreateListModal();
+      }, 200);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
   }
 
   // Undo every relabel we applied (used when the setting is toggled off live).
@@ -2366,6 +2947,58 @@
   // whose DOM belongs to Amazon so we can't inject a child node cleanly).
   const STYX_MARK_URI =
     "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='%23ff9900'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M2.5%203.5h2.2l2.2%2011.1a1.3%201.3%200%200%200%201.28%201.05h8.3a1.3%201.3%200%200%200%201.27-1.02L20.8%207.5H6'/%3E%3Ccircle%20cx='9'%20cy='20'%20r='1.5'/%3E%3Ccircle%20cx='17.5'%20cy='20'%20r='1.5'/%3E%3C/svg%3E";
+
+  // Shared branding for every Styx-injected inline button on Amazon pages
+  // (currently the wishlist "Send All to Amazon Cart"). One class so all our
+  // controls read as the same product: navy fill, orange border, white bold
+  // label, orange cart mark, 8px radius — matching the PDP "Add to a Styx cart"
+  // and cart-page "Save cart to a new list" buttons.
+  const STYX_BRAND_BTN_STYLE_ID = "styx-brand-btn-style";
+  function injectStyxBrandButtonStyles() {
+    if (document.getElementById(STYX_BRAND_BTN_STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYX_BRAND_BTN_STYLE_ID;
+    style.textContent = `
+      .styx-brand-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        gap: 6px; padding: 5px 10px; margin: 0; vertical-align: middle;
+        font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+        font-size: 13px; line-height: 18px; font-weight: 700;
+        border-radius: ${STYX_BTN_RADIUS}; border: 1px solid ${STYX_BTN_BORDER};
+        background: ${STYX_BTN_BG}; color: #fff !important; cursor: pointer;
+        text-decoration: none; white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(15,23,42,.25);
+        transition: filter 120ms ease, opacity 120ms ease;
+      }
+      .styx-brand-btn:hover { filter: brightness(1.12); }
+      /* Busy state ("Adding…"): keep the navy fill — force it past Amazon's
+         global .a-button-disabled, which would otherwise paint the bg white. */
+      .styx-brand-btn.a-button-disabled {
+        background: ${STYX_BTN_BG} !important; opacity: .6; cursor: default;
+      }
+      /* Locked (free-tier over-limit) state: muted gray fill, readable text,
+         still clickable (opens the upgrade overlay). */
+      .styx-brand-btn.styx-locked {
+        background: #d5d9de !important;
+        border-color: rgba(0,0,0,.12) !important;
+        opacity: 1 !important; filter: none !important; cursor: pointer;
+        box-shadow: none;
+      }
+      .styx-brand-btn.styx-locked .a-button-text,
+      .styx-brand-btn.styx-locked .styx-brand-btn-label { color: #6b7280 !important; }
+      .styx-brand-btn.styx-locked .styx-btn-mark { opacity: .5; }
+      .styx-brand-btn .a-button-text,
+      .styx-brand-btn .styx-brand-btn-label {
+        color: #fff !important; font-weight: 700 !important;
+        padding: 0 !important; margin: 0 !important;
+        line-height: 18px !important; font-size: 13px !important;
+        height: auto !important; background: transparent !important;
+        border: 0 !important; box-shadow: none !important; white-space: nowrap;
+      }
+      .styx-brand-btn .styx-btn-mark { width: 15px; height: 15px; flex: 0 0 auto; display: block; }
+    `;
+    (document.head || document.documentElement).appendChild(style);
+  }
 
   // ---- Styx progress toast (on-page, for long list-save operations) -------
   const STYX_TOAST_ID = "styx-progress-toast";
@@ -2453,10 +3086,23 @@
   }
 
   // Background pushes progress here during a cart→list save.
+  //
+  // PROGRESS keeps the spinner up; DONE is the terminal state. A save driven
+  // from the panel (rather than from this page's own button) has no local code
+  // awaiting a response, so without a DONE message the toast would spin
+  // forever even after the save succeeded.
   try {
     chrome.runtime.onMessage.addListener((m) => {
-      if (m && m.type === "MC_LIST_SAVE_PROGRESS") {
+      if (!m) return;
+      if (m.type === "MC_LIST_SAVE_PROGRESS") {
         showStyxToast(m.detail || "Working…");
+      } else if (m.type === "MC_LIST_SAVE_DONE") {
+        finishStyxToast(
+          m.ok ? "done" : "error",
+          m.title || (m.ok ? "Cart saved" : "Couldn't save to Amazon"),
+          m.detail || "",
+          m.hideAfter
+        );
       }
     });
   } catch (_e) { /* no runtime — ignore */ }
@@ -2517,7 +3163,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = STYX_SAVE_CART_BTN_ID;
-    btn.title = "Save everything in this cart to a new Amazon wish list";
+    btn.title = "Save everything in this cart to a new Amazon list";
     btn.innerHTML =
       STYX_MARK_SVG("styx-btn-mark") +
       '<span class="styx-save-cart-label">' + STYX_SAVE_CART_LABEL + "</span>";
@@ -2615,6 +3261,41 @@
   const STYX_PDP_ATL_FLAG = "styxAtlRelocated"; // dataset marker on the stack
   const STYX_PDP_ATL_STYLE_ID = "styx-pdp-atl-style";
 
+  // The split-button caret (▼) that opens Amazon's multi-list chooser. Same
+  // resolution order as the background driver's pageAddToList (validated live).
+  function findAtlCaret(stack) {
+    return (
+      (stack && stack.querySelector("#add-to-wishlist-button")) ||
+      document.getElementById("add-to-wishlist-button") ||
+      (stack && stack.querySelector(".a-button-splitdropdown input")) ||
+      document.getElementById("wishListDropDown") ||
+      null
+    );
+  }
+
+  // Make the main (left) "Save to a Styx cart" button open the chooser dropdown
+  // instead of silently adding to the default list — i.e. behave like the caret.
+  // Capture-phase so we run before Amazon's own handler; only intercept clicks
+  // on the main button, leaving the real caret and everything else untouched.
+  function wireMainButtonOpensChooser(stack) {
+    if (!stack || stack.dataset.styxAtlRedirect === "1") return;
+    const mainBtn = stack.querySelector("#wishListMainButton");
+    if (!mainBtn) return;
+    stack.addEventListener(
+      "click",
+      (e) => {
+        if (!mainBtn.contains(e.target)) return; // only the main button
+        const caret = findAtlCaret(stack);
+        if (!caret || mainBtn.contains(caret)) return; // no separate caret → default
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        caret.click(); // opens the multi-list chooser
+      },
+      true
+    );
+    stack.dataset.styxAtlRedirect = "1";
+  }
+
   function stylePdpAddToListButton(stack) {
     // Keep Amazon's button DOM and classes intact so its bound handlers and
     // split-button behavior survive. These overrides are visual only.
@@ -2668,7 +3349,28 @@
     const label =
       stack.querySelector("#wishListMainButton-announce") ||
       stack.querySelector("#wishListMainButton .a-button-text");
-    if (label) label.textContent = "Save to a List";
+    // Match the Lists→Carts rebrand: when it's on, this reads as a Styx cart
+    // action; off, keep Amazon's native wording so the surface stays coherent.
+    if (label) {
+      label.textContent = relabelEnabled() ? "Add to a Styx cart" : "Add to List";
+    }
+
+    // Left button opens the chooser instead of adding to the default list.
+    wireMainButtonOpensChooser(stack);
+  }
+
+  // With the rebrand on, relabel Amazon's own "Add to Cart" so the destination
+  // is explicit next to our "Add to a Styx cart" button. Reversible via
+  // relabelNode (revertStyxCarts restores it when the toggle is turned off).
+  function relabelAtcButton() {
+    if (!relabelEnabled()) return;
+    const atc = document.getElementById("add-to-cart-button");
+    if (!atc) return;
+    const wrap = atc.closest(".a-button");
+    const label =
+      (wrap && wrap.querySelector(".a-button-text")) ||
+      document.getElementById("submit.add-to-cart-announce");
+    if (label) relabelNode(label, () => "Add directly to Amazon cart");
   }
 
   function injectPdpAddToListButton() {
@@ -2700,6 +3402,7 @@
 
   function initPdpAddToList() {
     injectPdpAddToListButton();
+    relabelAtcButton();
     // The buybox hydrates after document_idle and re-renders on variant
     // changes and soft navigations — each can spawn a fresh, unrelocated
     // widget. Keep a debounced, idempotent re-check running, scoped to the
@@ -2711,9 +3414,28 @@
       timer = setTimeout(() => {
         timer = 0;
         injectPdpAddToListButton();
+        relabelAtcButton();
       }, 250);
     });
     mo.observe(root, { childList: true, subtree: true });
+
+    // The "Add to List" chooser popover is fetched on caret-click and appended
+    // to <body> (outside #dp), so it needs its own watcher to catch + rebrand
+    // the list names as they render. Debounced + idempotent (relabelNode flags
+    // each node), scoped to body.
+    relabelPdpAtl();
+    let chooserTimer = 0;
+    const chooserMo = new MutationObserver(() => {
+      if (chooserTimer) return;
+      chooserTimer = setTimeout(() => {
+        chooserTimer = 0;
+        relabelPdpAtl();
+      }, 150);
+    });
+    chooserMo.observe(document.body || document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
   }
 
   // ---- Boot ---------------------------------------------------------------
@@ -2731,13 +3453,316 @@
   if (onProduct) watchAtcClicks();
   watchStorageForChanges();
   // Hydrate caches by reading chrome.storage.local directly — content
-  // scripts have permission, so no service-worker round-trip is needed.
-  // Eliminates the race where clicking ATC right after page load fell
-  // through because MC_LIST_CARTS hadn't responded yet.
+  // scripts have permission, so no service-worker round-trip is needed to
+  // have settings + the Amazon-lists snapshot ready for the first ATC click.
   hydrateCachesFromStorage();
   if (onUpsell) watchUpsellClicks();
   if (isWishlistPage()) initWishlist();
   if (isWishlistPage()) initStyxCartRelabel();
   if (onProduct) initPdpAddToList();
   if (isCartPage()) initSaveCart();
+  initCreateListRelabel();
+
+  // ------------------------------------------------------------------------
+  // Floating UI — the primary surface for the extension. A round button
+  // pinned to the bottom-right of the viewport (showing the extension icon)
+  // toggles a draggable modal that embeds popup.html in an iframe, so every
+  // control/behaviour of the old side panel is reused verbatim. The toolbar
+  // icon also toggles it (background forwards MC_TOGGLE_FLOATING).
+  //
+  // observer.js runs in all frames; this UI must exist only in the top frame.
+  // ------------------------------------------------------------------------
+  const FAB_ID = "__styx-fab";
+  const FAB_MODAL_ID = "__styx-fab-modal";
+  const FAB_STYLE_ID = "__styx-fab-style";
+  const FAB_POS_KEY = "styx.fab.pos.v1"; // per-tab dragged position
+  const FAB_OPEN_KEY = "styx.fab.open.v1"; // per-tab open/closed memory
+  const FAB_WIDTH = 400;
+  const FAB_MARGIN = 20;
+
+  function injectFloatingStyles() {
+    if (document.getElementById(FAB_STYLE_ID)) return;
+    const css = `
+      #${FAB_ID} {
+        position: fixed; right: ${FAB_MARGIN}px; bottom: ${FAB_MARGIN}px;
+        z-index: 2147483640;
+        width: 56px; height: 56px; padding: 0;
+        border: none; border-radius: 50%;
+        background: #131a22; cursor: pointer;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+        display: flex; align-items: center; justify-content: center;
+        transition: transform .12s ease, box-shadow .12s ease;
+      }
+      #${FAB_ID}:hover { transform: translateY(-2px);
+        box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,153,0,0.5); }
+      #${FAB_ID}:active { transform: translateY(0); }
+      #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
+      #${FAB_ID}[hidden] { display: none; }
+
+      /* Orange pulse ring around the button as a reminder to use it. Toggled
+         by the "Pulse the floating button" setting (on by default). */
+      @keyframes styx-fab-pulse {
+        0%   { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0.55); }
+        70%  { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 14px rgba(255,153,0,0); }
+        100% { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0); }
+      }
+      #${FAB_ID}.styx-fab-pulse { animation: styx-fab-pulse 2s ease-out infinite; }
+      #${FAB_ID}.styx-fab-pulse:hover { animation-play-state: paused; }
+      /* Motion-averse users still get a cue: a steady orange ring, no pulse. */
+      @media (prefers-reduced-motion: reduce) {
+        #${FAB_ID}.styx-fab-pulse {
+          animation: none;
+          box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 4px rgba(255,153,0,0.55);
+        }
+      }
+
+      #${FAB_MODAL_ID} {
+        position: fixed; right: ${FAB_MARGIN}px; bottom: ${FAB_MARGIN}px;
+        z-index: 2147483641;
+        width: ${FAB_WIDTH}px; height: min(640px, calc(100vh - ${FAB_MARGIN * 2}px));
+        display: flex; flex-direction: column;
+        background: #131a22; border-radius: 12px; overflow: hidden;
+        box-shadow: 0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+      }
+      #${FAB_MODAL_ID}[hidden] { display: none; }
+      #${FAB_MODAL_ID} .styx-fab-bar {
+        display: flex; align-items: center; gap: 8px;
+        height: 36px; flex: 0 0 36px; padding: 0 6px 0 12px;
+        background: #0f151c; cursor: move; user-select: none;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+      }
+      #${FAB_MODAL_ID} .styx-fab-bar-title {
+        flex: 1; min-width: 0; font-size: 12px; font-weight: 600;
+        color: #f3efe6; letter-spacing: .2px;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #${FAB_MODAL_ID} .styx-fab-bar-close {
+        flex: 0 0 auto; width: 26px; height: 26px; padding: 0;
+        border: none; border-radius: 6px; background: transparent;
+        color: #8a93a0; font-size: 16px; line-height: 1; cursor: pointer;
+      }
+      #${FAB_MODAL_ID} .styx-fab-bar-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      #${FAB_MODAL_ID} .styx-fab-frame {
+        flex: 1 1 auto; width: 100%; border: none; background: #131a22;
+      }
+      #${FAB_MODAL_ID}.styx-fab-dragging { user-select: none; }
+      #${FAB_MODAL_ID}.styx-fab-dragging .styx-fab-frame { pointer-events: none; }
+    `;
+    const style = document.createElement("style");
+    style.id = FAB_STYLE_ID;
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  function readStoredOpen() {
+    try { return sessionStorage.getItem(FAB_OPEN_KEY) === "1"; } catch (_e) { return false; }
+  }
+  function writeStoredOpen(open) {
+    try { sessionStorage.setItem(FAB_OPEN_KEY, open ? "1" : "0"); } catch (_e) { /* ignore */ }
+  }
+  function readStoredPos() {
+    try {
+      const raw = sessionStorage.getItem(FAB_POS_KEY);
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      if (typeof p.left === "number" && typeof p.top === "number") return p;
+    } catch (_e) { /* ignore */ }
+    return null;
+  }
+  function writeStoredPos(pos) {
+    try { sessionStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch (_e) { /* ignore */ }
+  }
+
+  // Clamp a left/top so the modal stays mostly on-screen after viewport changes.
+  function clampPos(left, top, el) {
+    const w = el.offsetWidth || FAB_WIDTH;
+    const h = el.offsetHeight || 400;
+    const maxLeft = Math.max(0, window.innerWidth - w);
+    const maxTop = Math.max(0, window.innerHeight - Math.min(h, 80));
+    return {
+      left: Math.min(Math.max(0, left), maxLeft),
+      top: Math.min(Math.max(0, top), maxTop)
+    };
+  }
+
+  function applyPos(modal, pos) {
+    modal.style.left = pos.left + "px";
+    modal.style.top = pos.top + "px";
+    modal.style.right = "auto";
+    modal.style.bottom = "auto";
+  }
+
+  // Toggle the orange pulse ring on the floating button from the current
+  // setting (on by default). Called on init and on live settings changes.
+  function applyFabPulse() {
+    const fab = document.getElementById(FAB_ID);
+    if (!fab) return;
+    fab.classList.toggle("styx-fab-pulse", _settingsCache.fabPulse !== false);
+  }
+
+  // True while a background-driven multi-navigation operation is running
+  // (cart restore sets `restoring`; cart clear / list save set `busy`). Used
+  // to hold back the floating window's auto-reopen so it doesn't rebuild and
+  // re-hit the lists API on every page load during the operation.
+  function uiSuspended() {
+    return !!(_settingsCache.restoring || _settingsCache.busy);
+  }
+
+  function initFloatingUi() {
+    // Top frame only — Amazon embeds many iframes; the FAB belongs on the page.
+    if (window.top !== window) return;
+    if (!document.body) return;
+    if (document.getElementById(FAB_ID)) return;
+
+    injectFloatingStyles();
+
+    const fab = document.createElement("button");
+    fab.id = FAB_ID;
+    fab.type = "button";
+    fab.setAttribute("aria-label", "Open Styx Multi-Cart");
+    const icon = document.createElement("img");
+    try { icon.src = chrome.runtime.getURL("icons/icon48.png"); } catch (_e) { /* ignore */ }
+    icon.alt = "";
+    fab.appendChild(icon);
+
+    const modal = document.createElement("div");
+    modal.id = FAB_MODAL_ID;
+    modal.hidden = true;
+
+    const bar = document.createElement("div");
+    bar.className = "styx-fab-bar";
+    const title = document.createElement("span");
+    title.className = "styx-fab-bar-title";
+    title.textContent = "Styx Multi-Cart";
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "styx-fab-bar-close";
+    closeBtn.setAttribute("aria-label", "Close");
+    closeBtn.textContent = "✕";
+    bar.appendChild(title);
+    bar.appendChild(closeBtn);
+
+    const frame = document.createElement("iframe");
+    frame.className = "styx-fab-frame";
+    // Lazily set src on first open so we don't spin up popup.js on every page.
+    frame.dataset.src = (() => {
+      try { return chrome.runtime.getURL("popup.html") + "?surface=floating"; }
+      catch (_e) { return ""; }
+    })();
+
+    modal.appendChild(bar);
+    modal.appendChild(frame);
+    document.body.appendChild(fab);
+    document.body.appendChild(modal);
+    applyFabPulse();
+
+    // Restore a dragged position from this tab's session, if any.
+    const storedPos = readStoredPos();
+    if (storedPos) applyPos(modal, clampPos(storedPos.left, storedPos.top, modal));
+
+    // Close when the user clicks anywhere outside the modal (i.e. on the page).
+    // Clicks inside the iframe don't reach this document, so they never count as
+    // "outside"; only true page clicks and the (hidden) FAB are checked.
+    function onDocPointerDown(e) {
+      if (modal.hidden) return;
+      if (modal.contains(e.target)) return;
+      if (e.target === fab || fab.contains(e.target)) return;
+      closeModal();
+    }
+    // Let other in-page UI (e.g. the docked wishlist "Send All" pill) react to
+    // the FAB showing/hiding without reaching into this scope.
+    function notifyFabVis() {
+      try { window.dispatchEvent(new Event("styx:fabvis")); } catch (_e) { /* ignore */ }
+    }
+    function openModal() {
+      if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
+      modal.hidden = false;
+      fab.hidden = true;
+      notifyFabVis();
+      writeStoredOpen(true);
+      // Defer so the click that opened the modal doesn't immediately close it.
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+      setTimeout(() => {
+        if (!modal.hidden) {
+          document.addEventListener("pointerdown", onDocPointerDown, true);
+        }
+      }, 0);
+    }
+    function closeModal() {
+      modal.hidden = true;
+      fab.hidden = false;
+      notifyFabVis();
+      writeStoredOpen(false);
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+    }
+    function toggleModal() {
+      if (modal.hidden) openModal(); else closeModal();
+    }
+
+    fab.addEventListener("click", openModal);
+    closeBtn.addEventListener("click", closeModal);
+
+    // Drag the modal by its title bar. Switches from right/bottom anchoring to
+    // left/top on first move, then persists the position for this tab.
+    let dragging = false;
+    let dx = 0;
+    let dy = 0;
+    bar.addEventListener("pointerdown", (e) => {
+      if (e.target === closeBtn || closeBtn.contains(e.target)) return;
+      dragging = true;
+      const rect = modal.getBoundingClientRect();
+      dx = e.clientX - rect.left;
+      dy = e.clientY - rect.top;
+      applyPos(modal, { left: rect.left, top: rect.top });
+      modal.classList.add("styx-fab-dragging");
+      try { bar.setPointerCapture(e.pointerId); } catch (_e) { /* ignore */ }
+      e.preventDefault();
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const pos = clampPos(e.clientX - dx, e.clientY - dy, modal);
+      applyPos(modal, pos);
+    });
+    function endDrag(e) {
+      if (!dragging) return;
+      dragging = false;
+      modal.classList.remove("styx-fab-dragging");
+      try { bar.releasePointerCapture(e.pointerId); } catch (_e) { /* ignore */ }
+      const rect = modal.getBoundingClientRect();
+      writeStoredPos({ left: rect.left, top: rect.top });
+    }
+    bar.addEventListener("pointerup", endDrag);
+    bar.addEventListener("pointercancel", endDrag);
+
+    // Keep the modal on-screen if the window shrinks after a drag.
+    window.addEventListener("resize", () => {
+      if (modal.hidden || modal.style.left === "" || modal.style.left === "auto") return;
+      const pos = clampPos(parseInt(modal.style.left, 10) || 0, parseInt(modal.style.top, 10) || 0, modal);
+      applyPos(modal, pos);
+    });
+
+    // Toolbar icon → background forwards this to toggle the modal.
+    try {
+      chrome.runtime.onMessage.addListener((m) => {
+        if (m && m.type === "MC_TOGGLE_FLOATING") toggleModal();
+      });
+    } catch (_e) { /* no runtime — ignore */ }
+
+    // Restore open state across Amazon's full-page navigations — UNLESS a
+    // multi-navigation Styx operation is running (cart clear / list save /
+    // restore). Those reload the page repeatedly; auto-reopening here would
+    // rebuild the popup and re-hit the lists API on every single load. The
+    // FAB still shows, so the user can open it manually if they want to.
+    if (readStoredOpen() && !uiSuspended()) openModal();
+
+    // The FAB now exists; nudge any in-page UI that rides on its visibility
+    // (the wishlist "Send All" pill was set up before this ran).
+    notifyFabVis();
+  }
+
+  // Run after the const/function declarations above are initialized (avoids a
+  // temporal-dead-zone ReferenceError if called earlier in the init sequence).
+  initFloatingUi();
 })();

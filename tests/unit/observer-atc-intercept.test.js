@@ -16,6 +16,23 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Reconstruct the item the observer built for a click: title/image come from
+// the picker header, asin/quantity from the MC_ADD_ITEM_TO_AMAZON_LIST message
+// the row click sends. (The picker targets Amazon lists, so there is no nested
+// `item` payload anymore.)
+function builtItem(picker, messages) {
+  const add = messages.find((m) => m.type === "MC_ADD_ITEM_TO_AMAZON_LIST") || {};
+  const titleEl = picker.querySelector(".styx-pk-title");
+  const thumb = picker.querySelector(".styx-pk-thumb");
+  return {
+    asin: add.asin,
+    quantity: add.quantity,
+    listId: add.listId,
+    title: titleEl ? titleEl.textContent.trim() : "",
+    image: thumb && thumb.tagName === "IMG" ? thumb.getAttribute("src") : "",
+  };
+}
+
 function loadObserver(
   html,
   {
@@ -30,6 +47,16 @@ function loadObserver(
     { interceptAtc: true },
     settings
   );
+  // The picker targets the user's Amazon lists (mc.amazonlists.v1 snapshot).
+  // Seed one editable list ("cart-1") so a picker row renders and row clicks
+  // route to MC_ADD_ITEM_TO_AMAZON_LIST.
+  const listsSnapshot = {
+    host: "www.amazon.com",
+    fetchedAt: Date.now(),
+    lists: [
+      { listId: "cart-1", name: "Beach trip", count: 0, kind: "custom", access: "editable" },
+    ],
+  };
   const dom = new JSDOM(html, {
     url,
     runScripts: "outside-only",
@@ -46,6 +73,10 @@ function loadObserver(
       },
       sendMessage(message, callback) {
         messages.push(message);
+        if (message.type === "MC_ENSURE_AMAZON_LISTS") {
+          if (callback) callback({ ok: true, ...listsSnapshot });
+          return;
+        }
         if (callback) callback({ ok: true });
       },
     },
@@ -54,15 +85,7 @@ function loadObserver(
         get(_keys, callback) {
           const payload = {
             "mc.settings.v1": storedSettings,
-            "mc.carts.v1": [
-              {
-                id: "cart-1",
-                name: "Beach trip",
-                savedAt: 1,
-                lastUsedAt: 1,
-                items: [],
-              },
-            ],
+            "mc.amazonlists.v1": listsSnapshot,
             "mc.entitlement.v1": { tier: "free", premiumUntil: null },
           };
           if (storageDelayMs > 0) {
@@ -168,13 +191,10 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0NBMOUNT1",
-        title: "NB Smoovex Single Computer Monitor Mount, Monitor Stand fits up to 32 Inch",
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0NBMOUNT1",
+      title: "NB Smoovex Single Computer Monitor Mount, Monitor Stand fits up to 32 Inch",
     });
   });
 
@@ -213,13 +233,10 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0G6KRDS4N",
-        quantity: 1,
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0G6KRDS4N",
+      quantity: 1,
     });
   });
 
@@ -258,14 +275,11 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0BVBKG522",
-        title: "CUPSHE Women Swimsuit Bikini Set High Waisted Push Up Cheeky Drawstring Two Piece Bathing Suit",
-        quantity: 1,
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0BVBKG522",
+      title: "CUPSHE Women Swimsuit Bikini Set High Waisted Push Up Cheeky Drawstring Two Piece Bathing Suit",
+      quantity: 1,
     });
   });
 
@@ -314,15 +328,12 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0BELLROY1",
-        title: "Bellroy Lite Duffel (Super-Lightweight 30L Weekend Duffel Bag with Internal Organization) - Clay",
-        quantity: 1,
-        image: "https://m.media-amazon.com/images/I/bellroy-duffel.jpg",
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0BELLROY1",
+      title: "Bellroy Lite Duffel (Super-Lightweight 30L Weekend Duffel Bag with Internal Organization) - Clay",
+      quantity: 1,
+      image: "https://m.media-amazon.com/images/I/bellroy-duffel.jpg",
     });
   });
 
@@ -366,14 +377,11 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0DRESS123",
-        title: "Women's Red Dress",
-        image: "https://m.media-amazon.com/images/I/dress-large.jpg",
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0DRESS123",
+      title: "Women's Red Dress",
+      image: "https://m.media-amazon.com/images/I/dress-large.jpg",
     });
   });
 
@@ -419,13 +427,10 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0DRESS123",
-        title: "Women's Red Pleated Dress with Tie Waist",
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0DRESS123",
+      title: "Women's Red Pleated Dress with Tie Waist",
     });
   });
 
@@ -462,14 +467,11 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0PDPIMAGE",
-        title: "Main PDP item",
-        image: "https://m.media-amazon.com/images/I/pdp-large.jpg",
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0PDPIMAGE",
+      title: "Main PDP item",
+      image: "https://m.media-amazon.com/images/I/pdp-large.jpg",
     });
   });
 
@@ -507,14 +509,11 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B0PDPIMAGE",
-        title: "Main PDP item",
-        image: "https://m.media-amazon.com/images/I/pdp-large.jpg",
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B0PDPIMAGE",
+      title: "Main PDP item",
+      image: "https://m.media-amazon.com/images/I/pdp-large.jpg",
     });
   });
 
@@ -557,13 +556,10 @@ describe("observer.js ATC intercept", () => {
       .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
 
-    const addMessage = messages.find((msg) => msg.type === "MC_ADD_ITEM_TO_SAVED_CART");
-    expect(addMessage).toMatchObject({
-      savedCartId: "cart-1",
-      item: {
-        asin: "B00JJID49S",
-        quantity: 1,
-      },
+    expect(builtItem(picker, messages)).toMatchObject({
+      listId: "cart-1",
+      asin: "B00JJID49S",
+      quantity: 1,
     });
   });
 });

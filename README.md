@@ -4,19 +4,20 @@ Licensed under [PolyForm Noncommercial 1.0.0](LICENSE) — free for personal and
 
 You can have multiple carts or separate purchases at checkout in the real world. Why not Amazon?!
 
-Styx **supercharges your Amazon lists**, repurposing them as reusable **carts** you fill with items and move to checkout in one click — so you can keep a separate cart for every occasion or purpose (the birthday, the holidays, the weekly groceries, the home project) and drop the whole thing into your Amazon cart when you're ready to buy. Because the carts are just your Amazon lists, they're backed by your Amazon account and sync across every device you sign in on.
+**One click to clear your Amazon cart — or save it for a later checkout.** Amazon never gave you an Empty Cart button, so you delete items one at a time, or you never clear it and the thing you actually want to buy stays buried. Styx empties the whole cart for you, and offers to save it first as a reusable cart so clearing costs you nothing. Those saved carts are just your Amazon lists, so they're backed by your Amazon account and already on every device you sign in on — a separate cart for every occasion (the birthday, the holidays, the weekly groceries, the home project), each one ready to send to checkout.
 
 ## What it does
 
+- **Empty your Amazon cart** — clears your live cart from one button in the Styx panel, instead of deleting items one at a time. Free and unlimited on every plan. **Saved for Later is never touched.** Larger carts are cleared item by item, so it takes a moment to work through them.
+- **Save & Clear** — the confirm dialog offers to save everything in the cart into a brand-new Amazon list first, so you can empty it and shop something else without losing a thing. Also available without clearing, via **Save Cart for Later** in the panel or **Save cart to a new list** on the Amazon cart page.
 - **Lists are carts** — every Amazon list shows up as a cart. Styx also relabels Amazon's own Lists page to **Your Styx Carts** and appends "Cart" to each list name (toggle the relabeling off in Settings).
 - **Floating panel** — a floating Styx button rides along on Amazon; click it for a draggable panel of all your carts, and click off it to dismiss. A **Go to Carts** button jumps to them on Amazon.
-- **Send All to Amazon Cart** — load an entire cart into your live Amazon cart at once, ready to check out. Out-of-stock items skip; books ask which edition/format.
+- **Send All to Amazon Cart** — load an entire cart into your live Amazon cart, ready to check out. Out-of-stock items skip; books ask which edition/format. Amazon's own bulk-add confirmation still needs one click from you.
 - **Add to a Styx cart while you browse** — a branded button next to **Add to Cart** on every product page lets you drop an item straight into the cart you choose.
-- **Save your Amazon cart into a new cart** — one click on the cart page snapshots everything in your live cart into a brand-new cart, so you can empty it and shop something else without losing a thing.
-- **Clear** — empty your live Amazon cart in one click for a fresh session; your carts stay untouched.
-- **Edit items inline** — each item shows as a picture tile. Click the **X** (top-left) to remove it, click the **count badge** (bottom-left) for a +/− quantity popover, or click the **picture** to move that item into another cart.
 
-**Free & Premium:** the free tier covers **3 carts** with every core action; **Premium unlocks unlimited carts** ($9.99/year or $19.99 lifetime). Over-limit carts render grayed and open the upgrade screen — list creation itself is never blocked. Your live Amazon cart is always first-class and always free, even if Premium lapses.
+Items inside a cart are shown as picture tiles for review; editing them (quantity, removal) happens on Amazon's own list page.
+
+**Free & Premium:** emptying your cart and saving it are **always free and unlimited**. The free tier also covers **3 carts** with every core action; **Premium unlocks unlimited carts** ($9.99/year or $19.99 lifetime). Over-limit carts render grayed and open the upgrade screen — list creation itself is never blocked. Your live Amazon cart is always first-class and always free, even if Premium lapses.
 
 Your carts live in your Amazon account; the extension stores only settings and preferences locally (`chrome.storage.local`) and never sends your cart contents to any server.
 
@@ -106,10 +107,10 @@ steps above) — no build step needed, and the debug controls are present.
 ## How to use
 
 1. On any Amazon page, click the **floating Styx button** (bottom-right) to open the panel of your carts. (You can also click the Styx toolbar icon.)
-2. **Build a cart:** while browsing, click **Add to a Styx cart** next to Add to Cart on a product page and pick the cart — or add items to any list on Amazon as usual.
+2. **Clear your cart:** hit **Clear Amazon Cart**. Styx asks whether to save it first — pick **Save & Clear** to keep everything as a new cart, or **Just Clear** to wipe it. Either way your Saved for Later is untouched.
 3. **Send a cart to checkout:** open a cart and hit **Send All to Amazon Cart**. Styx loads the whole cart into your live Amazon cart, ready to check out.
-4. **Save your current cart:** on the Amazon cart page, click **Save cart to a new list** to snapshot everything in your live cart into a brand-new cart — then empty it and shop something else without losing a thing.
-5. **Clear** empties your live Amazon cart in one click; your carts stay untouched.
+4. **Build a cart:** while browsing, click **Add to a Styx cart** next to Add to Cart on a product page and pick the cart — or add items to any list on Amazon as usual.
+5. **Save without emptying:** on the Amazon cart page, click **Save cart to a new list** to snapshot everything in your live cart into a brand-new cart.
 
 ### How "Send All to Amazon Cart" works under the hood
 
@@ -129,7 +130,8 @@ You'll need to be signed in to Amazon — the extension never handles your crede
 | `src/background/index.js`               | Canonical service-worker source                                     |
 | `background.js`                         | Generated bundled classic service worker loaded by the manifest     |
 | `content.js`                            | Runs on Amazon cart pages — scrapes items and clears the cart       |
-| `popup.html` / `popup.css` / `popup.js` | The toolbar popup UI                                                |
+| `observer.js`                           | Runs on Amazon product/list/cart pages — the floating button and panel, page buttons, relabeling |
+| `popup.html` / `popup.css` / `popup.js` | The panel UI, loaded inside the in-page floating modal              |
 | `generate_icons.html`                   | Optional one-time helper to generate toolbar icon PNGs              |
 
 ## Adding custom toolbar icons (optional)
@@ -145,10 +147,11 @@ The extension works fine with Chrome's default puzzle-piece icon. If you'd like 
 ## Troubleshooting
 
 - **"Could not read the Amazon cart page"** — make sure you're on `amazon.com/cart` (not the homepage) and the page is fully loaded. Refresh and try again.
-- **Restore opened a tab but nothing was added** — you're probably not signed in to Amazon, or Amazon is showing a CAPTCHA on a product page. Sign in, dismiss any prompts, then click Restore again.
-- **Some items didn't restore** — Amazon may have removed the listing, the seller may be out of stock, the product may have a custom-options page (e.g., engraving) that the extension doesn't fill in, or the ASIN may now be region-locked. Anything the extension couldn't add is simply skipped; the rest go through.
+- **Emptying stopped partway** — very large carts can hit the per-run ceiling, or Amazon may have stalled on a row. Click **Clear Amazon Cart** again to finish the rest.
+- **A tab opened but nothing was added** — you're probably not signed in to Amazon, or Amazon is showing a CAPTCHA on a product page. Sign in, dismiss any prompts, then try again.
+- **Some items didn't make it into the cart** — Amazon may have removed the listing, the seller may be out of stock, the product may have a custom-options page (e.g., engraving) that the extension doesn't fill in, or the ASIN may now be region-locked. Anything the extension couldn't add is simply skipped; the rest go through.
 - **Cart-page selectors stop working** — Amazon A/B tests its cart layout. Open an issue / file a fix; the relevant selectors are at the top of `content.js`.
 
 ## Privacy
 
-The extension stores data only in your browser's local extension storage. It never sends data to any third-party server. The only network requests it makes are to amazon.com itself, on your behalf, when you click Restore.
+Your carts are your own Amazon lists, held in your Amazon account — not in the extension and not on any server of ours, because there isn't one. The extension stores only settings, preferences, and Premium licensing state in your browser's local extension storage. Its network requests go to amazon.com on your behalf, plus `extensionpay.com` for Premium licensing (only if you click Upgrade). Bulk add-to-cart URLs carry our Amazon Associates tag. Full details in the [privacy policy](https://allballbearings.github.io/styx-multi-cart/privacy.html).

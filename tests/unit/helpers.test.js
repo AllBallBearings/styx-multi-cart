@@ -12,7 +12,6 @@ import {
   normalizeUrlForWait,
   buildBulkAddUrl,
   chunkItemsForBulk,
-  backfillCartSyncFields,
   parseAmazonListId,
   amazonListUrl,
   AMAZON_TLDS,
@@ -301,37 +300,6 @@ describe("chunkItemsForBulk", () => {
 
   it("returns an empty array for an empty input", () => {
     expect(chunkItemsForBulk([])).toEqual([]);
-  });
-});
-
-describe("backfillCartSyncFields", () => {
-  it("adds null sync fields to carts that never synced", () => {
-    const carts = [{ id: "a", name: "x", items: [] }];
-    backfillCartSyncFields(carts);
-    expect(carts[0].amazonListId).toBeNull();
-    expect(carts[0].amazonListUrl).toBeNull();
-    expect(carts[0].syncedAt).toBeNull();
-  });
-
-  it("preserves existing sync fields", () => {
-    const carts = [
-      { id: "a", amazonListId: "L1", amazonListUrl: "u", syncedAt: 123 },
-    ];
-    backfillCartSyncFields(carts);
-    expect(carts[0].amazonListId).toBe("L1");
-    expect(carts[0].amazonListUrl).toBe("u");
-    expect(carts[0].syncedAt).toBe(123);
-  });
-
-  it("returns the same array and tolerates junk entries", () => {
-    const carts = [null, { id: "b" }, 5];
-    const out = backfillCartSyncFields(carts);
-    expect(out).toBe(carts);
-    expect(carts[1].amazonListId).toBeNull();
-  });
-
-  it("returns non-arrays unchanged", () => {
-    expect(backfillCartSyncFields(null)).toBeNull();
   });
 });
 
