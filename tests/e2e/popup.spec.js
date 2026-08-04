@@ -118,7 +118,7 @@ test.describe("popup — Amazon list dashboard", () => {
     await card.locator('[data-action="toggle-amazon-list"]').click();
     await card.locator('[data-action="load-amazon-list-cart"]').click();
 
-    await expect(page.locator("#mc-confirm-title")).toHaveText("Add this list to your cart?");
+    await expect(page.locator("#mc-confirm-title")).toHaveText("Send these items to your Amazon cart?");
     await expect(page.locator("#mc-confirm-body")).toContainText(
       "1 unavailable item will be skipped"
     );

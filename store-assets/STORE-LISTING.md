@@ -13,47 +13,50 @@ Paste these into the Chrome Web Store Developer Dashboard listing form. Keep the
 > actually takes two clicks — the button, then a choice in the confirm dialog
 > ("Save & Clear" / "Just Clear"). The owner opted to keep the phrase. Don't
 > "fix" it to something weaker without asking; equally, don't propagate it to
-> *other* actions, where it has never been true.
+> _other_ actions, where it has never been true.
 
 ---
 
 ## Name
-Styx Multi-Cart — Clear your Amazon cart
+
+Styx Multi-Cart — Simply Clear, Save, or Restore
 
 ## Short description (max 132 chars)
-One click to clear your Amazon cart — or save it for a later checkout. Free, unlimited, Saved for Later untouched.
 
-> 113 chars. Alt (leads on the carts):
+Styx Multi-Cart — Simply Clear, Save, or Restore your Amazon cart and the items you have in it.
+
+> 95 chars. Alt (leads on the carts):
 > `One click to clear your Amazon cart, or save it for a later checkout. Your Amazon lists become reusable carts.` (109)
 
 ## Category
+
 Shopping
 
 ---
 
 ## Detailed description
 
-**One click to clear your Amazon cart — or save it for a later checkout. Amazon never gave you an Empty Cart button. Styx does, and it makes sure clearing costs you nothing.**
+**Styx Multi-Cart gives your Amazon cart three simple actions: clear it, save it, or restore it when you are ready to check out.**
 
-Your cart is doing three jobs at once: the things you're buying now, the things you're still thinking about, and the things you'll get around to eventually. Amazon makes you delete items one at a time, so you never clear it — and the one thing you actually want to buy ends up buried under forty things you don't.
+Amazon carts get cluttered fast. A few things you need now, a few things you might buy later, and a few things you are only comparing can all end up in the same checkout path. Amazon makes you remove cart items one at a time, so clearing the cart becomes tedious.
 
-Styx empties the whole cart for you. Free, unlimited, and your **Saved for Later** items stay exactly where they are. And when you clear it, Styx offers to save the cart for a **later checkout** — a reusable **Styx cart** that waits in your Amazon account until you're ready to buy.
+Styx makes that simple. Use it to clear your current Amazon cart, keep **Saved for Later** untouched, and optionally save the items before they disappear from checkout.
 
-That's when the real thing clicks: **every Amazon list is a cart.** Keep one for the birthday, one for the holidays, one for the weekly grocery run, one for the home project. Build each over time, then send the whole thing to your Amazon cart when you're ready to buy.
+The key idea is that Styx repurposes **Amazon Lists** as reusable carts. Save a cart full of items into an Amazon list, keep building it over time, then send that whole list back to your Amazon cart in bulk when you are ready to buy. Use one list for groceries, one for gifts, one for a home project, one for travel, or any other checkout you want to keep separate.
 
 **What it does**
 
-🧹 **Empty your Amazon cart from one button** — no more deleting items one at a time. Free, unlimited, and Saved for Later is never touched. Larger carts clear item by item, so give it a moment to work through them.
+🧹 **Clear your Amazon cart** — remove the items in your current cart without deleting them one at a time. Clearing is free and unlimited, and **Saved for Later** is never touched. Larger carts clear item by item, so give Styx a moment to work through them.
 
-💾 **Or save it for a later checkout** — when you clear your cart, Styx offers to save everything in it as a new cart in your Amazon account first. Clear with a clean conscience; it's all still there, ready to check out whenever you are.
+💾 **Save a cart for later** — before clearing, Styx can save the cart items into a new Amazon list. The items stay in your Amazon account as a reusable Styx cart instead of sitting in your live checkout cart.
 
-🛒 **Every list is a cart, in one floating panel** — a floating Styx button rides along on Amazon; click it to pop open a draggable panel with all your carts, and click anywhere off it to tuck it away. A **Go to Carts** button jumps you straight to them on Amazon, where Styx renames "Your Lists" to **Your Styx Carts** and adds "Cart" to each list name (toggle the relabeling off anytime).
+🛒 **Turn Amazon Lists into carts** — a floating Styx button rides along on Amazon; click it to open a draggable panel with your carts. A **Go to Carts** button jumps you straight to them on Amazon, where Styx renames "Your Lists" to **Your Styx Carts** and adds "Cart" to each list name (toggle the relabeling off anytime).
 
-⚡ **Send a whole cart to checkout** — the **Send All to Amazon Cart** button loads an entire cart into your Amazon cart, ready to check out. Out-of-stock items are skipped automatically, and for books it asks which edition or format you want.
+⚡ **Restore a saved cart in bulk** — when you are ready, use **Send All to Amazon Cart** to load an entire saved cart back into your Amazon cart for checkout. Out-of-stock items are skipped automatically, and for books Styx asks which edition or format you want.
 
-⭐ **Add to a cart while you browse** — Styx puts a branded **Add to a Styx cart** button right next to **Add to Cart** on every product page, so filling the right cart is as easy as buying.
+⭐ **Add items to the right cart while browsing** — Styx puts a branded **Add to a Styx cart** button next to **Add to Cart** on product pages, so you can build the right saved cart without sending everything to checkout immediately.
 
-🌍 **Already on all your devices** — your carts *are* your Amazon lists, stored in your Amazon account. Nothing to sync, nothing to sign up for, nothing of yours on our servers.
+🌍 **Use Amazon as the source of truth** — your Styx carts _are_ Amazon lists, stored in your Amazon account. There is nothing to sync, nothing to sign up for, and no Styx account to manage.
 
 🌗 **Light & dark mode**, and a **pulse** on the floating button you can switch off in Settings.
 
@@ -71,4 +74,5 @@ Works on Chrome, Edge, Brave, Arc, Opera, Vivaldi and other Chromium browsers.
 ---
 
 ## Notes for reviewer / permissions justification
+
 Accesses `amazon.com` pages to read your lists and cart and to add/remove items on your behalf (for example, emptying your cart, saving your cart into a new list, or sending a cart to your Amazon cart). Settings and preferences are stored locally (`chrome.storage.local`); cart and list contents live in the user's own Amazon account, not in the extension and not on any server of ours. The only non-Amazon network requests are to `extensionpay.com` for Premium licensing, and only after a user clicks Upgrade; no cart contents or PII are ever transmitted. Bulk add-to-cart URLs carry an Amazon Associates–style `tag=` parameter (`styxmcart-20`) because Amazon's bulk add-to-cart endpoint will not render items without one. It is a placeholder, not a registered Associates account, and the extension earns no commission or referral fee; this is stated in the privacy policy and permissions page.
