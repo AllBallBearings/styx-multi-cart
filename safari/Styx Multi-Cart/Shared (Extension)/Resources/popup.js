@@ -1041,9 +1041,9 @@
     const choice = await confirmDialog({
       title: "Clear your Amazon cart?",
       message:
-        `Save ${these} for a later checkout and they'll be waiting in your ` +
-        `Amazon account — or just clear it. Your Saved for Later stays ` +
-        `untouched either way.`,
+        `Save ${these} for a later checkout and they'll be waiting ` +
+        `as a unique Styx cart in your Amazon Lists — or just clear ` +
+        `it to shop for a different occasion.`,
       altLabel: "Save & Clear",
       okLabel: "Just Clear",
       cancelLabel: "Cancel",
@@ -1931,7 +1931,7 @@
       }
       const name = li.querySelector(".mc-amazon-list-name").textContent.trim();
       const ok = await confirmDialog({
-        title: "Add this list to your cart?",
+        title: "Send these items to your Amazon cart?",
         message:
           `Add ${availableItems.length} available item${availableItems.length === 1 ? "" : "s"} from "${name}" to your active Amazon cart? Existing cart items will stay.` +
           (unavailableCount
