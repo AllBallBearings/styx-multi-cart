@@ -2007,7 +2007,7 @@
       }
       const name = li.querySelector(".mc-amazon-list-name").textContent.trim();
       const ok = await confirmDialog({
-        title: "Add this list to your cart?",
+        title: "Send these items to your Amazon cart?",
         message:
           `Add ${availableItems.length} available item${availableItems.length === 1 ? "" : "s"} from "${name}" to your active Amazon cart? Existing cart items will stay.` +
           (unavailableCount
