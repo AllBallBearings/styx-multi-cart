@@ -62,6 +62,10 @@ The key idea is that Styx repurposes **Amazon Lists** as reusable carts. Save a 
 
 🔒 **Private by design** — Styx works entirely between your browser and Amazon. There is no Styx server, and no analytics or tracking of your browsing.
 
+**Affiliate disclosure**
+
+To send a whole cart back to Amazon in one step, Styx uses Amazon's bulk add-to-cart endpoint, which will not add your items unless the link includes an Amazon Associates tag (`tag=styxmcart-20`). Styx includes this placeholder tag **only so bulk cart restore works** — it is **not a registered Associates account**, and Styx **earns no commission, referral fee, or other compensation** from your purchases. You can review this any time in the extension's **Settings → Affiliate disclosure** and on our permissions page.
+
 **Free & Premium**
 
 - **Free** — emptying your cart and saving it are **always free and unlimited**, plus **3 carts** with every core action: send to your Amazon cart and add while you browse.
@@ -76,3 +80,5 @@ Works on Chrome, Edge, Brave, Arc, Opera, Vivaldi and other Chromium browsers.
 ## Notes for reviewer / permissions justification
 
 Accesses `amazon.com` pages to read your lists and cart and to add/remove items on your behalf (for example, emptying your cart, saving your cart into a new list, or sending a cart to your Amazon cart). Settings and preferences are stored locally (`chrome.storage.local`); cart and list contents live in the user's own Amazon account, not in the extension and not on any server of ours. The only non-Amazon network requests are to `extensionpay.com` for Premium licensing, and only after a user clicks Upgrade; no cart contents or PII are ever transmitted. Bulk add-to-cart URLs carry an Amazon Associates–style `tag=` parameter (`styxmcart-20`) because Amazon's bulk add-to-cart endpoint will not render items without one. It is a placeholder, not a registered Associates account, and the extension earns no commission or referral fee; this is stated in the privacy policy and permissions page.
+
+**Re: affiliate-ads policy (previous rejection "Grey Titanium").** The `tag=` parameter above is now disclosed prominently to users in three places: (1) this Store description, under **Affiliate disclosure**; (2) the extension UI, under **Settings → Affiliate disclosure**; and (3) before installation, via the disclosure in the Store listing and the linked permissions page. The tag exists solely so Amazon's bulk endpoint will restore a saved cart; the extension is not enrolled in Amazon Associates and earns nothing from it.

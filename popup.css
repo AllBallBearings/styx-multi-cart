@@ -1888,6 +1888,20 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
   color: var(--mc-fg-soft);
   font-variant-numeric: tabular-nums;
 }
+.mc-settings-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mc-fg-soft);
+}
+.mc-settings-note code {
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--mc-line);
+  color: var(--mc-fg);
+}
+.mc-settings-note a { color: var(--mc-link); }
 
 /* ---- Support module ------------------------------------------------------ */
 /* Subtle floating life-buoy pinned to the bottom-right of the popup / panel.
