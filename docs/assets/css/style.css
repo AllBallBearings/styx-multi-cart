@@ -319,8 +319,8 @@ section { padding: 80px 0; }
 
 .showcase-row:not(:last-child) { border-bottom: 1px solid var(--border); }
 
-.showcase-row.reverse .showcase-text { order: 2; }
-.showcase-row.reverse .showcase-img { order: 1; }
+.showcase-row.reverse .showcase-text { order: 1; }
+.showcase-row.reverse .showcase-img { order: 2; }
 
 .showcase-img img {
   border-radius: 10px;
