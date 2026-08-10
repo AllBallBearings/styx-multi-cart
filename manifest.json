@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Styx Multi-Cart",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
   "description": "One click to clear your Amazon cart — or save it for a later checkout. Free, unlimited, no tracking.",
