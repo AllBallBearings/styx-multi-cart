@@ -2365,7 +2365,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
         type: "MC_LIST_SAVE_DONE",
         ok: false,
         title: "Saved, but couldn't clear",
-        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.`,
         hideAfter: 8e3
       });
     }

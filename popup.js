@@ -111,6 +111,8 @@
 
   // Confirm-dialog refs (in-popup replacement for window.confirm).
   const $confirmModal = document.getElementById("mc-confirm-modal");
+  const $confirmCard = $confirmModal.querySelector(".mc-confirm-card");
+  const $confirmKicker = document.getElementById("mc-confirm-kicker");
   const $confirmTitle = document.getElementById("mc-confirm-title");
   const $confirmBody = document.getElementById("mc-confirm-body");
   const $confirmOk = document.getElementById("mc-confirm-ok");
@@ -261,6 +263,7 @@
       cancelLabel = "Cancel",
       altLabel = null,
       destructive = false,
+      variant = null,
     } = opts || {};
 
     // Auto-cancel any previous pending confirm.
@@ -299,6 +302,12 @@
       $confirmOk.classList.remove("mc-btn-ghost");
     }
 
+    // The "cart" variant reskins the card to match the on-page cart dialog
+    // (cream card, kicker, right-aligned actions). Reset in the resolver below.
+    const isCartVariant = variant === "cart";
+    $confirmCard.classList.toggle("mc-confirm-cart", isCartVariant);
+    $confirmKicker.hidden = !isCartVariant;
+
     $confirmModal.hidden = false;
     $confirmModal.removeAttribute("inert");
     // Focus the primary action so Enter picks it: the alt button when it
@@ -314,6 +323,8 @@
           $confirmModal.setAttribute("inert", "");
           $confirmOk.classList.remove("mc-btn-danger");
           $confirmAlt.hidden = true;
+          $confirmCard.classList.remove("mc-confirm-cart");
+          $confirmKicker.hidden = true;
           resolve(value);
         },
       };
@@ -1058,9 +1069,10 @@
         `as a unique Styx cart in your Amazon Lists — or just clear ` +
         `it to shop for a different occasion.`,
       altLabel: "Save & Clear",
-      okLabel: "Just Clear",
+      okLabel: "Clear it!",
       cancelLabel: "Cancel",
       destructive: true,
+      variant: "cart",
     });
     if (!choice) return;
 

@@ -288,19 +288,40 @@
         <div class="mc-list-header-actions">
           <button
             id="mc-clear"
-            class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
+            class="mc-btn mc-cart-action mc-btn-clear"
             type="button"
             title="Remove every item from your active Amazon cart"
           >
-            Clear Amazon Cart
+            <svg class="mc-cart-action-icon mc-clear-cart-icon" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <g stroke-width="2" transform="rotate(34 10 10)">
+                <path d="M2.5 3.5h2.2l2.2 10.1a1.3 1.3 0 0 0 1.28 1.05h7.8a1.3 1.3 0 0 0 1.27-1.02L20.2 7.5H6" />
+                <circle cx="9" cy="18" r="1.35" />
+                <circle cx="17" cy="18" r="1.35" />
+              </g>
+              <rect class="mc-cart-falling-item" x="21.5" y="6" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 23.75 8.25)" />
+              <rect class="mc-cart-falling-item" x="22.5" y="11.5" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(14 24.75 13.75)" />
+              <rect class="mc-cart-falling-item" x="21.5" y="17" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(32 23.75 19.25)" />
+            </svg>
+            Clear Amazon cart
           </button>
           <button
             id="mc-save-for-later"
-            class="mc-btn mc-btn-ghost mc-btn-sm"
+            class="mc-btn mc-cart-action mc-btn-save"
             type="button"
             title="Save everything in your Amazon cart as a new cart, without clearing it"
           >
-            Save Cart for Later
+            <svg class="mc-cart-action-icon mc-save-cart-icon" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3.4 4.8h5.2l2.15 10h9.45l3.15-7.3" stroke-width="2" />
+              <path d="M10.8 14.8h9.4" stroke-width="2" />
+              <path d="M15.9 3.4v7.2" stroke-width="2" />
+              <path d="m12.9 8.45 3 3 3-3" stroke-width="2" />
+              <circle cx="11.5" cy="17.5" r="2.05" fill="currentColor" stroke="none" />
+              <circle cx="20.2" cy="17.5" r="2.05" fill="currentColor" stroke="none" />
+              <circle cx="11.5" cy="17.5" r="0.48" fill="#131a22" stroke="none" />
+              <circle cx="20.2" cy="17.5" r="0.48" fill="#131a22" stroke="none" />
+              <path d="M6.1 19.8v0.9c0 1 0.8 1.8 1.8 1.8h14.6c1 0 1.8-0.8 1.8-1.8v-0.9" stroke-width="2" />
+            </svg>
+            Save Amazon cart for later
           </button>
         </div>
         <div hidden>
@@ -400,10 +421,10 @@
             </button>
           </div>
           <div class="mc-debug-hint">
-            <strong>Ctrl/Cmd+Alt+P</strong> flips Premium ⇄ Free instantly
-            (no panel needed) and locks it so ExtPay/StoreKit won't revert
-            it — clean for screenshots and video. Ctrl+Alt+D toggles this
-            panel. "Unlock" clears the pin and re-syncs the real account.
+            <strong>Ctrl/Cmd+Alt+P</strong> flips Premium ⇄ Free instantly (no
+            panel needed) and locks it so ExtPay/StoreKit won't revert it —
+            clean for screenshots and video. Ctrl+Alt+D toggles this panel.
+            "Unlock" clears the pin and re-syncs the real account.
           </div>
         </div>
         <!-- MC_DEBUG_ENT_END -->
@@ -446,12 +467,12 @@
           </div>
           <div id="mc-dev-backup-state" class="mc-debug-state" hidden></div>
           <div class="mc-debug-hint">
-            Export reads every Amazon list's items (slow — one tab per list)
-            and bundles them with the local <code>mc.*</code> storage into a
-            JSON file. Restore recreates each custom list on Amazon from that
-            file (also slow — drives Add-to-List per item). Watch the status
-            window for progress. Restore does not touch entitlement or
-            overwrite storage.
+            Export reads every Amazon list's items (slow — one tab per list) and
+            bundles them with the local <code>mc.*</code> storage into a JSON
+            file. Restore recreates each custom list on Amazon from that file
+            (also slow — drives Add-to-List per item). Watch the status window
+            for progress. Restore does not touch entitlement or overwrite
+            storage.
           </div>
         </div>
 
@@ -796,6 +817,7 @@
     >
       <div class="mc-modal-backdrop" data-action="confirm-cancel"></div>
       <div class="mc-modal-card mc-confirm-card">
+        <p id="mc-confirm-kicker" class="mc-confirm-kicker" hidden>Styx Multi-Cart</p>
         <h3 id="mc-confirm-title" class="mc-modal-title">Are you sure?</h3>
         <p id="mc-confirm-body" class="mc-modal-sub"></p>
         <div class="mc-modal-actions">

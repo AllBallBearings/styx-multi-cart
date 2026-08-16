@@ -1315,7 +1315,7 @@ async function scrapeCartInBackground(preferredHost) {
  * @param {boolean} [options.returnToOrigin=false]
  *   When true, navigate the tab back to wherever the user was before the
  *   clear started (e.g. the product page they were on when they clicked
- *   "Clear Amazon Cart"). Has no effect when the user was already on the cart page.
+ *   "Clear Amazon cart"). Has no effect when the user was already on the cart page.
  * @param {string}  [options.originUrl]
  *   Pre-captured return URL. If omitted and returnToOrigin is true, the
  *   function queries the active tab itself.
@@ -3374,7 +3374,7 @@ async function saveThenClearInBackground(
       type: "MC_LIST_SAVE_DONE",
       ok: false,
       title: "Saved, but couldn't clear",
-      detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+      detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.`,
       hideAfter: 8000,
     });
   }
@@ -5275,7 +5275,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // no clear.
           //
           // Both are deliberately UNGATED. This is the free on-ramp — the
-          // same ungated driver the cart-page "Save cart to a new list"
+          // same ungated driver the cart-page "Save to a new Styx Cart"
           // button uses. The saved cart is a brand-new Amazon list.
           const scClearAfter = msg.type === "MC_SAVE_AND_CLEAR";
 

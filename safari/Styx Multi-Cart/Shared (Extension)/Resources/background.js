@@ -164,6 +164,7 @@ importScripts("ExtPay.js");
   var DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
   var PROMO_KEY = "mc.promos.v1";
   var AMAZON_LISTS_CACHE_KEY = "mc.amazonlists.v1";
+  var LIST_ITEM_COUNTS_KEY = "mc.listcounts.v1";
   var PROMO_HASHES = Object.freeze([
     "47f0ec155e6bcfcdf6f63f88879a868a7dbaafdd1f95913eed6aa221fc7e9961",
     "848eebb65c9c41aac69fc477bc1945d549bae0a695424e82f7785b26f44cbdd8",
@@ -228,10 +229,95 @@ importScripts("ExtPay.js");
     const r = await chrome.storage.local.get(DEV_ENT_LOCK_KEY);
     return r[DEV_ENT_LOCK_KEY] === true;
   }
+  async function rememberListItemCount(listId, count) {
+    if (!listId || typeof count !== "number" || !Number.isFinite(count) || count < 0) {
+      return;
+    }
+    try {
+      const key = String(listId).toUpperCase();
+      const got = await chrome.storage.local.get(LIST_ITEM_COUNTS_KEY);
+      const map = got[LIST_ITEM_COUNTS_KEY] && typeof got[LIST_ITEM_COUNTS_KEY] === "object" ? got[LIST_ITEM_COUNTS_KEY] : {};
+      if (map[key] === count) return;
+      map[key] = count;
+      await chrome.storage.local.set({ [LIST_ITEM_COUNTS_KEY]: map });
+    } catch (_e) {
+    }
+  }
+  async function readRememberedListItemCounts() {
+    try {
+      const got = await chrome.storage.local.get(LIST_ITEM_COUNTS_KEY);
+      const map = got[LIST_ITEM_COUNTS_KEY];
+      return map && typeof map === "object" ? map : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+  async function bumpRememberedListItemCount(listId, delta) {
+    if (!listId || !Number.isFinite(delta)) return;
+    const counts = await readRememberedListItemCounts();
+    const key = String(listId).toUpperCase();
+    if (typeof counts[key] === "number") {
+      await rememberListItemCount(listId, Math.max(0, counts[key] + delta));
+    }
+  }
+  var _countBackfillRunning = false;
+  async function backfillListCounts(host, lists) {
+    if (_countBackfillRunning) return;
+    _countBackfillRunning = true;
+    try {
+      const usedHost = host || await inferAmazonHost();
+      const source = Array.isArray(lists) && lists.length ? lists : await listAmazonLists(usedHost).catch(() => []);
+      const remembered = await readRememberedListItemCounts();
+      const pending = source.filter((l) => {
+        const key = l && l.listId ? String(l.listId).toUpperCase() : null;
+        return key && l.count == null && typeof remembered[key] !== "number";
+      });
+      let learnedAny = false;
+      for (const l of pending) {
+        try {
+          await readAmazonList(l.listId, usedHost);
+          learnedAny = true;
+        } catch (_e) {
+        }
+      }
+      if (learnedAny) {
+        try {
+          await refreshSnapshotCounts(usedHost);
+        } catch (_e) {
+        }
+      }
+    } finally {
+      _countBackfillRunning = false;
+    }
+  }
+  async function refreshSnapshotCounts() {
+    const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+    const snap = got[AMAZON_LISTS_CACHE_KEY];
+    if (!snap || !Array.isArray(snap.lists)) return;
+    const remembered = await readRememberedListItemCounts();
+    let changed = false;
+    snap.lists = snap.lists.map((l) => {
+      const key = l.listId ? String(l.listId).toUpperCase() : null;
+      if (key && l.count == null && typeof remembered[key] === "number") {
+        changed = true;
+        return Object.assign({}, l, { count: remembered[key] });
+      }
+      return l;
+    });
+    if (changed) await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
+  }
   async function listAmazonListsWithAccessCached(host) {
     const rawLists = await listAmazonLists(host);
+    const remembered = await readRememberedListItemCounts();
+    const withCounts = rawLists.map((l) => {
+      const key = l.listId ? String(l.listId).toUpperCase() : null;
+      if (l.count == null && key && typeof remembered[key] === "number") {
+        return Object.assign({}, l, { count: remembered[key] });
+      }
+      return l;
+    });
     const ent = await readEntitlement();
-    const access = computeListAccess(rawLists, ent);
+    const access = computeListAccess(withCounts, ent);
     rememberListAccess(access.lists);
     const usedHost = host || (rawLists[0] && rawLists[0].url ? new URL(rawLists[0].url).hostname : null);
     try {
@@ -2279,7 +2365,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
         type: "MC_LIST_SAVE_DONE",
         ok: false,
         title: "Saved, but couldn't clear",
-        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.`,
         hideAfter: 8e3
       });
     }
@@ -2898,6 +2984,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     const cacheKey = `${host}:${listId}`;
     const cached = amazonListReadCache.get(cacheKey);
     if (!forceRefresh && cached && Date.now() - cached.cachedAt < AMAZON_LIST_READ_CACHE_MS) {
+      rememberListItemCount(listId, (cached.value.items || []).length);
       return cached.value;
     }
     const url = amazonListUrl(host, listId);
@@ -2927,6 +3014,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     }));
     const value = { host, name: data.name || "Amazon list", listId, url, items };
     amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+    rememberListItemCount(listId, items.length);
     return value;
   }
   async function createAmazonListFromPdp(host, name, firstAsin) {
@@ -3742,6 +3830,11 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
                 customCount: access.customCount
               }
             });
+            backfillListCounts(msg.host, access.lists);
+            break;
+          }
+          case "MC_GET_LIST_COUNTS": {
+            sendResponse({ ok: true, counts: await readRememberedListItemCounts() });
             break;
           }
           case "MC_ENSURE_AMAZON_LISTS": {
@@ -3751,6 +3844,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
               const cache = got[AMAZON_LISTS_CACHE_KEY];
               if (!msg.forceRefresh && cache && Array.isArray(cache.lists) && Date.now() - (cache.fetchedAt || 0) < maxAgeMs) {
                 sendResponse({ ok: true, ...cache, cached: true });
+                backfillListCounts(msg.host, cache.lists);
                 break;
               }
               const access = await listAmazonListsWithAccessCached(msg.host);
@@ -3760,6 +3854,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
                 ...fresh[AMAZON_LISTS_CACHE_KEY] || { lists: access.lists },
                 cached: false
               });
+              backfillListCounts(msg.host, access.lists);
             } catch (err) {
               const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
               const cache = got[AMAZON_LISTS_CACHE_KEY];
@@ -3792,6 +3887,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
                   } catch (_e) {
                   }
                 }
+                await bumpRememberedListItemCount(listId, 1);
                 try {
                   await listAmazonListsWithAccessCached(host);
                 } catch (_e) {
@@ -3833,6 +3929,9 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             try {
               setOpStatus(`Creating ${name}`, "Setting up your list\u2026");
               const created = await createAmazonListFromPdp(host, name, asin);
+              if (created && created.listId) {
+                await rememberListItemCount(created.listId, 1);
+              }
               const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
               if (created && created.listId && qty > 1) {
                 try {

@@ -58,6 +58,11 @@ cp icons/icon32.png "$DEST/icons/icon32.png"
 cp icons/icon48.png "$DEST/icons/icon48.png"
 cp icons/icon128.png "$DEST/icons/icon128.png"
 
+mkdir -p "$DEST/guide-assets"
+cp guide-assets/01-clear.png "$DEST/guide-assets/01-clear.png"
+cp guide-assets/02-lists-are-carts.png "$DEST/guide-assets/02-lists-are-carts.png"
+cp guide-assets/03-organize.png "$DEST/guide-assets/03-organize.png"
+
 if [[ "$STRIP_DEBUG_ENT" == "1" ]]; then
   if ! command -v python3 >/dev/null 2>&1; then
     echo "error: python3 is required to strip developer controls for a --prod build" >&2
@@ -69,4 +74,3 @@ else
   echo "synced DEV resources (developer entitlement controls kept) to $DEST"
   echo "  → run 'npm run sync:safari -- --prod' before archiving for the App Store"
 fi
-

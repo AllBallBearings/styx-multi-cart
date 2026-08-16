@@ -69,6 +69,41 @@ describe("floating modal config", () => {
     expect(observerSrc).toContain("window.top !== window");
   });
 
+  it("shows a persistent first-run guide from the floating button", () => {
+    expect(observerSrc).toContain("__styx-guide-tip");
+    expect(observerSrc).toContain("styx.onboarding.v1");
+    expect(observerSrc).toContain("guide-assets/01-clear.png");
+    expect(observerSrc).toContain("guide-assets/02-lists-are-carts.png");
+    expect(observerSrc).toContain("guide-assets/03-organize.png");
+    expect(observerSrc).toContain("guide-next");
+    expect(observerSrc).toContain("guide-back");
+    expect(observerSrc).toContain("markGuideSeen");
+  });
+
+  it("packages the screenshots used by the first-run walkthrough", () => {
+    for (const file of ["01-clear.png", "02-lists-are-carts.png", "03-organize.png"]) {
+      expect(fs.existsSync(path.join(ROOT, "guide-assets", file))).toBe(true);
+      expect(fs.existsSync(path.join(ROOT, "safari", "Styx Multi-Cart", "Shared (Extension)", "Resources", "guide-assets", file))).toBe(true);
+    }
+    const resources = manifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
+    expect(resources).toContain("guide-assets/*.png");
+  });
+
+  it("adds a cart-page clear button with the shared clear flow", () => {
+    expect(observerSrc).toContain('const STYX_CLEAR_CART_BTN_ID = "styx-clear-cart"');
+    expect(observerSrc).toContain("Clear Amazon cart");
+    expect(observerSrc).toContain('"MC_CLEAR_CURRENT"');
+    expect(observerSrc).toContain('"MC_SAVE_AND_CLEAR"');
+    expect(observerSrc).toContain('data-styx-clear-choice="save"');
+    expect(observerSrc).toContain("STYX_CLEAR_CART_MARK_SVG");
+    expect(observerSrc).toContain("STYX_SAVE_CART_MARK_SVG");
+    expect(observerSrc).toContain("Save Amazon cart for later");
+    expect(observerSrc).toContain("promptSaveCartName");
+    expect(observerSrc).toContain("Name your new Amazon list (new Styx cart):");
+    expect(observerSrc).toContain("After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension.");
+    expect(observerSrc).not.toContain('window.prompt("Name your new Amazon list:');
+  });
+
   it("teaches popup.html/css about the floating surface", () => {
     expect(popupJsSrc).toContain('"floating"');
     expect(popupCssSrc).toContain('data-surface="floating"');
