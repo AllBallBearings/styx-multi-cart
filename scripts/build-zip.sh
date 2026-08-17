@@ -35,15 +35,20 @@ FILES=(
   popup.html
   popup.css
   popup.js
-  status.html
-  status.css
-  status.js
   ExtPay.js
   LICENSE
   icons/icon16.png
   icons/icon32.png
   icons/icon48.png
   icons/icon128.png
+  guide-assets/guide-clear-save.png
+  guide-assets/StyxFabButton.png
+  guide-assets/AddtoStyxCart.png
+  guide-assets/CartList.png
+  guide-assets/SendAllToAmazonCart.png
+  guide-assets/SendAllDockedPill.png
+  guide-assets/SendAllPanelButton.png
+  guide-assets/CartButtons.png
 )
 
 for f in "${FILES[@]}"; do

@@ -1357,31 +1357,181 @@ body.mc-combine-active .mc-item:hover {
 
 /* ---- Toast -------------------------------------------------------------- */
 
+/* Shared toast spec — the same card as the on-page toast (observer.js) and the
+   injected one (pageShowStatus in the service worker): theme-aware surface, an
+   accent ring that pulses while an operation is in flight and holds steady once
+   it resolves, and the orbiting Styx carts as the busy indicator. Every
+   accent-coloured surface reads --mc-toast-accent, so a state change is one
+   variable swap. Anchored bottom on every extension surface. */
 .mc-toast {
+  --mc-toast-bg: var(--mc-bg);
+  --mc-toast-accent: var(--mc-accent);
+  --mc-toast-glow-dim: rgba(255, 153, 0, 0.16);
+  --mc-toast-glow-bright: rgba(255, 153, 0, 0.5);
   position: fixed;
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
-  background: var(--mc-bg);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--mc-toast-bg);
   color: var(--mc-fg);
-  border: 1px solid var(--mc-line-strong);
-  border-radius: var(--mc-radius);
-  padding: 10px 14px;
+  border: 1px solid var(--mc-toast-accent);
+  border-radius: 12px;
+  padding: 11px 14px;
   font-size: 13px;
   font-weight: 500;
   line-height: 1.35;
-  box-shadow: var(--mc-shadow);
-  max-width: calc(100% - 32px);
+  box-shadow: 0 0 0 1px var(--mc-toast-accent),
+    0 0 16px var(--mc-toast-glow-dim), var(--mc-shadow);
+  max-width: calc(100% - 24px);
   width: max-content;
-  text-align: center;
+  text-align: left;
   z-index: 50;
   animation: mc-toast-in 160ms cubic-bezier(0.2, 0.7, 0.3, 1.15);
 }
 
+/* display:flex above outranks the UA rule for the hidden attribute. */
+.mc-toast[hidden] {
+  display: none;
+}
+
+.mc-toast-icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+
+.mc-toast-badge {
+  position: absolute;
+  left: 50%;
+  top: 32%;
+  width: 15px;
+  height: 15px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  background: var(--mc-toast-accent);
+  box-shadow: 0 0 8px var(--mc-toast-glow-bright);
+}
+
+.mc-toast.mc-toast-done .mc-toast-badge,
+.mc-toast.mc-toast-error .mc-toast-badge {
+  display: flex;
+}
+
+.mc-toast-tick,
+.mc-toast-bang {
+  display: none;
+}
+
+.mc-toast.mc-toast-done .mc-toast-tick {
+  display: block;
+}
+
+.mc-toast.mc-toast-error .mc-toast-bang {
+  display: block;
+  color: #fff;
+}
+
+.mc-toast-body {
+  min-width: 0;
+}
+
+.mc-toast-title {
+  font-weight: 700;
+}
+
+.mc-toast-detail {
+  font-size: 12px;
+  opacity: 0.72;
+  margin-top: 2px;
+}
+
+.mc-toast-detail:empty {
+  display: none;
+}
+
+.mc-toast.mc-toast-done {
+  --mc-toast-accent: #34d399;
+  --mc-toast-glow-dim: rgba(52, 211, 153, 0.18);
+  --mc-toast-glow-bright: rgba(52, 211, 153, 0.5);
+}
+
 .mc-toast.mc-toast-error {
-  border-color: var(--mc-danger);
-  color: var(--mc-danger);
-  background: var(--mc-bg);
+  --mc-toast-accent: #ef4444;
+  --mc-toast-glow-dim: rgba(239, 68, 68, 0.18);
+  --mc-toast-glow-bright: rgba(239, 68, 68, 0.5);
+}
+
+/* Work in flight: breathe the halo and send the carts round the triangle. */
+.mc-toast.mc-toast-live {
+  animation: mc-toast-in 160ms cubic-bezier(0.2, 0.7, 0.3, 1.15),
+    mc-toast-glow 1.8s ease-in-out 160ms infinite;
+}
+
+.mc-toast.mc-toast-live .mc-cart-a {
+  animation: mc-cart-a 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.mc-toast.mc-toast-live .mc-cart-b {
+  animation: mc-cart-b 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.mc-toast.mc-toast-live .mc-cart-c {
+  animation: mc-cart-c 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes mc-toast-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--mc-toast-accent),
+      0 0 8px var(--mc-toast-glow-dim), var(--mc-shadow);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--mc-toast-accent),
+      0 0 26px var(--mc-toast-glow-bright), var(--mc-shadow);
+  }
+}
+
+@keyframes mc-cart-a {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(9px, 5.8px); }
+  66% { transform: translate(-8px, 5.8px); }
+}
+
+@keyframes mc-cart-b {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(8px, -5.8px); }
+  66% { transform: translate(17px, 0); }
+}
+
+@keyframes mc-cart-c {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(-17px, 0); }
+  66% { transform: translate(-9px, -5.8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-toast.mc-toast-live,
+  .mc-toast.mc-toast-live .mc-cart-a,
+  .mc-toast.mc-toast-live .mc-cart-b,
+  .mc-toast.mc-toast-live .mc-cart-c {
+    animation: none;
+  }
 }
 
 @keyframes mc-toast-in {
@@ -1393,15 +1543,6 @@ body.mc-combine-active .mc-item:hover {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
-}
-
-/* In the full-height side panel, pin the toast to the top so it sits near the
-   controls the user just clicked instead of the far bottom of the screen. The
-   fixed-size popup keeps its bottom anchor. */
-html[data-surface="panel"] .mc-toast,
-html[data-surface="sidepanel"] .mc-toast {
-  top: 14px;
-  bottom: auto;
 }
 
 /* ---- Loading state ------------------------------------------------------ */

@@ -356,13 +356,54 @@
       </p>
     </section>
 
+    <!-- Shared toast: same card as the on-page toast (observer.js) and the
+         injected one (pageShowStatus). Icon + title, with an optional detail
+         line and a pulsing ring while an operation is in flight. -->
     <div
       id="mc-toast"
       class="mc-toast"
       role="status"
       aria-live="polite"
       hidden
-    ></div>
+    >
+      <div class="mc-toast-icon">
+        <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="7" fill="var(--mc-toast-bg)" />
+          <g class="mc-cart-a">
+            <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z" /><path d="M12 8.6 L10.5 7.3" />
+            </g>
+            <circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900" /><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900" />
+          </g>
+          <g class="mc-cart-b">
+            <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z" /><path d="M4 14.4 L2.5 13.1" />
+            </g>
+            <circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900" /><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900" />
+          </g>
+          <g class="mc-cart-c">
+            <g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">
+              <path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z" /><path d="M21 14.4 L19.5 13.1" />
+            </g>
+            <circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900" /><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900" />
+          </g>
+          <path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55" />
+          <path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round" />
+          <path d="M0 23 Q 4 22, 8 23 T 16 23 T 24 23 T 32 23" stroke="#5db5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.55" />
+          <path d="M0 25.9 Q 4 25, 8 25.9 T 16 25.9 T 24 25.9 T 32 25.9" stroke="#5db5ff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.38" />
+        </svg>
+        <div class="mc-toast-badge">
+          <svg class="mc-toast-tick" width="11" height="11" viewBox="0 0 21 21" fill="none" aria-hidden="true">
+            <path d="M3 10.5L8.5 16L18 5" stroke="#0b1a14" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="mc-toast-bang">!</span>
+        </div>
+      </div>
+      <div class="mc-toast-body">
+        <div id="mc-toast-title" class="mc-toast-title"></div>
+        <div id="mc-toast-detail" class="mc-toast-detail"></div>
+      </div>
+    </div>
 
     <details id="mc-debug" class="mc-debug" hidden>
       <summary class="mc-debug-toggle">Debug</summary>

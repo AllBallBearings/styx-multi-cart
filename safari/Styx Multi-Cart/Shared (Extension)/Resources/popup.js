@@ -60,6 +60,8 @@
   const $count = document.getElementById("mc-list-count");
   const $empty = document.getElementById("mc-empty");
   const $toast = document.getElementById("mc-toast");
+  const $toastTitle = document.getElementById("mc-toast-title");
+  const $toastDetail = document.getElementById("mc-toast-detail");
   const $template = document.getElementById("mc-item-template");
   const $amazonListTemplate = document.getElementById("mc-amazon-list-template");
   const $amazonListsRefresh = document.getElementById("mc-amazon-lists-refresh");
@@ -232,14 +234,30 @@
   // ---- Toast -------------------------------------------------------------
 
   let toastTimer = null;
-  function toast(message, kind) {
-    $toast.textContent = message;
+  /**
+   * Shared toast — same card as the on-page toast (observer.js) and the
+   * injected one (pageShowStatus in the service worker).
+   *
+   * `kind`: "error" (red + !), "done" (green + tick), "live" (pulsing orange,
+   * stays up until replaced or dismissed), or omitted for the neutral accent
+   * used by ordinary one-line messages. `opts.detail` adds a second line and
+   * `opts.duration` overrides the auto-hide.
+   */
+  function toast(message, kind, opts) {
+    const { detail = "", duration = null } = opts || {};
+    $toastTitle.textContent = message;
+    $toastDetail.textContent = detail;
     $toast.classList.toggle("mc-toast-error", kind === "error");
+    $toast.classList.toggle("mc-toast-done", kind === "done");
+    $toast.classList.toggle("mc-toast-live", kind === "live");
     $toast.hidden = false;
     clearTimeout(toastTimer);
+    // A live toast tracks an operation that outlives this call, so it has no
+    // timer — the next toast() call replaces it.
+    if (kind === "live") return;
     toastTimer = setTimeout(() => {
       $toast.hidden = true;
-    }, 2600);
+    }, duration != null ? duration : kind === "error" ? 4200 : 2600);
   }
 
   // ---- Confirm dialog (in-popup replacement for window.confirm) ----------

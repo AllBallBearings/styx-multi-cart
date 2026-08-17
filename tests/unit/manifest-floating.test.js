@@ -23,6 +23,10 @@ const backgroundSource = fs.readFileSync(
 const observerSrc = fs.readFileSync(path.join(ROOT, "observer.js"), "utf8");
 const popupJsSrc = fs.readFileSync(path.join(ROOT, "popup.js"), "utf8");
 const popupCssSrc = fs.readFileSync(path.join(ROOT, "popup.css"), "utf8");
+const buildZipSrc = fs.readFileSync(
+  path.join(ROOT, "scripts", "build-zip.sh"),
+  "utf8"
+);
 
 describe("floating modal config", () => {
   it("no longer declares the sidePanel permission", () => {
@@ -72,18 +76,27 @@ describe("floating modal config", () => {
   it("shows a persistent first-run guide from the floating button", () => {
     expect(observerSrc).toContain("__styx-guide-tip");
     expect(observerSrc).toContain("styx.onboarding.v1");
-    expect(observerSrc).toContain("guide-assets/01-clear.png");
-    expect(observerSrc).toContain("guide-assets/02-lists-are-carts.png");
-    expect(observerSrc).toContain("guide-assets/03-organize.png");
+    expect(observerSrc).toContain("guide-assets/guide-clear-save.png");
+    expect(observerSrc).toContain("guide-assets/StyxFabButton.png");
+    expect(observerSrc).toContain("guide-assets/AddtoStyxCart.png");
+    expect(observerSrc).toContain("guide-assets/CartList.png");
+    expect(observerSrc).toContain("guide-assets/SendAllToAmazonCart.png");
+    expect(observerSrc).toContain("guide-assets/CartButtons.png");
+    expect(observerSrc).toContain("guide-assets/SendAllDockedPill.png");
+    expect(observerSrc).toContain("guide-assets/SendAllPanelButton.png");
     expect(observerSrc).toContain("guide-next");
     expect(observerSrc).toContain("guide-back");
     expect(observerSrc).toContain("markGuideSeen");
   });
 
   it("packages the screenshots used by the first-run walkthrough", () => {
-    for (const file of ["01-clear.png", "02-lists-are-carts.png", "03-organize.png"]) {
+    for (const file of ["guide-clear-save.png", "StyxFabButton.png", "AddtoStyxCart.png", "CartList.png", "SendAllToAmazonCart.png", "SendAllDockedPill.png", "SendAllPanelButton.png", "CartButtons.png"]) {
       expect(fs.existsSync(path.join(ROOT, "guide-assets", file))).toBe(true);
       expect(fs.existsSync(path.join(ROOT, "safari", "Styx Multi-Cart", "Shared (Extension)", "Resources", "guide-assets", file))).toBe(true);
+      // Also packaged into the Chrome Web Store zip — without this, real
+      // installs 404 on every guide image (web_accessible_resources declares
+      // the path, but the zip's FILES array is a separate, exact list).
+      expect(buildZipSrc).toContain(`guide-assets/${file}`);
     }
     const resources = manifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
     expect(resources).toContain("guide-assets/*.png");
