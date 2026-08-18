@@ -35,9 +35,6 @@ FILES=(
   popup.html
   popup.css
   popup.js
-  status.html
-  status.css
-  status.js
   ExtPay.js
   LICENSE
 )
@@ -58,6 +55,16 @@ cp icons/icon32.png "$DEST/icons/icon32.png"
 cp icons/icon48.png "$DEST/icons/icon48.png"
 cp icons/icon128.png "$DEST/icons/icon128.png"
 
+mkdir -p "$DEST/guide-assets"
+cp guide-assets/guide-clear-save.png "$DEST/guide-assets/guide-clear-save.png"
+cp guide-assets/StyxFabButton.png "$DEST/guide-assets/StyxFabButton.png"
+cp guide-assets/AddtoStyxCart.png "$DEST/guide-assets/AddtoStyxCart.png"
+cp guide-assets/CartList.png "$DEST/guide-assets/CartList.png"
+cp guide-assets/SendAllToAmazonCart.png "$DEST/guide-assets/SendAllToAmazonCart.png"
+cp guide-assets/SendAllDockedPill.png "$DEST/guide-assets/SendAllDockedPill.png"
+cp guide-assets/SendAllPanelButton.png "$DEST/guide-assets/SendAllPanelButton.png"
+cp guide-assets/CartButtons.png "$DEST/guide-assets/CartButtons.png"
+
 if [[ "$STRIP_DEBUG_ENT" == "1" ]]; then
   if ! command -v python3 >/dev/null 2>&1; then
     echo "error: python3 is required to strip developer controls for a --prod build" >&2
@@ -69,4 +76,3 @@ else
   echo "synced DEV resources (developer entitlement controls kept) to $DEST"
   echo "  → run 'npm run sync:safari -- --prod' before archiving for the App Store"
 fi
-

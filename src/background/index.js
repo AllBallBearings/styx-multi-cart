@@ -982,28 +982,26 @@ function pageApplyUpsellChoice(recorded) {
 
 // ---- Live operation status ------------------------------------------------
 //
-// A small popup window (status.html) polls MC_GET_STATUS every 350 ms to
-// display what the extension is doing during long background operations.
-// The window opens automatically at the start of each operation and closes
-// itself once the operation finishes.
+// Tracks what the extension is doing during long background operations. This
+// used to also drive a separate popup window (status.html), but that relied on
+// chrome.windows.create({type:"popup"}), which Safari ignores — it opened a
+// full-size blank window that never rendered and never self-closed, leaking one
+// untitled window per operation. Progress now rides the on-page toast on every
+// browser, so Chrome and Safari behave identically.
+//
+// _opStatus is still the single source of truth for operation state and is
+// surfaced through MC_GET_STATUS.
 
 let _opStatus = null;        // { active, title, detail } | null
-let _statusWindowId = null;  // chrome.windows id of the status popup
 
-// NOTE: IS_SAFARI is defined near the top of the file (needed earlier for the
-// payment-source branch). Safari ignores chrome.windows.create's type:"popup"
-// and opens a full-size blank window that never renders status.html (so it
-// never self-closes), leaking one untitled window per operation. The on-page
-// toast carries the same progress there, so the status window is Chrome-only.
-
-/** Set the current in-progress status shown in the status window. */
+/** Set the current in-progress status, queryable via MC_GET_STATUS. */
 function setOpStatus(title, detail = "") {
   _opStatus = { active: true, title, detail };
 }
 
 /**
- * Mark the operation done. The status window will show a green check +
- * doneTitle for 3.5 s, then close itself. _opStatus is nulled after that.
+ * Mark the operation done. _opStatus keeps reporting the done title for a few
+ * seconds (so a late reader still sees the outcome), then is nulled.
  */
 function clearOpStatus(doneTitle = "Done") {
   _opStatus = { active: false, title: doneTitle, detail: "" };
@@ -1036,40 +1034,6 @@ function notifyTab(tabId, payload) {
   try {
     chrome.tabs.sendMessage(tabId, payload, () => void chrome.runtime.lastError);
   } catch (_e) { /* tab gone — non-fatal */ }
-}
-
-/** Open (or focus) the floating status window. Non-blocking — call without await. */
-async function openStatusWindow() {
-  if (IS_SAFARI) return;
-  // If the window is still open, just bring it to front.
-  if (_statusWindowId !== null) {
-    try {
-      await chrome.windows.update(_statusWindowId, { focused: true });
-      return;
-    } catch (_e) {
-      _statusWindowId = null; // window was closed by the user
-    }
-  }
-  try {
-    const win = await chrome.windows.create({
-      url: chrome.runtime.getURL("status.html"),
-      type: "popup",
-      width: 400,
-      height: 190,
-      focused: false, // don't steal focus from the Amazon tab
-    });
-    _statusWindowId = win.id;
-    // Null out the id when the user manually closes the window.
-    const onRemoved = (wid) => {
-      if (wid === _statusWindowId) {
-        _statusWindowId = null;
-        chrome.windows.onRemoved.removeListener(onRemoved);
-      }
-    };
-    chrome.windows.onRemoved.addListener(onRemoved);
-  } catch (_e) {
-    _statusWindowId = null;
-  }
 }
 
 // ---- Tab helpers ----------------------------------------------------------
@@ -1315,7 +1279,7 @@ async function scrapeCartInBackground(preferredHost) {
  * @param {boolean} [options.returnToOrigin=false]
  *   When true, navigate the tab back to wherever the user was before the
  *   clear started (e.g. the product page they were on when they clicked
- *   "Clear Amazon Cart"). Has no effect when the user was already on the cart page.
+ *   "Clear Amazon cart"). Has no effect when the user was already on the cart page.
  * @param {string}  [options.originUrl]
  *   Pre-captured return URL. If omitted and returnToOrigin is true, the
  *   function queries the active tab itself.
@@ -1386,7 +1350,7 @@ async function clearAmazonCartImpl(preferredHost, options = {}) {
   let sawEmpty = false;
   let stalledDeletes = 0;
 
-  // Show initial status on the cart tab and in the status window.
+  // Show initial status on the cart tab.
   setOpStatus("Clearing cart");
   await showStatus(tabId, 'Clearing cart…', 'loading');
 
@@ -2775,7 +2739,7 @@ async function restoreCart(savedCart, onProgress) {
         availability = choice.availability || { available: true };
       }
 
-      // Show per-item progress on the now-loaded product page and in the status window.
+      // Show per-item progress on the now-loaded product page.
       {
         const raw = item.title || item.asin || '';
         const shortTitle = raw.length > 30 ? raw.slice(0, 28) + '…' : raw;
@@ -2915,7 +2879,7 @@ async function restoreCart(savedCart, onProgress) {
       active: true,
     });
     await waitForTabReload(helperTab.id, 15000);
-    // Show a summary on the final cart page and in the status window.
+    // Show a summary on the final cart page.
     const restoreDoneMsg = failed > 0
       ? `Cart restored — ${added} of ${items.length} added (${failed} failed)`
       : `Cart restored — ${added} item${added === 1 ? '' : 's'} added`;
@@ -3305,7 +3269,7 @@ async function clearCurrentCartInBackground() {
 // Composed here rather than in the message handler because saving drives one
 // background tab per item — far too slow to hold a sendResponse channel open,
 // and the popup that initiated it has usually closed by then. Progress rides
-// the status window + the on-page toast instead.
+// the on-page toast instead.
 //
 // The clear is deliberately gated on a successful save: clearing a cart whose
 // snapshot failed would destroy the only copy of it.
@@ -3374,7 +3338,7 @@ async function saveThenClearInBackground(
       type: "MC_LIST_SAVE_DONE",
       ok: false,
       title: "Saved, but couldn't clear",
-      detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+      detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.`,
       hideAfter: 8000,
     });
   }
@@ -3903,6 +3867,22 @@ function pageShowStatus(message, type, theme, placement) {
       '.__styx-toast-loading .__styx-cart-a{animation:_styxCartA 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
       '.__styx-toast-loading .__styx-cart-b{animation:_styxCartB 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
       '.__styx-toast-loading .__styx-cart-c{animation:_styxCartC 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}' +
+      // Breathing halo while work is in flight, so an ongoing operation is
+      // unmistakable. The two custom properties are set per-state below, which
+      // lets one keyframe rule serve every accent colour.
+      '@keyframes _styxGlow{' +
+        '0%,100%{box-shadow:0 0 0 1px var(--styx-accent),0 0 8px var(--styx-glow-dim),var(--styx-drop)}' +
+        '50%{box-shadow:0 0 0 1px var(--styx-accent),0 0 28px var(--styx-glow-bright),var(--styx-drop)}' +
+      '}' +
+      '.__styx-toast-loading{animation:_styxGlow 1.8s ease-in-out infinite}' +
+      // Respect reduced-motion: drop the pulse and the cart orbit, keep a
+      // steady ring so the toast still reads as "working".
+      '@media (prefers-reduced-motion:reduce){' +
+        '.__styx-toast-loading{animation:none}' +
+        '.__styx-toast-loading .__styx-cart-a,' +
+        '.__styx-toast-loading .__styx-cart-b,' +
+        '.__styx-toast-loading .__styx-cart-c{animation:none}' +
+      '}' +
       '@keyframes _styxFadeIn{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}';
     (document.head || document.body || document.documentElement).appendChild(s);
   }
@@ -3916,9 +3896,10 @@ function pageShowStatus(message, type, theme, placement) {
   var glowRgb = type === 'done' ? '52,211,153' : type === 'error' ? '239,68,68' : '255,153,0';
   var bg = isDark ? '#131a22' : '#ffffff';
   var fg = isDark ? '#ffffff' : '#131a22';
+  var drop = isDark ? '0 6px 24px rgba(0,0,0,.45)' : '0 6px 24px rgba(15,17,21,.18)';
   var shadow = isDark
-    ? '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), 0 6px 24px rgba(0,0,0,.45)'
-    : '0 0 0 1px ' + accent + ', 0 0 18px rgba(' + glowRgb + ',.22), 0 6px 24px rgba(15,17,21,.18)';
+    ? '0 0 0 1px ' + accent + ', 0 0 24px rgba(' + glowRgb + ',.35), ' + drop
+    : '0 0 0 1px ' + accent + ', 0 0 18px rgba(' + glowRgb + ',.22), ' + drop;
 
   var ts = toast.style;
   // Placement follows the UI surface (passed from showStatus): the side panel
@@ -3940,6 +3921,13 @@ function pageShowStatus(message, type, theme, placement) {
   ts.fontFamily = '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
   ts.fontSize = '18px'; ts.fontWeight = '600'; ts.lineHeight = '1.35';
   ts.boxShadow = shadow;
+  // Feed the _styxGlow keyframes. CSS animations outrank inline styles, so on
+  // the loading state the pulse takes over from boxShadow above; done/error
+  // have no animation and keep the steady ring.
+  ts.setProperty('--styx-accent', accent);
+  ts.setProperty('--styx-glow-dim', 'rgba(' + glowRgb + ',' + (isDark ? '.2' : '.14') + ')');
+  ts.setProperty('--styx-glow-bright', 'rgba(' + glowRgb + ',' + (isDark ? '.6' : '.5') + ')');
+  ts.setProperty('--styx-drop', drop);
   ts.maxWidth = '720px'; ts.width = ''; ts.pointerEvents = 'none';
   ts.opacity = '1'; ts.transition = 'opacity .2s, box-shadow .25s, border-color .25s';
 
@@ -4499,8 +4487,8 @@ async function saveCartToAmazonListImpl(cart, opts = {}) {
   if (!items.length) return { ok: false, error: "This cart has no items to save." };
 
   const label = cart.name ? `"${cart.name}"` : "cart";
-  // Progress fans out to both the floating status window and (when the caller
-  // supplies a tab) an on-page Styx toast on the initiating tab.
+  // Progress updates _opStatus and, when the caller supplies a tab, drives an
+  // on-page Styx toast on the initiating tab.
   const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
   const report = (detail, extra = {}) => {
     setOpStatus(`Saving ${label} to Amazon`, detail);
@@ -5235,7 +5223,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // on the user's confirmation, which can outlive the message channel.
           sendResponse({ ok: true, started: true, total: items.length });
           setOpStatus("Adding wishlist to cart", "Starting…");
-          openStatusWindow(); // non-blocking
           setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
           break;
         }
@@ -5252,7 +5239,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // the response and leave the button spinner stuck forever.
           sendResponse({ ok: true, started: true });
           setOpStatus("Clearing cart", "Starting…");
-          openStatusWindow(); // non-blocking — don't await
           setTimeout(clearCurrentCartInBackground, 0);
           break;
         }
@@ -5275,7 +5261,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // no clear.
           //
           // Both are deliberately UNGATED. This is the free on-ramp — the
-          // same ungated driver the cart-page "Save cart to a new list"
+          // same ungated driver the cart-page "Save to a new Styx Cart"
           // button uses. The saved cart is a brand-new Amazon list.
           const scClearAfter = msg.type === "MC_SAVE_AND_CLEAR";
 
@@ -5286,9 +5272,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const scOriginUrl = (scOriginTab && scOriginTab.url &&
             isAmazonUrl(scOriginTab.url) && !isAmazonCartUrl(scOriginTab.url))
             ? scOriginTab.url : null;
-          // Progress toasts land on the initiating Amazon tab when the popup
-          // is running as the in-page floating panel; null in the standalone
-          // popup, where the status window carries progress instead.
+          // Progress toasts land on the initiating Amazon tab when the popup is
+          // running as the in-page floating panel; null in the standalone
+          // popup, which closes itself and leaves the work to the cart tab.
           const scProgressTabId = (_sender && _sender.tab && _sender.tab.id) || null;
 
           let scCart;
@@ -5311,7 +5297,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const savedCount = scCart.items.length;
           sendResponse({ ok: true, started: true, saving: savedCount });
           setOpStatus("Saving cart", `Saving ${savedCount} item${savedCount === 1 ? "" : "s"} to a new Amazon list…`);
-          openStatusWindow(); // non-blocking — don't await
           setTimeout(() => saveThenClearInBackground(
             {
               // No cart.id → saveCartToAmazonList always creates a new list.

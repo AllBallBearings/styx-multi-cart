@@ -23,7 +23,7 @@ When you invoke the extension on an Amazon page — via the floating Styx button
 The extension uses `chrome.scripting.executeScript` to inject its own interface and helpers into Amazon pages. All of them are small, self-contained, and shipped inside the extension package:
 
 1. **The floating button and panel** — the round Styx button and the draggable cart panel it opens.
-2. **Page buttons** — "Save cart to a new list" on the cart page, "Send All to Amazon Cart" on a list page, and the branded "Add to a Styx cart" button on a product page.
+2. **Page buttons** — "Save to a new Styx Cart" on the cart page, "Send All to Amazon Cart" on a list page, and the branded "Add to a Styx cart" button on a product page.
 3. **Cart picker** — the in-page chooser for picking which cart an item goes into.
 4. **Readers** — reads the items on your cart page or list page when you save, empty, or send a cart.
 5. **Drivers** — clicks the page's real "Add to Cart" and delete controls, just as a human would, when sending a cart to your Amazon cart or emptying it.

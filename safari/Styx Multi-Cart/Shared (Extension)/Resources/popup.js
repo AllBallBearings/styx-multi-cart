@@ -60,6 +60,8 @@
   const $count = document.getElementById("mc-list-count");
   const $empty = document.getElementById("mc-empty");
   const $toast = document.getElementById("mc-toast");
+  const $toastTitle = document.getElementById("mc-toast-title");
+  const $toastDetail = document.getElementById("mc-toast-detail");
   const $template = document.getElementById("mc-item-template");
   const $amazonListTemplate = document.getElementById("mc-amazon-list-template");
   const $amazonListsRefresh = document.getElementById("mc-amazon-lists-refresh");
@@ -111,6 +113,8 @@
 
   // Confirm-dialog refs (in-popup replacement for window.confirm).
   const $confirmModal = document.getElementById("mc-confirm-modal");
+  const $confirmCard = $confirmModal.querySelector(".mc-confirm-card");
+  const $confirmKicker = document.getElementById("mc-confirm-kicker");
   const $confirmTitle = document.getElementById("mc-confirm-title");
   const $confirmBody = document.getElementById("mc-confirm-body");
   const $confirmOk = document.getElementById("mc-confirm-ok");
@@ -230,14 +234,30 @@
   // ---- Toast -------------------------------------------------------------
 
   let toastTimer = null;
-  function toast(message, kind) {
-    $toast.textContent = message;
+  /**
+   * Shared toast — same card as the on-page toast (observer.js) and the
+   * injected one (pageShowStatus in the service worker).
+   *
+   * `kind`: "error" (red + !), "done" (green + tick), "live" (pulsing orange,
+   * stays up until replaced or dismissed), or omitted for the neutral accent
+   * used by ordinary one-line messages. `opts.detail` adds a second line and
+   * `opts.duration` overrides the auto-hide.
+   */
+  function toast(message, kind, opts) {
+    const { detail = "", duration = null } = opts || {};
+    $toastTitle.textContent = message;
+    $toastDetail.textContent = detail;
     $toast.classList.toggle("mc-toast-error", kind === "error");
+    $toast.classList.toggle("mc-toast-done", kind === "done");
+    $toast.classList.toggle("mc-toast-live", kind === "live");
     $toast.hidden = false;
     clearTimeout(toastTimer);
+    // A live toast tracks an operation that outlives this call, so it has no
+    // timer — the next toast() call replaces it.
+    if (kind === "live") return;
     toastTimer = setTimeout(() => {
       $toast.hidden = true;
-    }, 2600);
+    }, duration != null ? duration : kind === "error" ? 4200 : 2600);
   }
 
   // ---- Confirm dialog (in-popup replacement for window.confirm) ----------
@@ -261,6 +281,7 @@
       cancelLabel = "Cancel",
       altLabel = null,
       destructive = false,
+      variant = null,
     } = opts || {};
 
     // Auto-cancel any previous pending confirm.
@@ -299,6 +320,12 @@
       $confirmOk.classList.remove("mc-btn-ghost");
     }
 
+    // The "cart" variant reskins the card to match the on-page cart dialog
+    // (cream card, kicker, right-aligned actions). Reset in the resolver below.
+    const isCartVariant = variant === "cart";
+    $confirmCard.classList.toggle("mc-confirm-cart", isCartVariant);
+    $confirmKicker.hidden = !isCartVariant;
+
     $confirmModal.hidden = false;
     $confirmModal.removeAttribute("inert");
     // Focus the primary action so Enter picks it: the alt button when it
@@ -314,6 +341,8 @@
           $confirmModal.setAttribute("inert", "");
           $confirmOk.classList.remove("mc-btn-danger");
           $confirmAlt.hidden = true;
+          $confirmCard.classList.remove("mc-confirm-cart");
+          $confirmKicker.hidden = true;
           resolve(value);
         },
       };
@@ -382,10 +411,25 @@
 
     $promptModal.hidden = false;
     $promptModal.removeAttribute("inert");
-    setTimeout(() => {
-      $promptInput.focus();
-      $promptInput.select();
-    }, 0);
+    // The floating in-page modal renders this popup inside an iframe on
+    // amazon.com. A lone setTimeout(0) focus can miss when the iframe hasn't
+    // taken frame-focus yet (or the host page grabs it back), leaving a caret
+    // that swallows no keystrokes. Grab the window first and retry a few times
+    // so the input reliably becomes the active element. Mirrors the on-page
+    // picker's create-name field, which needs the same treatment.
+    const focusPromptInput = () => {
+      try {
+        window.focus();
+      } catch (_e) {}
+      try {
+        $promptInput.focus();
+        $promptInput.select();
+      } catch (_e) {}
+    };
+    focusPromptInput();
+    setTimeout(focusPromptInput, 0);
+    setTimeout(focusPromptInput, 60);
+    requestAnimationFrame(focusPromptInput);
 
     return new Promise((resolve) => {
       promptPending = {
@@ -875,11 +919,9 @@
           if (/(^|\.)amazon\./i.test(u.hostname)) host = u.hostname;
         }
       } catch (_e) { /* default host is fine */ }
-      try {
-        await chrome.tabs.create({ url: `https://${host}/hz/wishlist/ls` });
-      } catch (_e) {
-        toast("Couldn't open your carts", "error");
-      }
+      // Navigate the existing Amazon tab in place instead of forking a new tab
+      // — same as the per-list "View on Amazon" links below.
+      openInActiveTab(`https://${host}/hz/wishlist/ls`);
     });
   }
 
@@ -1045,9 +1087,10 @@
         `as a unique Styx cart in your Amazon Lists — or just clear ` +
         `it to shop for a different occasion.`,
       altLabel: "Save & Clear",
-      okLabel: "Just Clear",
+      okLabel: "Clear it!",
       cancelLabel: "Cancel",
       destructive: true,
+      variant: "cart",
     });
     if (!choice) return;
 
@@ -1736,6 +1779,7 @@
       (unavailableCount
         ? ` · ${unavailableCount} unavailable`
         : "");
+    card.dataset.countKnown = "1"; // real count is in — the poll can skip it
     const status = card.querySelector(".mc-amazon-list-load-status");
     status.hidden = true;
     status.textContent = "";
@@ -1795,10 +1839,25 @@
     if (forceItems) node.dataset.forceRefresh = "1";
     const nameEl = node.querySelector(".mc-amazon-list-name");
     nameEl.textContent = list.name || "Amazon list";
-    const host = fullHost.replace(/^www\./, "");
     const metaEl = node.querySelector(".mc-amazon-list-meta");
     const open = node.querySelector(".mc-amazon-list-open");
     open.href = list.url || "#";
+    // Show the item count when we already know it. It's often unknown at first
+    // paint (the wishlist index page prints no reliable count), so fall back to
+    // the "View items" affordance and let the background count backfill fill it
+    // in latently (pollListCounts). `data-count-known` marks cards the poll can
+    // skip. updateAmazonListCard replaces this with "N items · M qty" on expand.
+    const countEl = node.querySelector(".mc-item-count");
+    // Guard null/"" explicitly — Number(null) and Number("") are both 0, which
+    // would mislabel a count-less list as "0 items".
+    const listCount =
+      list.count == null || list.count === "" ? NaN : Number(list.count);
+    if (Number.isFinite(listCount) && listCount >= 0) {
+      countEl.textContent = `${listCount} item${listCount === 1 ? "" : "s"}`;
+      node.dataset.countKnown = "1";
+    } else {
+      countEl.textContent = "View items";
+    }
     if (list.access === "locked") {
       // Free-tier cart beyond the limit: gray it out, drop the add-all action,
       // and route clicks to the paywall (handled in the list click listener).
@@ -1806,10 +1865,14 @@
       node.dataset.locked = "1";
       const addAll = node.querySelector(".mc-amazon-list-addall");
       if (addAll) addAll.remove();
-      metaEl.textContent = `${host} · Premium cart — upgrade to use`;
+      // The only meta worth showing: why the cart is grayed out.
+      metaEl.textContent = "Premium cart — upgrade to use";
+      metaEl.hidden = false;
       nameEl.setAttribute("aria-label", `Unlock ${list.name || "this cart"} with Premium`);
     } else {
-      metaEl.textContent = `${host} · Amazon list`;
+      // "host · Amazon list" told the user nothing — drop it entirely.
+      metaEl.textContent = "";
+      metaEl.hidden = true;
       nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
     }
     amazonListCache.set(list.listId, Object.assign({}, list));
@@ -1851,12 +1914,53 @@
         $amazonLists.appendChild(renderAmazonListCard(list, forceRefresh))
       );
       amazonListsLoaded = true;
+      // Labels are up. The service worker fills missing counts in the
+      // background (invisible tabs); poll the cheap counts map and drop each
+      // number in as it lands, so the user never waits on a spinner.
+      pollListCounts();
     })();
 
     try {
       await amazonListsLoadPromise;
     } finally {
       amazonListsLoadPromise = null;
+    }
+  }
+
+  // Latently fill card counts the first render didn't know. Polls the SW's
+  // cached counts (no Amazon driving) and updates each card as its count
+  // appears, stopping once every card is known or after a hard cap so it can't
+  // spin forever. Re-entrant-safe: a fresh call cancels the previous timer.
+  let countPollTimer = null;
+  function stopCountPolling() {
+    if (countPollTimer) {
+      clearTimeout(countPollTimer);
+      countPollTimer = null;
+    }
+  }
+  async function pollListCounts(attempt = 0) {
+    stopCountPolling();
+    if (!$amazonLists) return;
+    const cards = Array.from(
+      $amazonLists.querySelectorAll(".mc-amazon-list-card")
+    );
+    const pending = cards.filter((c) => c.dataset.countKnown !== "1");
+    if (!pending.length || attempt > 20) return; // all in, or gave up (~30s)
+
+    const res = await send({ type: "MC_GET_LIST_COUNTS" });
+    const counts = (res && res.ok && res.counts) || {};
+    pending.forEach((card) => {
+      const id = String(card.dataset.listId || "").toUpperCase();
+      const n = counts[id];
+      if (typeof n === "number") {
+        const el = card.querySelector(".mc-item-count");
+        if (el) el.textContent = `${n} item${n === 1 ? "" : "s"}`;
+        card.dataset.countKnown = "1";
+      }
+    });
+
+    if (cards.some((c) => c.dataset.countKnown !== "1")) {
+      countPollTimer = setTimeout(() => pollListCounts(attempt + 1), 1500);
     }
   }
 

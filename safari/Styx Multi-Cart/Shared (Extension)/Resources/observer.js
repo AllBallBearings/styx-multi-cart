@@ -1202,7 +1202,7 @@
           return;
         }
 
-        // Escape-hatch path: the picker's "Just add to Amazon cart" button
+        // Escape-hatch path: the picker's "Add to Amazon cart" button
         // re-clicks the original ATC after setting this flag. We must let
         // that click pass through untouched so Amazon's handlers AND the
         // existing watchAtcClicks() listener (for upsell recording) run.
@@ -1586,12 +1586,12 @@
       }
       #${PICKER_ID} .styx-pk-escape {
         appearance: none; flex: 1;
-        background: transparent; color: #c2cbd6;
-        border: 1px solid #3a414b; border-radius: 8px;
-        padding: 8px 12px; font-size: 12px; font-weight: 600;
+        background: #ffd814; color: #0f1111;
+        border: 1px solid #fcd200; border-radius: 8px;
+        padding: 8px 12px; font-size: 12px; font-weight: 700;
         font-family: inherit; cursor: pointer;
       }
-      #${PICKER_ID} .styx-pk-escape:hover { background: #1f242b; color: #fff; }
+      #${PICKER_ID} .styx-pk-escape:hover { background: #f7ca00; }
       #${PICKER_ID} .styx-pk-confirm {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
@@ -1788,14 +1788,12 @@
         color: #7a4b00;
         border-color: #f0c36a;
       }
-      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-escape,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-upgrade-back,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-create-row,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-create-back {
         color: #4a5360;
         border-color: #c9bfae;
       }
-      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-escape:hover,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-upgrade-back:hover,
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-create-back:hover {
         background: #f7f3ec;
@@ -1827,6 +1825,42 @@
     const root = document.getElementById(PICKER_ID);
     if (root) root.remove();
     document.removeEventListener("keydown", onPickerKeydown, true);
+    restoreCompetingOverlays();
+  }
+
+  // While our picker is open it may sit ON TOP of one of Amazon's own overlays
+  // — most importantly the multi-variant "choose a size" modal, which the ATC
+  // intercept deliberately opens over (see buildItemFromAtcModal). Those
+  // overlays run a focus-trap that yanks focus straight back into themselves the
+  // instant our create-cart field takes it, leaving a caret that swallows every
+  // keystroke. Marking the competing overlay `inert` for the picker's lifetime
+  // makes it (and any focus-lock target inside it) unfocusable, so the trap
+  // can't fire and our field keeps focus. Tagged so we only ever un-inert the
+  // overlays we inerted, and restored on dismiss.
+  function neutralizeCompetingOverlays() {
+    const picker = document.getElementById(PICKER_ID);
+    if (!picker) return;
+    document
+      .querySelectorAll("[role='dialog'], .a-modal-scroller, .a-popover-modal")
+      .forEach((el) => {
+        // Never touch our own picker, anything inside it, or an ancestor of it.
+        if (el === picker || picker.contains(el) || el.contains(picker)) return;
+        if (el.inert) return; // already inert — leave it as we found it
+        if (!el.offsetWidth && !el.offsetHeight) return; // hidden template
+        try {
+          el.setAttribute("inert", "");
+          el.dataset.styxInerted = "1";
+        } catch (_e) {
+          /* inert unsupported — nothing we can do, field may still misbehave */
+        }
+      });
+  }
+
+  function restoreCompetingOverlays() {
+    document.querySelectorAll('[data-styx-inerted="1"]').forEach((el) => {
+      el.removeAttribute("inert");
+      delete el.dataset.styxInerted;
+    });
   }
 
   /**
@@ -2224,13 +2258,16 @@
         <ul class="styx-pk-list">${cartsHtml}</ul>
         <button type="button" class="styx-pk-create-row" data-styx-action="create-new">+ Create new cart</button>
         <div class="styx-pk-footer">
-          <button type="button" class="styx-pk-escape" data-styx-action="escape">Just add to Amazon cart</button>
+          <button type="button" class="styx-pk-escape" data-styx-action="escape">Add to Amazon cart</button>
         </div>
       </div>
     `;
 
     document.body.appendChild(root);
     document.addEventListener("keydown", onPickerKeydown, true);
+    // Disable any Amazon overlay we opened over (e.g. its "choose a size"
+    // modal) so its focus-trap can't steal the create-cart field's focus.
+    neutralizeCompetingOverlays();
 
     // Refresh the Amazon-list snapshot in the background: fills the list in if
     // the cache was cold, and keeps counts current. Only re-renders while the
@@ -2911,7 +2948,7 @@
     mo.observe(root, { childList: true, subtree: true });
   }
 
-  // ---- Cart page: "Save cart to a new list" → new Amazon wish list --------
+  // ---- Cart page: "Save cart to a new Styx Cart" → new Amazon wish list --------
   //
   // On the Amazon Shopping Cart page, drop a button in the buybox that saves
   // everything currently in the cart into a brand-new Amazon wish list. The
@@ -2921,8 +2958,12 @@
   // to Amazon. The button names the list and shows status.
 
   const STYX_SAVE_CART_BTN_ID = "styx-save-cart";
-  const STYX_SAVE_CART_LABEL = "Save cart to a new list";
+  const STYX_SAVE_CART_LABEL = "Save Amazon cart for later";
   const STYX_SAVE_CART_STYLE_ID = "styx-save-cart-style";
+  const STYX_CLEAR_CART_BTN_ID = "styx-clear-cart";
+  const STYX_CLEAR_CART_LABEL = "Clear Amazon cart";
+  const STYX_CLEAR_CART_CONFIRM_ID = "styx-clear-cart-confirm";
+  const STYX_SAVE_CART_PROMPT_ID = "styx-save-cart-prompt";
 
   // ---- Shared Styx button branding ---------------------------------------
   // One visual language for every Styx-owned action button (cart page + PDP):
@@ -2932,6 +2973,8 @@
   const STYX_BTN_BORDER = "rgba(255,153,0,.55)";
   const STYX_BTN_RADIUS = "8px";
   const STYX_ORANGE = "#ff9900";
+  const STYX_CLEAR_RED = "#e2564a";
+  const STYX_CLEAR_BORDER = "#c0463a";
 
   // Orange Styx shopping-cart glyph. `cls` lets each caller size/position it.
   function STYX_MARK_SVG(cls) {
@@ -2943,6 +2986,36 @@
       '<circle cx="9" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/></svg>'
     );
   }
+
+  function STYX_CLEAR_CART_MARK_SVG() {
+    return (
+      '<svg class="styx-btn-mark styx-clear-cart-mark" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<g stroke-width="2" transform="rotate(34 10 10)">' +
+      '<path d="M2.5 3.5h2.2l2.2 10.1a1.3 1.3 0 0 0 1.28 1.05h7.8a1.3 1.3 0 0 0 1.27-1.02L20.2 7.5H6" />' +
+      '<circle cx="9" cy="18" r="1.35" /><circle cx="17" cy="18" r="1.35" />' +
+      '</g>' +
+      '<rect x="21.5" y="6" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(-24 23.75 8.25)" />' +
+      '<rect x="22.5" y="11.5" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(14 24.75 13.75)" />' +
+      '<rect x="21.5" y="17" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(32 23.75 19.25)" />' +
+      '</svg>'
+    );
+  }
+
+  function STYX_SAVE_CART_MARK_SVG() {
+    return (
+      '<svg class="styx-btn-mark styx-save-cart-mark" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M3.4 4.8h5.2l2.15 10h9.45l3.15-7.3" stroke-width="2" />' +
+      '<path d="M10.8 14.8h9.4" stroke-width="2" />' +
+      '<path d="M15.9 3.4v7.2" stroke-width="2" />' +
+      '<path d="m12.9 8.45 3 3 3-3" stroke-width="2" />' +
+      '<circle cx="11.5" cy="17.5" r="2.05" fill="currentColor" stroke="none" />' +
+      '<circle cx="20.2" cy="17.5" r="2.05" fill="currentColor" stroke="none" />' +
+      '<circle cx="11.5" cy="17.5" r="0.48" fill="#131a22" stroke="none" />' +
+      '<circle cx="20.2" cy="17.5" r="0.48" fill="#131a22" stroke="none" />' +
+      '<path d="M6.1 19.8v0.9c0 1 0.8 1.8 1.8 1.8h14.6c1 0 1.8-0.8 1.8-1.8v-0.9" stroke-width="2" />' +
+      '</svg>'
+    );
+  }
   // URL-encoded form of the same mark for CSS ::before backgrounds (PDP button,
   // whose DOM belongs to Amazon so we can't inject a child node cleanly).
   const STYX_MARK_URI =
@@ -2952,7 +3025,7 @@
   // (currently the wishlist "Send All to Amazon Cart"). One class so all our
   // controls read as the same product: navy fill, orange border, white bold
   // label, orange cart mark, 8px radius — matching the PDP "Add to a Styx cart"
-  // and cart-page "Save cart to a new list" buttons.
+  // and cart-page "Save to a new Styx Cart" buttons.
   const STYX_BRAND_BTN_STYLE_ID = "styx-brand-btn-style";
   function injectStyxBrandButtonStyles() {
     if (document.getElementById(STYX_BRAND_BTN_STYLE_ID)) return;
@@ -3004,43 +3077,128 @@
   const STYX_TOAST_ID = "styx-progress-toast";
   let _styxToastHideTimer = 0;
 
+  // The three Styx carts orbiting a triangle, used as the busy indicator.
+  // Mirrors the logo drawn by pageShowStatus in the service worker so the
+  // on-page toast and the injected one are the same object to the user.
+  function STYX_TOAST_LOGO_SVG() {
+    return (
+      '<svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true" style="display:block">' +
+        '<rect width="32" height="32" rx="7" fill="var(--styx-bg)"/>' +
+        '<g class="styx-cart-a">' +
+          '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+            '<path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/>' +
+          '</g>' +
+          '<circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/>' +
+        '</g>' +
+        '<g class="styx-cart-b">' +
+          '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+            '<path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/>' +
+          '</g>' +
+          '<circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/>' +
+        '</g>' +
+        '<g class="styx-cart-c">' +
+          '<g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none">' +
+            '<path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/>' +
+          '</g>' +
+          '<circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/>' +
+        '</g>' +
+        '<path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/>' +
+        '<path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/>' +
+        '<path d="M0 23 Q 4 22, 8 23 T 16 23 T 24 23 T 32 23" stroke="#5db5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.55"/>' +
+        '<path d="M0 25.9 Q 4 25, 8 25.9 T 16 25.9 T 24 25.9 T 32 25.9" stroke="#5db5ff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.38"/>' +
+      '</svg>'
+    );
+  }
+
+  // Shared toast spec: theme-aware card, accent ring that pulses while work is
+  // in flight and holds steady once it resolves. Every accent-coloured surface
+  // reads --styx-accent, so a state change is one variable swap.
   function ensureStyxToastStyle() {
     if (document.getElementById("styx-toast-style")) return;
     const style = document.createElement("style");
     style.id = "styx-toast-style";
     style.textContent = `
       #${STYX_TOAST_ID} {
-        position: fixed; top: 22px; left: 50%; z-index: 2147483000;
-        display: flex; align-items: center; gap: 11px;
-        max-width: 360px; padding: 13px 15px;
-        border-radius: 12px; border: 1px solid ${STYX_BTN_BORDER};
-        border-left: 4px solid ${STYX_ORANGE};
-        background: ${STYX_BTN_BG}; color: #fff;
-        font: 500 13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-        box-shadow: 0 8px 28px rgba(0,0,0,.4);
+        --styx-accent: ${STYX_ORANGE};
+        --styx-glow-dim: rgba(255,153,0,.14);
+        --styx-glow-bright: rgba(255,153,0,.5);
+        --styx-drop: 0 6px 24px rgba(15,17,21,.18);
+        --styx-bg: #ffffff;
+        --styx-fg: #131a22;
+        position: fixed; top: 72px; left: 50%; z-index: 2147483000;
+        display: flex; align-items: center; gap: 14px;
+        max-width: 420px; padding: 14px 18px;
+        border-radius: 14px; border: 1px solid var(--styx-accent);
+        background: var(--styx-bg); color: var(--styx-fg);
+        font: 500 14px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+        box-shadow: 0 0 0 1px var(--styx-accent), 0 0 18px var(--styx-glow-dim), var(--styx-drop);
         opacity: 0; transform: translate(-50%, -8px);
-        transition: opacity 160ms ease, transform 160ms ease;
+        transition: opacity 160ms ease, transform 160ms ease,
+          box-shadow 250ms ease, border-color 250ms ease;
+      }
+      @media (prefers-color-scheme: dark) {
+        #${STYX_TOAST_ID} {
+          --styx-bg: #131a22; --styx-fg: #ffffff;
+          --styx-drop: 0 6px 24px rgba(0,0,0,.45);
+          --styx-glow-dim: rgba(255,153,0,.2);
+          --styx-glow-bright: rgba(255,153,0,.6);
+        }
       }
       #${STYX_TOAST_ID}.styx-toast-in { opacity: 1; transform: translate(-50%, 0); }
-      #${STYX_TOAST_ID} .styx-toast-spin {
-        width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
-        border: 2px solid rgba(255,153,0,.3); border-top-color: ${STYX_ORANGE};
-        animation: styx-toast-spin 720ms linear infinite;
+      #${STYX_TOAST_ID} .styx-toast-icon {
+        position: relative; flex: 0 0 auto; width: 36px; height: 36px;
       }
-      #${STYX_TOAST_ID}.styx-toast-done .styx-toast-spin,
-      #${STYX_TOAST_ID}.styx-toast-error .styx-toast-spin { display: none; }
-      #${STYX_TOAST_ID} .styx-toast-mark { width: 20px; height: 20px; flex: 0 0 auto; display: none; }
-      #${STYX_TOAST_ID}.styx-toast-done .styx-toast-mark { display: block; }
+      #${STYX_TOAST_ID} .styx-toast-badge {
+        position: absolute; left: 50%; top: 32%; width: 18px; height: 18px;
+        transform: translate(-50%, -50%); border-radius: 50%;
+        display: none; align-items: center; justify-content: center;
+        color: #0b1a14; font-size: 13px; font-weight: 800; line-height: 1;
+        background: var(--styx-accent); box-shadow: 0 0 8px var(--styx-glow-bright);
+      }
+      #${STYX_TOAST_ID}.styx-toast-done .styx-toast-badge,
+      #${STYX_TOAST_ID}.styx-toast-error .styx-toast-badge { display: flex; }
+      #${STYX_TOAST_ID} .styx-toast-badge .styx-toast-tick { display: none; }
+      #${STYX_TOAST_ID}.styx-toast-done .styx-toast-badge .styx-toast-tick { display: block; }
+      #${STYX_TOAST_ID} .styx-toast-badge .styx-toast-bang { display: none; }
+      #${STYX_TOAST_ID}.styx-toast-error .styx-toast-badge .styx-toast-bang { display: block; color: #fff; }
       #${STYX_TOAST_ID} .styx-toast-body { min-width: 0; }
       #${STYX_TOAST_ID} .styx-toast-title { font-weight: 700; }
-      #${STYX_TOAST_ID} .styx-toast-detail { color: #c9d4e0; margin-top: 2px; }
-      #${STYX_TOAST_ID}.styx-toast-error { border-left-color: #e06565; }
-      @keyframes styx-toast-spin { to { transform: rotate(360deg); } }
+      #${STYX_TOAST_ID} .styx-toast-detail { font-size: 13px; opacity: .72; margin-top: 2px; }
+      #${STYX_TOAST_ID} .styx-toast-detail:empty { display: none; }
+      #${STYX_TOAST_ID}.styx-toast-done {
+        --styx-accent: #34d399;
+        --styx-glow-dim: rgba(52,211,153,.18);
+        --styx-glow-bright: rgba(52,211,153,.5);
+      }
+      #${STYX_TOAST_ID}.styx-toast-error {
+        --styx-accent: #ef4444;
+        --styx-glow-dim: rgba(239,68,68,.18);
+        --styx-glow-bright: rgba(239,68,68,.5);
+      }
+      #${STYX_TOAST_ID}.styx-toast-live {
+        animation: styx-toast-glow 1.8s ease-in-out infinite;
+      }
+      .styx-toast-live .styx-cart-a { animation: styx-cart-a 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      .styx-toast-live .styx-cart-b { animation: styx-cart-b 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      .styx-toast-live .styx-cart-c { animation: styx-cart-c 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      @keyframes styx-toast-glow {
+        0%, 100% { box-shadow: 0 0 0 1px var(--styx-accent), 0 0 8px var(--styx-glow-dim), var(--styx-drop); }
+        50% { box-shadow: 0 0 0 1px var(--styx-accent), 0 0 28px var(--styx-glow-bright), var(--styx-drop); }
+      }
+      @keyframes styx-cart-a { 0%,100%{transform:translate(0,0)} 33%{transform:translate(9px,5.8px)} 66%{transform:translate(-8px,5.8px)} }
+      @keyframes styx-cart-b { 0%,100%{transform:translate(0,0)} 33%{transform:translate(8px,-5.8px)} 66%{transform:translate(17px,0)} }
+      @keyframes styx-cart-c { 0%,100%{transform:translate(0,0)} 33%{transform:translate(-17px,0)} 66%{transform:translate(-9px,-5.8px)} }
+      @media (prefers-reduced-motion: reduce) {
+        #${STYX_TOAST_ID}.styx-toast-live,
+        .styx-toast-live .styx-cart-a,
+        .styx-toast-live .styx-cart-b,
+        .styx-toast-live .styx-cart-c { animation: none; }
+      }
     `;
     (document.head || document.documentElement).appendChild(style);
   }
 
-  function showStyxToast(detail) {
+  function showStyxToast(detail, title) {
     ensureStyxToastStyle();
     if (_styxToastHideTimer) { clearTimeout(_styxToastHideTimer); _styxToastHideTimer = 0; }
     let el = document.getElementById(STYX_TOAST_ID);
@@ -3049,8 +3207,13 @@
       el.id = STYX_TOAST_ID;
       el.setAttribute("role", "status");
       el.innerHTML =
-        '<div class="styx-toast-spin"></div>' +
-        STYX_MARK_SVG("styx-toast-mark") +
+        '<div class="styx-toast-icon">' +
+        STYX_TOAST_LOGO_SVG() +
+        '<div class="styx-toast-badge">' +
+        '<svg class="styx-toast-tick" width="12" height="12" viewBox="0 0 21 21" fill="none" aria-hidden="true">' +
+        '<path d="M3 10.5L8.5 16L18 5" stroke="#0b1a14" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+        '<span class="styx-toast-bang">!</span>' +
+        '</div></div>' +
         '<div class="styx-toast-body">' +
         '<div class="styx-toast-title">Building your Amazon list</div>' +
         '<div class="styx-toast-detail"></div></div>';
@@ -3058,6 +3221,8 @@
       requestAnimationFrame(() => el.classList.add("styx-toast-in"));
     }
     el.classList.remove("styx-toast-done", "styx-toast-error");
+    el.classList.add("styx-toast-live");
+    setStyxToastTitle(title);
     setStyxToastDetail(detail);
     return el;
   }
@@ -3069,11 +3234,19 @@
     if (d) d.textContent = detail || "";
   }
 
+  function setStyxToastTitle(title) {
+    const el = document.getElementById(STYX_TOAST_ID);
+    if (!el || !title) return;
+    const t = el.querySelector(".styx-toast-title");
+    if (t) t.textContent = title;
+  }
+
   function finishStyxToast(kind, title, detail, hideAfter) {
     const el = showStyxToast(detail);
+    // Terminal state — stop the pulse and hold a steady ring in the state colour.
+    el.classList.remove("styx-toast-live");
     el.classList.add(kind === "error" ? "styx-toast-error" : "styx-toast-done");
-    const t = el.querySelector(".styx-toast-title");
-    if (t && title) t.textContent = title;
+    setStyxToastTitle(title);
     setStyxToastDetail(detail);
     _styxToastHideTimer = setTimeout(() => dismissStyxToast(), hideAfter || 4000);
   }
@@ -3095,7 +3268,7 @@
     chrome.runtime.onMessage.addListener((m) => {
       if (!m) return;
       if (m.type === "MC_LIST_SAVE_PROGRESS") {
-        showStyxToast(m.detail || "Working…");
+        showStyxToast(m.detail || "Working…", m.title);
       } else if (m.type === "MC_LIST_SAVE_DONE") {
         finishStyxToast(
           m.ok ? "done" : "error",
@@ -3112,13 +3285,164 @@
     // Desktop cart (/gp/cart/view.html) and the short /cart route. Exclude the
     // /gp/cart/aws upsell interstitial (handled as an upsell surface).
     if (/\/gp\/cart\/view\.html/i.test(p)) return true;
-    if (/^\/cart\/?$/i.test(p)) return true;
+    // The short route redirects through ref-tagged variants that put the ref
+    // IN the path, not the query string — e.g. /cart/ref=ord_cart_shr (the
+    // "?" only starts after that segment) — so match any /cart or /cart/...
+    // path, not just an exact /cart or /cart/.
+    if (/^\/cart(\/|$)/i.test(p)) return true;
     return false;
   }
 
   function setSaveCartLabel(btn, text) {
     const label = btn.querySelector(".styx-save-cart-label");
     if (label) label.textContent = text;
+  }
+
+  function setClearCartLabel(btn, text) {
+    const label = btn.querySelector(".styx-clear-cart-label");
+    if (label) label.textContent = text;
+  }
+
+  function dismissCartClearConfirm() {
+    const dialog = document.getElementById(STYX_CLEAR_CART_CONFIRM_ID);
+    if (dialog) dialog.remove();
+  }
+
+  function dismissSaveCartPrompt() {
+    const dialog = document.getElementById(STYX_SAVE_CART_PROMPT_ID);
+    if (dialog) dialog.remove();
+  }
+
+  function promptSaveCartName(defaultName) {
+    dismissSaveCartPrompt();
+    return new Promise((resolve) => {
+      const dialog = document.createElement("div");
+      dialog.id = STYX_SAVE_CART_PROMPT_ID;
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("aria-labelledby", "styx-save-cart-prompt-title");
+      dialog.innerHTML = `
+        <div class="styx-save-cart-prompt-card">
+          <p class="styx-save-cart-prompt-kicker">Styx Multi-Cart</p>
+          <form class="styx-save-cart-prompt-form" autocomplete="off">
+            <label id="styx-save-cart-prompt-title" class="styx-save-cart-prompt-title" for="styx-save-cart-prompt-input">Name your new Amazon list (new Styx cart):</label>
+            <input id="styx-save-cart-prompt-input" class="styx-save-cart-prompt-input" type="text" maxlength="60" autocomplete="off" />
+            <p class="styx-save-cart-prompt-help">After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension.</p>
+            <div class="styx-save-cart-prompt-actions">
+              <button type="button" data-styx-save-prompt-choice="cancel">Cancel</button>
+              <button type="submit" data-styx-save-prompt-choice="ok">OK</button>
+            </div>
+          </form>
+        </div>
+      `;
+      const input = dialog.querySelector("#styx-save-cart-prompt-input");
+      const form = dialog.querySelector(".styx-save-cart-prompt-form");
+      const close = (value) => {
+        document.removeEventListener("keydown", onKeydown, true);
+        dialog.remove();
+        resolve(value);
+      };
+      const onKeydown = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close(null);
+        }
+      };
+
+      input.value = defaultName;
+      document.body.appendChild(dialog);
+      input.focus();
+      input.select();
+      document.addEventListener("keydown", onKeydown, true);
+
+      dialog.addEventListener("click", (e) => {
+        if (e.target === dialog) { close(null); return; }
+        const choice = e.target.closest("[data-styx-save-prompt-choice]")?.dataset.styxSavePromptChoice;
+        if (choice === "cancel") close(null);
+      });
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        close(input.value);
+      });
+    });
+  }
+
+  function showCartClearConfirm(btn) {
+    if (document.getElementById(STYX_CLEAR_CART_CONFIRM_ID)) return;
+    const dialog = document.createElement("div");
+    dialog.id = STYX_CLEAR_CART_CONFIRM_ID;
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "styx-clear-cart-confirm-title");
+    dialog.innerHTML = `
+      <div class="styx-clear-cart-confirm-card">
+        <p class="styx-clear-cart-confirm-kicker">Styx Multi-Cart</p>
+        <h2 id="styx-clear-cart-confirm-title">Clear your Amazon cart?</h2>
+        <p>Save these items to a new Styx cart for later, or clear them now to shop for a different occasion.</p>
+        <div class="styx-clear-cart-confirm-actions">
+          <button type="button" data-styx-clear-choice="clear">Clear it!</button>
+          <button type="button" data-styx-clear-choice="save">Save &amp; Clear</button>
+          <button type="button" data-styx-clear-choice="cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+    const close = () => dismissCartClearConfirm();
+    dialog.addEventListener("click", async (e) => {
+      if (e.target === dialog) { close(); return; }
+      const choice = e.target.closest("[data-styx-clear-choice]")?.dataset.styxClearChoice;
+      if (!choice) return;
+      if (choice === "cancel") { close(); return; }
+
+      const actionButton = e.target;
+      actionButton.disabled = true;
+      dialog.querySelectorAll("button").forEach((el) => { el.disabled = true; });
+      btn.disabled = true;
+      setClearCartLabel(btn, choice === "save" ? "Saving & clearing…" : "Clearing cart…");
+      close();
+      showStyxToast(
+        choice === "save" ? "Saving your cart, then clearing it…" : "Clearing your Amazon cart…",
+        choice === "save" ? "Saving your cart" : "Clearing your cart"
+      );
+
+      const res = await sendRequest({
+        type: choice === "save" ? "MC_SAVE_AND_CLEAR" : "MC_CLEAR_CURRENT",
+        ...(choice === "save" ? { name: `Cart ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}` } : {})
+      });
+      if (res && res.ok) {
+        finishStyxToast(
+          "done",
+          choice === "save" ? "Cart saved and cleared" : "Cart clearing started",
+          res.alreadyEmpty ? "Your Amazon cart is already empty." : "Check the Amazon tab for progress.",
+          5000
+        );
+      } else {
+        finishStyxToast("error", "Couldn't clear cart", (res && res.error) || "Please try again.", 6000);
+        btn.disabled = false;
+        setClearCartLabel(btn, STYX_CLEAR_CART_LABEL);
+      }
+    });
+  }
+
+  function injectClearCartButton() {
+    if (document.getElementById(STYX_CLEAR_CART_BTN_ID)) return true;
+    const saveBtn = document.getElementById(STYX_SAVE_CART_BTN_ID);
+    if (!saveBtn || !saveBtn.parentNode) return false;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = STYX_CLEAR_CART_BTN_ID;
+    btn.title = "Clear every item from your active Amazon cart";
+    btn.innerHTML =
+      STYX_CLEAR_CART_MARK_SVG() +
+      '<span class="styx-clear-cart-label">' + STYX_CLEAR_CART_LABEL + "</span>";
+    saveBtn.parentNode.insertBefore(btn, saveBtn);
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!btn.disabled) showCartClearConfirm(btn);
+    });
+    return true;
   }
 
   function injectSaveCartButton() {
@@ -3153,8 +3477,109 @@
         }
         #${STYX_SAVE_CART_BTN_ID}:hover { filter: brightness(1.12); }
         #${STYX_SAVE_CART_BTN_ID}:disabled { opacity: 0.6; cursor: default; }
-        #${STYX_SAVE_CART_BTN_ID} .styx-btn-mark {
-          width: 17px; height: 17px; flex: 0 0 auto; display: block;
+        #${STYX_SAVE_CART_BTN_ID} .styx-btn-mark,
+        #${STYX_CLEAR_CART_BTN_ID} .styx-btn-mark {
+          width: 22px; height: 22px; flex: 0 0 auto; display: block;
+          color: ${STYX_ORANGE};
+        }
+        #${STYX_CLEAR_CART_BTN_ID} .styx-btn-mark { color: ${STYX_CLEAR_RED}; }
+        #${STYX_CLEAR_CART_BTN_ID} {
+          display: flex; align-items: center; justify-content: center; gap: 7px;
+          width: 100%; box-sizing: border-box;
+          margin-top: 10px; padding: 9px 12px;
+          font-size: 13px; line-height: 18px; font-weight: 700;
+          text-align: center; border-radius: ${STYX_BTN_RADIUS};
+          border: 1px solid ${STYX_BTN_BORDER};
+          background: ${STYX_BTN_BG};
+          color: #ffffff; cursor: pointer;
+          box-shadow: 0 1px 2px rgba(15,23,42,.25);
+          transition: filter 120ms ease, opacity 120ms ease;
+        }
+        #${STYX_CLEAR_CART_BTN_ID}:hover { filter: brightness(1.12); }
+        #${STYX_CLEAR_CART_BTN_ID}:disabled { opacity: 0.6; cursor: default; }
+        #${STYX_CLEAR_CART_BTN_ID} { border-color: ${STYX_CLEAR_BORDER}; }
+        #${STYX_CLEAR_CART_CONFIRM_ID} {
+          position: fixed; inset: 0; z-index: 2147483646;
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px; background: rgba(15, 23, 42, .46);
+          font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} .styx-clear-cart-confirm-card {
+          width: min(380px, 100%); box-sizing: border-box; padding: 20px;
+          border: 1px solid rgba(255,153,0,.55); border-radius: 12px;
+          background: #ffffff; color: #131a22;
+          box-shadow: 0 18px 50px rgba(0,0,0,.35);
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} .styx-clear-cart-confirm-kicker {
+          margin: 0 0 6px; color: #b06700; font-size: 11px;
+          font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} h2 { margin: 0 0 8px; font-size: 20px; line-height: 1.2; }
+        #${STYX_CLEAR_CART_CONFIRM_ID} p:not(.styx-clear-cart-confirm-kicker) {
+          margin: 0 0 16px; color: #384250; font-size: 13px; line-height: 1.45;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} .styx-clear-cart-confirm-actions {
+          display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} button {
+          border: 1px solid rgba(19,26,34,.16); border-radius: 8px;
+          padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 700;
+          color: #27313d; background: #fff; cursor: pointer;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} button[data-styx-clear-choice="save"] {
+          border-color: #e88a00; background: linear-gradient(135deg,#ffc34d,#ff9900); color: #1a1209;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} button[data-styx-clear-choice="clear"] {
+          border-color: #b1271b; color: #fff; background: #b1271b;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} button[data-styx-clear-choice="clear"]:hover {
+          border-color: #9a1f15; background: #9a1f15;
+        }
+        #${STYX_CLEAR_CART_CONFIRM_ID} button:disabled { opacity: .6; cursor: default; }
+        #${STYX_SAVE_CART_PROMPT_ID} {
+          position: fixed; inset: 0; z-index: 2147483646;
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px; background: rgba(15, 23, 42, .46);
+          font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-card {
+          width: min(540px, 100%); box-sizing: border-box; padding: 20px;
+          border: 1px solid rgba(255,153,0,.55); border-radius: 12px;
+          background: #fffaf0; color: #131a22;
+          box-shadow: 0 18px 50px rgba(0,0,0,.35);
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-kicker {
+          margin: 0 0 8px; color: #b06700; font-size: 11px;
+          font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-form { margin: 0; }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-title {
+          display: block; margin: 0 0 10px;
+          font-size: 17px; line-height: 1.25; font-weight: 800;
+          white-space: nowrap;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-input {
+          width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px;
+          border: 1px solid rgba(19,26,34,.28); border-radius: 8px;
+          background: #fff; color: #131a22; font: inherit; font-size: 14px;
+          outline: none;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-input:focus {
+          border-color: #e88a00; box-shadow: 0 0 0 3px rgba(255,153,0,.22);
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-help {
+          margin: 8px 0 16px; color: #384250; font-size: 12px; line-height: 1.4;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} .styx-save-cart-prompt-actions {
+          display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} button {
+          border: 1px solid rgba(19,26,34,.16); border-radius: 8px;
+          padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 700;
+          color: #27313d; background: #fff; cursor: pointer;
+        }
+        #${STYX_SAVE_CART_PROMPT_ID} button[data-styx-save-prompt-choice="ok"] {
+          border-color: #e88a00; background: linear-gradient(135deg,#ffc34d,#ff9900); color: #1a1209;
         }
       `;
       (document.head || document.documentElement).appendChild(style);
@@ -3165,7 +3590,7 @@
     btn.id = STYX_SAVE_CART_BTN_ID;
     btn.title = "Save everything in this cart to a new Amazon list";
     btn.innerHTML =
-      STYX_MARK_SVG("styx-btn-mark") +
+      STYX_SAVE_CART_MARK_SVG() +
       '<span class="styx-save-cart-label">' + STYX_SAVE_CART_LABEL + "</span>";
 
     // Place it right under Proceed to Checkout.
@@ -3184,14 +3609,15 @@
         month: "short",
         day: "numeric",
       })}`;
-      const raw = window.prompt("Name your new Amazon list:", defaultName);
+      const raw = await promptSaveCartName(defaultName);
       if (raw === null) return; // user cancelled
       const name = raw.trim() || defaultName;
 
       btn.disabled = true;
       setSaveCartLabel(btn, "Saving to Amazon…");
       showStyxToast(
-        "Opening Amazon tabs to add each item — please keep this tab open."
+        "Opening Amazon tabs to add each item — please keep this tab open.",
+        "Building your Amazon list"
       );
 
       // Long-running: background creates the list + adds items via Amazon tabs,
@@ -3223,11 +3649,13 @@
     });
 
     dlog("[Styx ATC] Save-this-cart button injected");
+    injectClearCartButton();
     return true;
   }
 
   function initSaveCart() {
     injectSaveCartButton();
+    injectClearCartButton();
     // The buybox re-renders on quantity changes / item removal, which drops
     // our button. Keep a debounced, idempotent re-check running, scoped to
     // the active cart form to bound the cost.
@@ -3241,6 +3669,7 @@
       timer = setTimeout(() => {
         timer = 0;
         injectSaveCartButton();
+        injectClearCartButton();
       }, 250);
     });
     mo.observe(root, { childList: true, subtree: true });
@@ -3302,7 +3731,7 @@
     if (!document.getElementById(STYX_PDP_ATL_STYLE_ID)) {
       const style = document.createElement("style");
       style.id = STYX_PDP_ATL_STYLE_ID;
-      // Branded to match the cart-page "Save cart to a new list" button: navy
+      // Branded to match the cart-page "Save to a new Styx Cart" button: navy
       // fill, white bold label, orange Styx cart mark, 8px radius. Amazon's
       // split-button DOM/classes stay intact (handlers survive) — visual only.
       style.textContent = `
@@ -3475,8 +3904,11 @@
   const FAB_ID = "__styx-fab";
   const FAB_MODAL_ID = "__styx-fab-modal";
   const FAB_STYLE_ID = "__styx-fab-style";
+  const FAB_GUIDE_ID = "__styx-guide-tip";
+  const FAB_LIGHTBOX_ID = "__styx-guide-lightbox";
   const FAB_POS_KEY = "styx.fab.pos.v1"; // per-tab dragged position
   const FAB_OPEN_KEY = "styx.fab.open.v1"; // per-tab open/closed memory
+  const FAB_GUIDE_KEY = "styx.onboarding.v1"; // profile-wide first-run guide state
   const FAB_WIDTH = 400;
   const FAB_MARGIN = 20;
 
@@ -3499,10 +3931,302 @@
       #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
       #${FAB_ID}[hidden] { display: none; }
 
+      #${FAB_GUIDE_ID} {
+        position: fixed;
+        right: ${FAB_MARGIN}px;
+        bottom: ${FAB_MARGIN + 72}px;
+        z-index: 2147483639;
+        width: min(430px, calc(100vw - ${FAB_MARGIN * 2}px));
+        /* Fixed height on every step: the panel used to grow and shrink as the
+           content changed, which reads as the whole dialog jumping between
+           steps. The body scrolls internally instead (see .styx-guide-body). */
+        height: min(620px, calc(100vh - 112px));
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding: 16px;
+        border-radius: 12px;
+        color: #131a22;
+        background: #fffaf0;
+        border: 1px solid rgba(255,153,0,0.55);
+        box-shadow: 0 16px 42px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.9);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+      }
+      #${FAB_GUIDE_ID}[hidden] { display: none; }
+      #${FAB_GUIDE_ID}::after {
+        content: "";
+        position: absolute;
+        right: 22px;
+        bottom: -10px;
+        width: 18px;
+        height: 18px;
+        transform: rotate(45deg);
+        background: #fffaf0;
+        border-right: 1px solid rgba(255,153,0,0.55);
+        border-bottom: 1px solid rgba(255,153,0,0.55);
+      }
+      #${FAB_GUIDE_ID} .styx-guide-kicker {
+        margin: 0 0 6px;
+        color: #b06700;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-title {
+        margin: 0 0 8px;
+        color: #131a22;
+        font-size: 18px;
+        line-height: 1.2;
+        font-weight: 800;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-copy {
+        margin: 0 0 12px;
+        color: #384250;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-shot {
+        display: block;
+        width: 100%;
+        height: auto;
+        margin: 0 0 12px;
+        border: 1px solid rgba(19,26,34,0.14);
+        border-radius: 8px;
+        background: #f5f5f5;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-progress {
+        margin: 0 0 8px;
+        color: #69727d;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-list {
+        margin: 0 0 14px;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+        color: #27313d;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      /* list-style MUST be re-declared on the li, not just the ul: a value
+         inherited from the ul loses to any rule that matches the li directly,
+         and the host page (amazon.com) styles bare list items. Without this
+         the native marker renders next to our ::before dot — double bullets. */
+      #${FAB_GUIDE_ID} .styx-guide-list li {
+        position: relative;
+        padding-left: 18px;
+        list-style: none;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-list li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: .45em;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ff9900;
+      }
+      /* Nested sub-bullets (e.g. a clarifying aside under a step). Same orange
+         as the parent list's dot — just smaller — so the hierarchy reads from
+         size/indent alone, with one consistent marker colour throughout. */
+      #${FAB_GUIDE_ID} .styx-guide-sublist {
+        margin: 4px 0 2px;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 4px;
+        color: #5b6572;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-sublist li {
+        position: relative;
+        padding-left: 16px;
+        list-style: none;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-sublist li::before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: .5em;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #ff9900;
+      }
+      /* A button screenshot presented under its bullet's text, rather than
+         squeezed inline with it — the crops are wide pills, not icon-sized. */
+      #${FAB_GUIDE_ID} .styx-guide-inline-shot {
+        display: block;
+        width: 200px;
+        max-width: 100%;
+        height: auto;
+        margin: 6px 0 2px;
+        border: 1px solid rgba(19,26,34,0.14);
+        border-radius: 6px;
+      }
+      /* Wide crops (e.g. the full panel header) are unreadable at 200px. */
+      #${FAB_GUIDE_ID} .styx-guide-inline-shot-wide {
+        width: 100%;
+      }
+      /* Every screenshot in the guide is clickable (see openGuideLightbox). */
+      #${FAB_GUIDE_ID} .styx-guide-shot,
+      #${FAB_GUIDE_ID} .styx-guide-inline-shot,
+      #${FAB_GUIDE_ID} .styx-guide-shot-row img {
+        cursor: zoom-in;
+      }
+      #${FAB_LIGHTBOX_ID} {
+        position: fixed;
+        inset: 0;
+        /* Above the FAB, modal and guide, which all sit at 214748363x. */
+        z-index: 2147483646;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        background: rgba(15,23,42,0.72);
+        cursor: zoom-out;
+      }
+      #${FAB_LIGHTBOX_ID} img {
+        max-width: 100%;
+        max-height: 100%;
+        width: auto;
+        height: auto;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+        cursor: default;
+      }
+      #${FAB_LIGHTBOX_ID} .styx-guide-lightbox-close {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid rgba(255,255,255,0.35);
+        border-radius: 50%;
+        background: rgba(19,26,34,0.75);
+        color: #fff;
+        font: 600 15px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Arial, sans-serif;
+        cursor: pointer;
+      }
+      #${FAB_LIGHTBOX_ID} .styx-guide-lightbox-close:hover {
+        background: rgba(19,26,34,0.95);
+      }
+      /* Two related shots side by side. Bounded by height rather than width so
+         a tall portrait crop and a wide one line up without either dominating. */
+      #${FAB_GUIDE_ID} .styx-guide-shot-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 10px;
+        margin: 0 0 12px;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-shot-row img {
+        max-height: 230px;
+        max-width: 48%;
+        width: auto;
+        height: auto;
+        border: 1px solid rgba(19,26,34,0.14);
+        border-radius: 8px;
+        background: #f5f5f5;
+      }
+      /* Tall portrait crops (the cart-page column) blow the step's vertical
+         budget at full width and push the buttons they are meant to show below
+         the fold — keep them narrow so the whole shot fits in view. */
+      #${FAB_GUIDE_ID} .styx-guide-inline-shot-tall {
+        width: 190px;
+      }
+      /* Everything above the buttons scrolls; the actions stay pinned so Next
+         and Back sit in the same spot on every step. */
+      #${FAB_GUIDE_ID} .styx-guide-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin-bottom: 12px;
+      }
+      /* Standing preamble above the step content: how to reach Styx at all.
+         It is a prerequisite for every step, not a step of its own, so it sits
+         above the step counter and persists as the user pages through. */
+      #${FAB_GUIDE_ID} .styx-guide-intro {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 0 12px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(255,153,0,0.10);
+        color: #384250;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-intro img {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        display: block;
+      }
+      /* Labels the parallel choices in a step ("in the panel" vs "on the cart
+         page") so they read as alternatives rather than sequential actions. */
+      #${FAB_GUIDE_ID} .styx-guide-option {
+        display: block;
+        margin-bottom: 3px;
+        color: #b06700;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-spacer { flex: 1 1 auto; }
+      #${FAB_GUIDE_ID} .styx-guide-btn {
+        position: relative;
+        z-index: 1;
+        appearance: none;
+        border: 1px solid rgba(19,26,34,0.15);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        background: #fff;
+        color: #27313d;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-btn-primary {
+        background: linear-gradient(135deg, #ffc34d, #ff9900);
+        color: #1a1209;
+        border-color: #e88a00;
+      }
+      #${FAB_GUIDE_ID} .styx-guide-btn:hover {
+        filter: brightness(0.98);
+      }
+      @media (max-width: 420px) {
+        #${FAB_GUIDE_ID} {
+          right: 12px;
+          bottom: 84px;
+          width: calc(100vw - 24px);
+        }
+        #${FAB_GUIDE_ID} .styx-guide-actions { gap: 6px; }
+      }
+
       /* Orange pulse ring around the button as a reminder to use it. Toggled
          by the "Pulse the floating button" setting (on by default). */
       @keyframes styx-fab-pulse {
-        0%   { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0.55); }
+        0%   { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0.95); }
         70%  { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 14px rgba(255,153,0,0); }
         100% { box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 0 rgba(255,153,0,0); }
       }
@@ -3512,7 +4236,7 @@
       @media (prefers-reduced-motion: reduce) {
         #${FAB_ID}.styx-fab-pulse {
           animation: none;
-          box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 4px rgba(255,153,0,0.55);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06), 0 0 0 4px rgba(255,153,0,0.95);
         }
       }
 
@@ -3602,6 +4326,27 @@
     fab.classList.toggle("styx-fab-pulse", _settingsCache.fabPulse !== false);
   }
 
+  async function readGuideSeen() {
+    try {
+      const got = await chrome.storage.local.get(FAB_GUIDE_KEY);
+      const state = got && got[FAB_GUIDE_KEY];
+      return !!(state && typeof state === "object" && state.seenAt);
+    } catch (_e) {
+      return true;
+    }
+  }
+
+  async function markGuideSeen(reason) {
+    try {
+      await chrome.storage.local.set({
+        [FAB_GUIDE_KEY]: {
+          seenAt: Date.now(),
+          reason: reason || "dismissed"
+        }
+      });
+    } catch (_e) { /* ignore */ }
+  }
+
   // True while a background-driven multi-navigation operation is running
   // (cart restore sets `restoring`; cart clear / list save set `busy`). Used
   // to hold back the floating window's auto-reopen so it doesn't rebuild and
@@ -3631,6 +4376,122 @@
     modal.id = FAB_MODAL_ID;
     modal.hidden = true;
 
+    const guide = document.createElement("div");
+    guide.id = FAB_GUIDE_ID;
+    guide.hidden = true;
+    guide.setAttribute("role", "dialog");
+    guide.setAttribute("aria-label", "Styx Multi-Cart quick start");
+    const guidePages = [
+      {
+        title: "Clear your Amazon cart",
+        copy: "",
+        // No hero image: the first instruction has to be the first thing under
+        // the title, so each step carries its own inline screenshot instead.
+        image: "",
+        alt: "",
+        bullets: [
+          '<span class="styx-guide-option">Option 1 — in the Styx panel</span>' +
+            'Click <strong>Clear Amazon cart</strong> to empty the live cart, or <strong>Save Amazon cart for later</strong> to keep a copy in a new Styx Cart first.' +
+            '<img class="styx-guide-inline-shot styx-guide-inline-shot-wide" src="guide-assets/guide-clear-save.png" alt="Clear Amazon cart and Save Amazon cart for later buttons at the top of the Styx panel">' +
+            '<ul class="styx-guide-sublist"><li>Styx Carts are simply Amazon lists with added versatility.</li></ul>',
+          '<span class="styx-guide-option">Option 2 — on your Amazon cart page</span>' +
+            'The same two buttons sit right under <strong>Proceed to checkout</strong>.' +
+            '<img class="styx-guide-inline-shot styx-guide-inline-shot-tall" src="guide-assets/CartButtons.png" alt="Clear Amazon cart and Save Amazon cart for later buttons below Proceed to checkout on the Amazon cart page">'
+        ]
+      },
+      {
+        title: "Put items in different carts for separate purchases",
+        copy: [
+          "Want to organize your purchases as you shop?...",
+          "Choose <strong>Add to a Styx cart</strong> on an item's page or 'add' button",
+          "Then pick an existing cart or <strong>+ Create new cart</strong>."
+        ],
+        image: "",
+        alt: "",
+        images: [
+          { src: "guide-assets/AddtoStyxCart.png", alt: "Add to a Styx cart button on an Amazon product page" },
+          { src: "guide-assets/CartList.png", alt: "The Styx cart picker listing your carts, with a Create new cart option" }
+        ],
+        bullets: ["Use separate carts for trips, projects, or people.", "Adding an item directly to your Amazon cart or 'Buy now' are still available options."]
+      },
+      {
+        title: "Send a whole cart to Amazon",
+        // No hero image — this step is a tour of the three places the action
+        // lives, so each surface gets its own inline screenshot inside a bullet.
+        copy: "Ready to checkout with a specific cart? You can send it to your Amazon cart multiple ways...",
+        image: "",
+        alt: "",
+        bullets: [
+          '<span class="styx-guide-option">Option 1 — at the top of a cart</span>' +
+            'On any Styx cart (Amazon list) page.' +
+            '<img class="styx-guide-inline-shot" src="guide-assets/SendAllToAmazonCart.png" alt="Send All to Amazon Cart button at the top of a list page">',
+          '<span class="styx-guide-option">Option 2 — docked while you scroll</span>' +
+            'Once you scroll past that button it docks in the bottom-right, so it is always in reach on long lists.' +
+            '<img class="styx-guide-inline-shot" src="guide-assets/SendAllDockedPill.png" alt="Send All to Amazon Cart button docked beside the floating Styx button">',
+          '<span class="styx-guide-option">Option 3 — in the Styx panel</span>' +
+            'Click the cart button on any cart\'s row in the extension panel' +
+            '<img class="styx-guide-inline-shot styx-guide-inline-shot-wide" src="guide-assets/SendAllPanelButton.png" alt="Add All to Amazon Cart button on a cart row in the Styx panel">',
+          'Styx adds all the items to whatever is already in your Amazon cart, then reports the result when it is done.',
+          "<strong> We've already loaded your Amazon lists</strong> so you can start using Styx carts right away. Click <strong>Finish</strong> to start a whole new way to shop on Amazon!"
+        ]
+      }
+    ];
+    let guidePage = 0;
+    function guideImageUrl(path) {
+      try { return chrome.runtime.getURL(path); } catch (_e) { return path; }
+    }
+    function renderGuidePage() {
+      const page = guidePages[guidePage];
+      const isLast = guidePage === guidePages.length - 1;
+      // Bullets can carry their own inline screenshots (e.g. the FAB badge, a
+      // button crop) as raw <img src="..."> HTML — resolve those relative
+      // extension paths the same way the page's main screenshot is resolved,
+      // so they load under both chrome-extension:// and Safari's scheme.
+      const bulletsHtml = page.bullets
+        .map((item) => `<li>${item}</li>`)
+        .join("")
+        .replace(/src="([^"]+)"/g, (_m, p) => `src="${guideImageUrl(p)}"`);
+      // `copy` takes an array when a step reads better as separate lines than
+      // one run-on paragraph.
+      const copyHtml = []
+        .concat(page.copy || [])
+        .filter(Boolean)
+        .map((line) => `<p class="styx-guide-copy">${line}</p>`)
+        .join("");
+      // `images` shows two related shots side by side (e.g. the button and the
+      // picker it opens) — capped by height so a tall portrait crop can sit
+      // next to a wide one without blowing the step's vertical budget.
+      const imagesHtml = (page.images || []).length
+        ? `<div class="styx-guide-shot-row">` +
+          page.images
+            .map((im) => `<img src="${guideImageUrl(im.src)}" alt="${im.alt}">`)
+            .join("") +
+          `</div>`
+        : "";
+      guide.innerHTML = `
+        <div class="styx-guide-body">
+          <p class="styx-guide-kicker">Quick start</p>
+          <p class="styx-guide-intro">
+            <img src="${guideImageUrl("guide-assets/StyxFabButton.png")}" alt="The round Styx button">
+            <span>Click the Styx button in the bottom-right of any Amazon page to open the panel.</span>
+          </p>
+          <p class="styx-guide-progress">Step ${guidePage + 1} of ${guidePages.length}</p>
+          <h2 class="styx-guide-title">${page.title}</h2>
+          ${copyHtml}
+          ${page.image ? `<img class="styx-guide-shot" src="${guideImageUrl(page.image)}" alt="${page.alt}">` : ""}
+          ${imagesHtml}
+          <ul class="styx-guide-list">${bulletsHtml}</ul>
+        </div>
+        <div class="styx-guide-actions">
+          ${guidePage > 0 ? `<button class="styx-guide-btn" type="button" data-action="guide-back">Back</button>` : ""}
+          <button class="styx-guide-btn" type="button" data-action="dismiss-guide">Not now</button>
+          <span class="styx-guide-spacer"></span>
+          <button class="styx-guide-btn styx-guide-btn-primary" type="button" data-action="${isLast ? "finish-guide" : "guide-next"}">${isLast ? "Finish" : "Next"}</button>
+        </div>
+      `;
+    }
+    renderGuidePage();
+
     const bar = document.createElement("div");
     bar.className = "styx-fab-bar";
     const title = document.createElement("span");
@@ -3654,6 +4515,7 @@
 
     modal.appendChild(bar);
     modal.appendChild(frame);
+    document.body.appendChild(guide);
     document.body.appendChild(fab);
     document.body.appendChild(modal);
     applyFabPulse();
@@ -3676,7 +4538,63 @@
     function notifyFabVis() {
       try { window.dispatchEvent(new Event("styx:fabvis")); } catch (_e) { /* ignore */ }
     }
+    function hideGuide() {
+      closeGuideLightbox();
+      guide.hidden = true;
+    }
+
+    // ---- Guide screenshot lightbox ----------------------------------------
+    //
+    // Built lazily and torn down on close so the guide leaves nothing behind on
+    // the host page. Sits above the FAB/modal/guide (all 214748363x) so it is
+    // never covered by the very panel it was opened from.
+    let _guideLightbox = null;
+    function closeGuideLightbox() {
+      if (!_guideLightbox) return;
+      document.removeEventListener("keydown", onGuideLightboxKey, true);
+      try { _guideLightbox.remove(); } catch (_e) { /* already gone */ }
+      _guideLightbox = null;
+    }
+    function onGuideLightboxKey(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeGuideLightbox();
+      }
+    }
+    function openGuideLightbox(src, alt) {
+      closeGuideLightbox();
+      const box = document.createElement("div");
+      box.id = FAB_LIGHTBOX_ID;
+      box.setAttribute("role", "dialog");
+      box.setAttribute("aria-modal", "true");
+      box.setAttribute("aria-label", alt || "Screenshot");
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = alt || "";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "styx-guide-lightbox-close";
+      close.setAttribute("aria-label", "Close image");
+      close.textContent = "✕";
+      box.appendChild(img);
+      box.appendChild(close);
+      // Backdrop click closes; clicks on the image itself do not.
+      box.addEventListener("click", (e) => {
+        if (e.target === img) return;
+        closeGuideLightbox();
+      });
+      document.addEventListener("keydown", onGuideLightboxKey, true);
+      (document.body || document.documentElement).appendChild(box);
+      _guideLightbox = box;
+      try { close.focus(); } catch (_e) { /* focus is best-effort */ }
+    }
+    async function maybeShowGuide() {
+      if (!modal.hidden || fab.hidden || uiSuspended()) return;
+      if (await readGuideSeen()) return;
+      guide.hidden = false;
+    }
     function openModal() {
+      hideGuide();
       if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
       modal.hidden = false;
       fab.hidden = true;
@@ -3696,10 +4614,37 @@
       notifyFabVis();
       writeStoredOpen(false);
       document.removeEventListener("pointerdown", onDocPointerDown, true);
+      setTimeout(() => { maybeShowGuide(); }, 250);
     }
     function toggleModal() {
       if (modal.hidden) openModal(); else closeModal();
     }
+
+    guide.addEventListener("click", async (e) => {
+      // Any screenshot in the guide opens full size — the inline shots are
+      // deliberately small to keep every step the same height, so this is how
+      // a user reads the detail in one.
+      const shot = e.target && e.target.closest && e.target.closest("img");
+      // The intro's icon is decorative chrome, not a screenshot — skip it.
+      if (shot && guide.contains(shot) && !shot.closest(".styx-guide-intro")) {
+        openGuideLightbox(shot.currentSrc || shot.src, shot.alt || "");
+        return;
+      }
+      const action = e.target && e.target.closest && e.target.closest("[data-action]")?.dataset.action;
+      if (action === "guide-back") {
+        guidePage = Math.max(0, guidePage - 1);
+        renderGuidePage();
+      } else if (action === "guide-next") {
+        guidePage = Math.min(guidePages.length - 1, guidePage + 1);
+        renderGuidePage();
+      } else if (action === "finish-guide") {
+        await markGuideSeen("completed");
+        hideGuide();
+      } else if (action === "dismiss-guide") {
+        await markGuideSeen("dismissed");
+        hideGuide();
+      }
+    });
 
     fab.addEventListener("click", openModal);
     closeBtn.addEventListener("click", closeModal);
@@ -3756,6 +4701,8 @@
     // rebuild the popup and re-hit the lists API on every single load. The
     // FAB still shows, so the user can open it manually if they want to.
     if (readStoredOpen() && !uiSuspended()) openModal();
+
+    setTimeout(() => { maybeShowGuide(); }, 500);
 
     // The FAB now exists; nudge any in-page UI that rides on its visibility
     // (the wishlist "Send All" pill was set up before this ran).

@@ -156,7 +156,7 @@ test.describe("popup — Amazon list dashboard", () => {
     ).toBe(2);
   });
 
-  test("Clear Amazon Cart remains accessible and sends MC_CLEAR_CURRENT", async ({ popup }) => {
+  test("Clear Amazon cart remains accessible and sends MC_CLEAR_CURRENT", async ({ popup }) => {
     const page = await popup({ amazonLists });
     const clear = page.locator("#mc-clear");
     await expect(clear).toBeVisible();

@@ -60,6 +60,8 @@
   const $count = document.getElementById("mc-list-count");
   const $empty = document.getElementById("mc-empty");
   const $toast = document.getElementById("mc-toast");
+  const $toastTitle = document.getElementById("mc-toast-title");
+  const $toastDetail = document.getElementById("mc-toast-detail");
   const $template = document.getElementById("mc-item-template");
   const $amazonListTemplate = document.getElementById("mc-amazon-list-template");
   const $amazonListsRefresh = document.getElementById("mc-amazon-lists-refresh");
@@ -111,6 +113,8 @@
 
   // Confirm-dialog refs (in-popup replacement for window.confirm).
   const $confirmModal = document.getElementById("mc-confirm-modal");
+  const $confirmCard = $confirmModal.querySelector(".mc-confirm-card");
+  const $confirmKicker = document.getElementById("mc-confirm-kicker");
   const $confirmTitle = document.getElementById("mc-confirm-title");
   const $confirmBody = document.getElementById("mc-confirm-body");
   const $confirmOk = document.getElementById("mc-confirm-ok");
@@ -230,14 +234,30 @@
   // ---- Toast -------------------------------------------------------------
 
   let toastTimer = null;
-  function toast(message, kind) {
-    $toast.textContent = message;
+  /**
+   * Shared toast — same card as the on-page toast (observer.js) and the
+   * injected one (pageShowStatus in the service worker).
+   *
+   * `kind`: "error" (red + !), "done" (green + tick), "live" (pulsing orange,
+   * stays up until replaced or dismissed), or omitted for the neutral accent
+   * used by ordinary one-line messages. `opts.detail` adds a second line and
+   * `opts.duration` overrides the auto-hide.
+   */
+  function toast(message, kind, opts) {
+    const { detail = "", duration = null } = opts || {};
+    $toastTitle.textContent = message;
+    $toastDetail.textContent = detail;
     $toast.classList.toggle("mc-toast-error", kind === "error");
+    $toast.classList.toggle("mc-toast-done", kind === "done");
+    $toast.classList.toggle("mc-toast-live", kind === "live");
     $toast.hidden = false;
     clearTimeout(toastTimer);
+    // A live toast tracks an operation that outlives this call, so it has no
+    // timer — the next toast() call replaces it.
+    if (kind === "live") return;
     toastTimer = setTimeout(() => {
       $toast.hidden = true;
-    }, 2600);
+    }, duration != null ? duration : kind === "error" ? 4200 : 2600);
   }
 
   // ---- Confirm dialog (in-popup replacement for window.confirm) ----------
@@ -261,6 +281,7 @@
       cancelLabel = "Cancel",
       altLabel = null,
       destructive = false,
+      variant = null,
     } = opts || {};
 
     // Auto-cancel any previous pending confirm.
@@ -299,6 +320,12 @@
       $confirmOk.classList.remove("mc-btn-ghost");
     }
 
+    // The "cart" variant reskins the card to match the on-page cart dialog
+    // (cream card, kicker, right-aligned actions). Reset in the resolver below.
+    const isCartVariant = variant === "cart";
+    $confirmCard.classList.toggle("mc-confirm-cart", isCartVariant);
+    $confirmKicker.hidden = !isCartVariant;
+
     $confirmModal.hidden = false;
     $confirmModal.removeAttribute("inert");
     // Focus the primary action so Enter picks it: the alt button when it
@@ -314,6 +341,8 @@
           $confirmModal.setAttribute("inert", "");
           $confirmOk.classList.remove("mc-btn-danger");
           $confirmAlt.hidden = true;
+          $confirmCard.classList.remove("mc-confirm-cart");
+          $confirmKicker.hidden = true;
           resolve(value);
         },
       };
@@ -1058,9 +1087,10 @@
         `as a unique Styx cart in your Amazon Lists — or just clear ` +
         `it to shop for a different occasion.`,
       altLabel: "Save & Clear",
-      okLabel: "Just Clear",
+      okLabel: "Clear it!",
       cancelLabel: "Cancel",
       destructive: true,
+      variant: "cart",
     });
     if (!choice) return;
 

@@ -23,6 +23,10 @@ const backgroundSource = fs.readFileSync(
 const observerSrc = fs.readFileSync(path.join(ROOT, "observer.js"), "utf8");
 const popupJsSrc = fs.readFileSync(path.join(ROOT, "popup.js"), "utf8");
 const popupCssSrc = fs.readFileSync(path.join(ROOT, "popup.css"), "utf8");
+const buildZipSrc = fs.readFileSync(
+  path.join(ROOT, "scripts", "build-zip.sh"),
+  "utf8"
+);
 
 describe("floating modal config", () => {
   it("no longer declares the sidePanel permission", () => {
@@ -67,6 +71,50 @@ describe("floating modal config", () => {
     expect(observerSrc).toContain("MC_TOGGLE_FLOATING");
     // Top-frame only — Amazon embeds many iframes.
     expect(observerSrc).toContain("window.top !== window");
+  });
+
+  it("shows a persistent first-run guide from the floating button", () => {
+    expect(observerSrc).toContain("__styx-guide-tip");
+    expect(observerSrc).toContain("styx.onboarding.v1");
+    expect(observerSrc).toContain("guide-assets/guide-clear-save.png");
+    expect(observerSrc).toContain("guide-assets/StyxFabButton.png");
+    expect(observerSrc).toContain("guide-assets/AddtoStyxCart.png");
+    expect(observerSrc).toContain("guide-assets/CartList.png");
+    expect(observerSrc).toContain("guide-assets/SendAllToAmazonCart.png");
+    expect(observerSrc).toContain("guide-assets/CartButtons.png");
+    expect(observerSrc).toContain("guide-assets/SendAllDockedPill.png");
+    expect(observerSrc).toContain("guide-assets/SendAllPanelButton.png");
+    expect(observerSrc).toContain("guide-next");
+    expect(observerSrc).toContain("guide-back");
+    expect(observerSrc).toContain("markGuideSeen");
+  });
+
+  it("packages the screenshots used by the first-run walkthrough", () => {
+    for (const file of ["guide-clear-save.png", "StyxFabButton.png", "AddtoStyxCart.png", "CartList.png", "SendAllToAmazonCart.png", "SendAllDockedPill.png", "SendAllPanelButton.png", "CartButtons.png"]) {
+      expect(fs.existsSync(path.join(ROOT, "guide-assets", file))).toBe(true);
+      expect(fs.existsSync(path.join(ROOT, "safari", "Styx Multi-Cart", "Shared (Extension)", "Resources", "guide-assets", file))).toBe(true);
+      // Also packaged into the Chrome Web Store zip — without this, real
+      // installs 404 on every guide image (web_accessible_resources declares
+      // the path, but the zip's FILES array is a separate, exact list).
+      expect(buildZipSrc).toContain(`guide-assets/${file}`);
+    }
+    const resources = manifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
+    expect(resources).toContain("guide-assets/*.png");
+  });
+
+  it("adds a cart-page clear button with the shared clear flow", () => {
+    expect(observerSrc).toContain('const STYX_CLEAR_CART_BTN_ID = "styx-clear-cart"');
+    expect(observerSrc).toContain("Clear Amazon cart");
+    expect(observerSrc).toContain('"MC_CLEAR_CURRENT"');
+    expect(observerSrc).toContain('"MC_SAVE_AND_CLEAR"');
+    expect(observerSrc).toContain('data-styx-clear-choice="save"');
+    expect(observerSrc).toContain("STYX_CLEAR_CART_MARK_SVG");
+    expect(observerSrc).toContain("STYX_SAVE_CART_MARK_SVG");
+    expect(observerSrc).toContain("Save Amazon cart for later");
+    expect(observerSrc).toContain("promptSaveCartName");
+    expect(observerSrc).toContain("Name your new Amazon list (new Styx cart):");
+    expect(observerSrc).toContain("After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension.");
+    expect(observerSrc).not.toContain('window.prompt("Name your new Amazon list:');
   });
 
   it("teaches popup.html/css about the floating surface", () => {

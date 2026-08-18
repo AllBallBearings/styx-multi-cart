@@ -9,7 +9,7 @@ You can have multiple carts or separate purchases at checkout in the real world.
 ## What it does
 
 - **Empty your Amazon cart** — clears your live cart from one button in the Styx panel, instead of deleting items one at a time. Free and unlimited on every plan. **Saved for Later is never touched.** Larger carts are cleared item by item, so it takes a moment to work through them.
-- **Save & Clear** — the confirm dialog offers to save everything in the cart into a brand-new Amazon list first, so you can empty it and shop something else without losing a thing. Also available without clearing, via **Save Cart for Later** in the panel or **Save cart to a new list** on the Amazon cart page.
+- **Save & Clear** — the confirm dialog offers to save everything in the cart into a brand-new Amazon list first, so you can empty it and shop something else without losing a thing. Also available without clearing, via **Save Cart for Later** in the panel or **Save to a new Styx Cart** on the Amazon cart page.
 - **Lists are carts** — every Amazon list shows up as a cart. Styx also relabels Amazon's own Lists page to **Your Styx Carts** and appends "Cart" to each list name (toggle the relabeling off in Settings).
 - **Floating panel** — a floating Styx button rides along on Amazon; click it for a draggable panel of all your carts, and click off it to dismiss. A **Go to Carts** button jumps to them on Amazon.
 - **Send All to Amazon Cart** — load an entire cart into your live Amazon cart, ready to check out. Out-of-stock items skip; books ask which edition/format. Amazon's own bulk-add confirmation still needs one click from you.
@@ -107,10 +107,10 @@ steps above) — no build step needed, and the debug controls are present.
 ## How to use
 
 1. On any Amazon page, click the **floating Styx button** (bottom-right) to open the panel of your carts. (You can also click the Styx toolbar icon.)
-2. **Clear your cart:** hit **Clear Amazon Cart**. Styx asks whether to save it first — pick **Save & Clear** to keep everything as a new cart, or **Just Clear** to wipe it. Either way your Saved for Later is untouched.
+2. **Clear your cart:** hit **Clear Amazon cart**. Styx asks whether to save it first — pick **Save & Clear** to keep everything as a new cart, or **Just Clear** to wipe it. Either way your Saved for Later is untouched.
 3. **Send a cart to checkout:** open a cart and hit **Send All to Amazon Cart**. Styx loads the whole cart into your live Amazon cart, ready to check out.
 4. **Build a cart:** while browsing, click **Add to a Styx cart** next to Add to Cart on a product page and pick the cart — or add items to any list on Amazon as usual.
-5. **Save without emptying:** on the Amazon cart page, click **Save cart to a new list** to snapshot everything in your live cart into a brand-new cart.
+5. **Save without emptying:** on the Amazon cart page, click **Save to a new Styx Cart** to snapshot everything in your live cart into a brand-new cart.
 
 ### How "Send All to Amazon Cart" works under the hood
 
@@ -124,15 +124,15 @@ You'll need to be signed in to Amazon — the extension never handles your crede
 
 ## Files
 
-| File                                    | What it does                                                        |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| `manifest.json`                         | Extension metadata, permissions, content-script targets             |
-| `src/background/index.js`               | Canonical service-worker source                                     |
-| `background.js`                         | Generated bundled classic service worker loaded by the manifest     |
-| `content.js`                            | Runs on Amazon cart pages — scrapes items and clears the cart       |
+| File                                    | What it does                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `manifest.json`                         | Extension metadata, permissions, content-script targets                                          |
+| `src/background/index.js`               | Canonical service-worker source                                                                  |
+| `background.js`                         | Generated bundled classic service worker loaded by the manifest                                  |
+| `content.js`                            | Runs on Amazon cart pages — scrapes items and clears the cart                                    |
 | `observer.js`                           | Runs on Amazon product/list/cart pages — the floating button and panel, page buttons, relabeling |
-| `popup.html` / `popup.css` / `popup.js` | The panel UI, loaded inside the in-page floating modal              |
-| `generate_icons.html`                   | Optional one-time helper to generate toolbar icon PNGs              |
+| `popup.html` / `popup.css` / `popup.js` | The panel UI, loaded inside the in-page floating modal                                           |
+| `generate_icons.html`                   | Optional one-time helper to generate toolbar icon PNGs                                           |
 
 ## Adding custom toolbar icons (optional)
 
@@ -147,7 +147,7 @@ The extension works fine with Chrome's default puzzle-piece icon. If you'd like 
 ## Troubleshooting
 
 - **"Could not read the Amazon cart page"** — make sure you're on `amazon.com/cart` (not the homepage) and the page is fully loaded. Refresh and try again.
-- **Emptying stopped partway** — very large carts can hit the per-run ceiling, or Amazon may have stalled on a row. Click **Clear Amazon Cart** again to finish the rest.
+- **Emptying stopped partway** — very large carts can hit the per-run ceiling, or Amazon may have stalled on a row. Click **Clear Amazon cart** again to finish the rest.
 - **A tab opened but nothing was added** — you're probably not signed in to Amazon, or Amazon is showing a CAPTCHA on a product page. Sign in, dismiss any prompts, then try again.
 - **Some items didn't make it into the cart** — Amazon may have removed the listing, the seller may be out of stock, the product may have a custom-options page (e.g., engraving) that the extension doesn't fill in, or the ASIN may now be region-locked. Anything the extension couldn't add is simply skipped; the rest go through.
 - **Cart-page selectors stop working** — Amazon A/B tests its cart layout. Open an issue / file a fix; the relevant selectors are at the top of `content.js`.

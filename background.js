@@ -747,7 +747,6 @@ importScripts("ExtPay.js");
     });
   }
   var _opStatus = null;
-  var _statusWindowId = null;
   function setOpStatus(title, detail = "") {
     _opStatus = { active: true, title, detail };
   }
@@ -768,37 +767,6 @@ importScripts("ExtPay.js");
     try {
       chrome.tabs.sendMessage(tabId, payload, () => void chrome.runtime.lastError);
     } catch (_e) {
-    }
-  }
-  async function openStatusWindow() {
-    if (IS_SAFARI) return;
-    if (_statusWindowId !== null) {
-      try {
-        await chrome.windows.update(_statusWindowId, { focused: true });
-        return;
-      } catch (_e) {
-        _statusWindowId = null;
-      }
-    }
-    try {
-      const win = await chrome.windows.create({
-        url: chrome.runtime.getURL("status.html"),
-        type: "popup",
-        width: 400,
-        height: 190,
-        focused: false
-        // don't steal focus from the Amazon tab
-      });
-      _statusWindowId = win.id;
-      const onRemoved = (wid) => {
-        if (wid === _statusWindowId) {
-          _statusWindowId = null;
-          chrome.windows.onRemoved.removeListener(onRemoved);
-        }
-      };
-      chrome.windows.onRemoved.addListener(onRemoved);
-    } catch (_e) {
-      _statusWindowId = null;
     }
   }
   var AMAZON_TLDS = [
@@ -2365,7 +2333,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
         type: "MC_LIST_SAVE_DONE",
         ok: false,
         title: "Saved, but couldn't clear",
-        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon Cart again.`,
+        detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.`,
         hideAfter: 8e3
       });
     }
@@ -2711,7 +2679,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     if (!document.getElementById("__styx-kf")) {
       var s = document.createElement("style");
       s.id = "__styx-kf";
-      s.textContent = "@keyframes _styxCartA{0%,100%{transform:translate(0,0)}33%{transform:translate(9px,5.8px)}66%{transform:translate(-8px,5.8px)}}@keyframes _styxCartB{0%,100%{transform:translate(0,0)}33%{transform:translate(8px,-5.8px)}66%{transform:translate(17px,0)}}@keyframes _styxCartC{0%,100%{transform:translate(0,0)}33%{transform:translate(-17px,0)}66%{transform:translate(-9px,-5.8px)}}.__styx-toast-loading .__styx-cart-a{animation:_styxCartA 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}.__styx-toast-loading .__styx-cart-b{animation:_styxCartB 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}.__styx-toast-loading .__styx-cart-c{animation:_styxCartC 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes _styxFadeIn{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}";
+      s.textContent = "@keyframes _styxCartA{0%,100%{transform:translate(0,0)}33%{transform:translate(9px,5.8px)}66%{transform:translate(-8px,5.8px)}}@keyframes _styxCartB{0%,100%{transform:translate(0,0)}33%{transform:translate(8px,-5.8px)}66%{transform:translate(17px,0)}}@keyframes _styxCartC{0%,100%{transform:translate(0,0)}33%{transform:translate(-17px,0)}66%{transform:translate(-9px,-5.8px)}}.__styx-toast-loading .__styx-cart-a{animation:_styxCartA 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}.__styx-toast-loading .__styx-cart-b{animation:_styxCartB 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}.__styx-toast-loading .__styx-cart-c{animation:_styxCartC 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes _styxGlow{0%,100%{box-shadow:0 0 0 1px var(--styx-accent),0 0 8px var(--styx-glow-dim),var(--styx-drop)}50%{box-shadow:0 0 0 1px var(--styx-accent),0 0 28px var(--styx-glow-bright),var(--styx-drop)}}.__styx-toast-loading{animation:_styxGlow 1.8s ease-in-out infinite}@media (prefers-reduced-motion:reduce){.__styx-toast-loading{animation:none}.__styx-toast-loading .__styx-cart-a,.__styx-toast-loading .__styx-cart-b,.__styx-toast-loading .__styx-cart-c{animation:none}}@keyframes _styxFadeIn{from{opacity:0;transform:translate(-50%,-50%) scale(.6)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}";
       (document.head || document.body || document.documentElement).appendChild(s);
     }
     var isDark = theme === "dark" || theme !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -2719,7 +2687,8 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     var glowRgb = type === "done" ? "52,211,153" : type === "error" ? "239,68,68" : "255,153,0";
     var bg = isDark ? "#131a22" : "#ffffff";
     var fg = isDark ? "#ffffff" : "#131a22";
-    var shadow = isDark ? "0 0 0 1px " + accent + ", 0 0 24px rgba(" + glowRgb + ",.35), 0 6px 24px rgba(0,0,0,.45)" : "0 0 0 1px " + accent + ", 0 0 18px rgba(" + glowRgb + ",.22), 0 6px 24px rgba(15,17,21,.18)";
+    var drop = isDark ? "0 6px 24px rgba(0,0,0,.45)" : "0 6px 24px rgba(15,17,21,.18)";
+    var shadow = isDark ? "0 0 0 1px " + accent + ", 0 0 24px rgba(" + glowRgb + ",.35), " + drop : "0 0 0 1px " + accent + ", 0 0 18px rgba(" + glowRgb + ",.22), " + drop;
     var ts = toast.style;
     ts.position = "fixed";
     ts.left = "50%";
@@ -2746,6 +2715,10 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     ts.fontWeight = "600";
     ts.lineHeight = "1.35";
     ts.boxShadow = shadow;
+    ts.setProperty("--styx-accent", accent);
+    ts.setProperty("--styx-glow-dim", "rgba(" + glowRgb + "," + (isDark ? ".2" : ".14") + ")");
+    ts.setProperty("--styx-glow-bright", "rgba(" + glowRgb + "," + (isDark ? ".6" : ".5") + ")");
+    ts.setProperty("--styx-drop", drop);
     ts.maxWidth = "720px";
     ts.width = "";
     ts.pointerEvents = "none";
@@ -3650,7 +3623,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             }
             sendResponse({ ok: true, started: true, total: items.length });
             setOpStatus("Adding wishlist to cart", "Starting\u2026");
-            openStatusWindow();
             setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
             break;
           }
@@ -3662,7 +3634,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             }
             sendResponse({ ok: true, started: true });
             setOpStatus("Clearing cart", "Starting\u2026");
-            openStatusWindow();
             setTimeout(clearCurrentCartInBackground, 0);
             break;
           }
@@ -3694,7 +3665,6 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             const savedCount = scCart.items.length;
             sendResponse({ ok: true, started: true, saving: savedCount });
             setOpStatus("Saving cart", `Saving ${savedCount} item${savedCount === 1 ? "" : "s"} to a new Amazon list\u2026`);
-            openStatusWindow();
             setTimeout(() => saveThenClearInBackground(
               {
                 // No cart.id → saveCartToAmazonList always creates a new list.
