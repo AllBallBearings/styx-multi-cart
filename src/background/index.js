@@ -259,45 +259,91 @@ async function bumpRememberedListItemCount(listId, delta) {
   }
 }
 
-// --- Latent per-list count backfill --------------------------------------
-// The wishlist index gives labels fast but no reliable per-list count, and
-// reading every list up front would make the popup spin. So callers return the
-// labels immediately and kick this off: read each not-yet-counted list in a
-// background tab (active:false, invisible), persist the count, then merge the
-// results into the cached snapshot so both popup surfaces and the on-page
-// picker pick them up. Singleton — one pass at a time — and it only touches
-// lists we don't already have a count for, so once warm it does nothing.
-let _countBackfillRunning = false;
-async function backfillListCounts(host, lists) {
-  if (_countBackfillRunning) return;
-  _countBackfillRunning = true;
-  try {
-    const usedHost = host || (await inferAmazonHost());
-    const source =
-      Array.isArray(lists) && lists.length
-        ? lists
-        : await listAmazonLists(usedHost).catch(() => []);
-    const remembered = await readRememberedListItemCounts();
-    const pending = source.filter((l) => {
-      const key = l && l.listId ? String(l.listId).toUpperCase() : null;
-      return key && l.count == null && typeof remembered[key] !== "number";
-    });
-    let learnedAny = false;
-    for (const l of pending) {
-      try {
-        // readAmazonList persists the count via rememberListItemCount.
-        await readAmazonList(l.listId, usedHost);
-        learnedAny = true;
-      } catch (_e) {
-        /* one list failing shouldn't stop the rest */
-      }
+// --- Background list-content prefetch -----------------------------------
+// The lists index is cheap enough to load for the panel, but each list page
+// can be expensive and Amazon lazy-loads its rows while scrolling. Keep the
+// panel responsive by doing those reads after the labels paint, in hidden
+// helper tabs, with a small concurrency cap. A queue (rather than one
+// Promise.all) prevents a large account from opening dozens of tabs at once.
+const AMAZON_LIST_PREFETCH_CONCURRENCY = 3;
+const _listPrefetchQueue = [];
+const _listPrefetchQueued = new Map();
+const _listPrefetchActive = new Set();
+let _listPrefetchDraining = false;
+
+function amazonListPrefetchKey(host, listId) {
+  return `${String(host || "").toLowerCase()}:${String(listId || "").toUpperCase()}`;
+}
+
+function enqueueAmazonListPrefetch(host, lists, forceRefresh = false) {
+  let usedHost = host || "";
+  if (!usedHost) {
+    const firstUrl = (Array.isArray(lists) ? lists : []).find((list) => list && list.url);
+    try { usedHost = firstUrl ? new URL(firstUrl.url).hostname : ""; } catch (_e) {}
+  }
+  let queued = 0;
+  for (const list of Array.isArray(lists) ? lists : []) {
+    const listId = String(list && list.listId || "").trim();
+    if (!listId || (list && list.access === "locked")) continue;
+    const key = amazonListPrefetchKey(usedHost, listId);
+    if (_listPrefetchActive.has(key)) continue;
+    const existing = _listPrefetchQueued.get(key);
+    if (existing) {
+      // An explicit panel refresh upgrades an already-queued warm read.
+      existing.forceRefresh = existing.forceRefresh || forceRefresh === true;
+      continue;
     }
-    if (learnedAny) {
-      try { await refreshSnapshotCounts(usedHost); } catch (_e) {}
+    const job = { host: usedHost, listId, forceRefresh: forceRefresh === true };
+    _listPrefetchQueued.set(key, job);
+    _listPrefetchQueue.push(job);
+    queued += 1;
+  }
+  if (queued && !_listPrefetchDraining) {
+    _listPrefetchDraining = true;
+    void drainAmazonListPrefetchQueue();
+  }
+  return queued;
+}
+
+async function drainAmazonListPrefetchQueue() {
+  let warmedAny = false;
+  try {
+    while (_listPrefetchQueue.length) {
+      const batch = _listPrefetchQueue.splice(0, AMAZON_LIST_PREFETCH_CONCURRENCY);
+      await Promise.all(batch.map(async (job) => {
+        const key = amazonListPrefetchKey(job.host, job.listId);
+        _listPrefetchQueued.delete(key);
+        _listPrefetchActive.add(key);
+        try {
+          await readAmazonList(job.listId, job.host, job.forceRefresh);
+          warmedAny = true;
+        } catch (_e) {
+          // A single list failing (sign-in, a deleted list, transient Amazon
+          // error) must not prevent the remaining queue from warming.
+        } finally {
+          _listPrefetchActive.delete(key);
+        }
+      }));
+    }
+    if (warmedAny) {
+      try { await refreshSnapshotCounts(); } catch (_e) {}
     }
   } finally {
-    _countBackfillRunning = false;
+    _listPrefetchDraining = false;
+    // A message can enqueue work between the final loop check and this flag
+    // change. Pick that work up without creating a second drain loop.
+    if (_listPrefetchQueue.length) {
+      _listPrefetchDraining = true;
+      void drainAmazonListPrefetchQueue();
+    }
   }
+}
+
+// Kept for the on-page picker, which historically asked for count backfill.
+// Full item reads now warm both counts and contents using the same bounded
+// queue, so opening a list after the picker or panel has little/no wait.
+function backfillListCounts(host, lists) {
+  enqueueAmazonListPrefetch(host, lists);
 }
 
 // Merge the latest remembered counts into the cached list snapshot in place —
@@ -319,7 +365,34 @@ async function refreshSnapshotCounts() {
   if (changed) await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
 }
 
-async function listAmazonListsWithAccessCached(host) {
+async function listAmazonListsWithAccessCached(host, { forceRefresh = false } = {}) {
+  // Opening the Amazon Lists index is relatively expensive and, on a first
+  // install, creates a visible tab while Chrome loads the page. Reuse the
+  // snapshot populated by the last successful scrape for a short window so
+  // simply opening the Styx panel never forks a new Amazon tab. The explicit
+  // refresh button (and picker force-refresh) bypasses this cache.
+  if (!forceRefresh) {
+    try {
+      const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+      const cached = got[AMAZON_LISTS_CACHE_KEY];
+      const cacheHost = cached && cached.host;
+      const fresh =
+        cached &&
+        Array.isArray(cached.lists) &&
+        cached.fetchedAt &&
+        Date.now() - cached.fetchedAt < AMAZON_LIST_READ_CACHE_MS &&
+        (!host || !cacheHost || sameAmazonHost(host, cacheHost));
+      if (fresh) {
+        const ent = await readEntitlement();
+        const access = computeListAccess(cached.lists, ent);
+        rememberListAccess(access.lists);
+        return access;
+      }
+    } catch (_e) {
+      // A cache read failure should fall through to a fresh scrape.
+    }
+  }
+
   const rawLists = await listAmazonLists(host);
   // Backfill counts the index scrape couldn't read from what we've learned
   // before, so carts the user has opened/created still show "N items".
@@ -4266,6 +4339,10 @@ async function pageScrapeCart() {
 const AMAZON_LISTS_PATH = "/hz/wishlist/ls";
 const AMAZON_LIST_READ_CACHE_MS = 5 * 60 * 1000;
 const amazonListReadCache = new Map();
+// Share a read already in progress (including a background prefetch) with an
+// expand/Add All click. This avoids opening a second helper tab for the same
+// list when the user interacts while the warm queue is still running.
+const amazonListReadInFlight = new Map();
 
 /**
  * Open a silent background tab at `url`, wait for it to load, run `fn(tabId)`,
@@ -4275,7 +4352,11 @@ const amazonListReadCache = new Map();
 async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false } = {}) {
   const tab = await chrome.tabs.create({ url, active: false });
   try {
-    await waitForTabReload(tab.id, timeoutMs);
+    // This tab was just created, so waiting for a *reload* can miss the
+    // initial loading event and hold the tab open until the timeout. Waiting
+    // for completion is sufficient and lets the finally block close the
+    // helper as soon as its page is ready.
+    await waitForTabComplete(tab.id, timeoutMs);
     return await fn(tab.id, tab);
   } finally {
     if (!keepOpen) {
@@ -4328,38 +4409,51 @@ async function readAmazonList(listId, preferredHost, forceRefresh = false) {
     rememberListItemCount(listId, (cached.value.items || []).length);
     return cached.value;
   }
-  const url = amazonListUrl(host, listId);
-  const data = await runInAmazonTab(
-    url,
-    async (tabId) => {
-      // Lists lazy-load on scroll; give the first paint a beat before scraping.
-      await sleep(900);
-      const res = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: pageScrapeSingleList,
-      });
-      return (res && res[0] && res[0].result) || { items: [] };
-    },
-    { timeoutMs: 15000 }
-  );
-  if (data.error) throw new Error(data.error);
-  const items = (data.items || [])
-    .filter((it) => it && it.asin)
-    .map((it) => ({
-      asin: String(it.asin).toUpperCase(),
-      title: it.title || "(untitled)",
-      quantity: Math.max(1, Math.min(99, Number(it.quantity) || 1)),
-      price: "",
-      image: it.image || "",
-      url: it.url || `https://${host}/dp/${it.asin}`,
-      variantLabel: "",
-      unavailable: it.unavailable === true,
-      unavailableReason: it.unavailableReason || "",
-    }));
-  const value = { host, name: data.name || "Amazon list", listId, url, items };
-  amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
-  rememberListItemCount(listId, items.length);
-  return value;
+  const existing = amazonListReadInFlight.get(cacheKey);
+  if (existing) return existing;
+
+  const readPromise = (async () => {
+    const url = amazonListUrl(host, listId);
+    const data = await runInAmazonTab(
+      url,
+      async (tabId) => {
+        // Lists lazy-load on scroll; give the first paint a beat before scraping.
+        await sleep(900);
+        const res = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageScrapeSingleList,
+        });
+        return (res && res[0] && res[0].result) || { items: [] };
+      },
+      { timeoutMs: 15000 }
+    );
+    if (data.error) throw new Error(data.error);
+    const items = (data.items || [])
+      .filter((it) => it && it.asin)
+      .map((it) => ({
+        asin: String(it.asin).toUpperCase(),
+        title: it.title || "(untitled)",
+        quantity: Math.max(1, Math.min(99, Number(it.quantity) || 1)),
+        price: "",
+        image: it.image || "",
+        url: it.url || `https://${host}/dp/${it.asin}`,
+        variantLabel: "",
+        unavailable: it.unavailable === true,
+        unavailableReason: it.unavailableReason || "",
+      }));
+    const value = { host, name: data.name || "Amazon list", listId, url, items };
+    amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+    rememberListItemCount(listId, items.length);
+    return value;
+  })();
+  amazonListReadInFlight.set(cacheKey, readPromise);
+  try {
+    return await readPromise;
+  } finally {
+    if (amazonListReadInFlight.get(cacheKey) === readPromise) {
+      amazonListReadInFlight.delete(cacheKey);
+    }
+  }
 }
 
 /**
@@ -5443,7 +5537,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // Read the user's Amazon wish lists for the popup dashboard, then
           // annotate each with tier access (editable/locked) so the popup can
           // gray + paywall locked custom carts.
-          const access = await listAmazonListsWithAccessCached(msg.host);
+          const access = await listAmazonListsWithAccessCached(msg.host, {
+            forceRefresh: msg.forceRefresh === true,
+          });
           sendResponse({
             ok: true,
             lists: access.lists,
@@ -5453,15 +5549,33 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               customCount: access.customCount,
             },
           });
-          // Labels are out; fill any missing counts in the background. The
-          // popup polls MC_GET_LIST_COUNTS to show them as they land.
-          backfillListCounts(msg.host, access.lists);
+          // Labels are out. Do not block this response on per-list item
+          // scrapes: the popup schedules MC_PREFETCH_AMAZON_LISTS after its
+          // cards paint, where the bounded queue can warm contents without
+          // delaying panel startup.
+          break;
+        }
+
+        case "MC_PREFETCH_AMAZON_LISTS": {
+          // The popup sends this after the list cards have painted. Queue the
+          // item reads and return immediately; helper tabs are active:false
+          // and are always closed by runInAmazonTab when each read finishes.
+          const queued = enqueueAmazonListPrefetch(
+            msg.host || "",
+            msg.lists,
+            msg.forceRefresh === true
+          );
+          sendResponse({
+            ok: true,
+            queued,
+            concurrency: AMAZON_LIST_PREFETCH_CONCURRENCY,
+          });
           break;
         }
 
         case "MC_GET_LIST_COUNTS": {
           // Cheap, no Amazon driving: the latest remembered per-list counts.
-          // Polled by the popup while the background backfill fills them in.
+          // Polled by the popup while the background prefetch fills them in.
           sendResponse({ ok: true, counts: await readRememberedListItemCounts() });
           break;
         }
@@ -5485,7 +5599,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               backfillListCounts(msg.host, cache.lists);
               break;
             }
-            const access = await listAmazonListsWithAccessCached(msg.host);
+            const access = await listAmazonListsWithAccessCached(msg.host, {
+              forceRefresh: msg.forceRefresh === true,
+            });
             const fresh = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
             sendResponse({
               ok: true,

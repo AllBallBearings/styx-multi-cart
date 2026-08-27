@@ -4,7 +4,7 @@
   "version": "1.0.6",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
-  "description": "One click to clear your Amazon cart — or save it for a later checkout. Free, unlimited, no tracking.",
+  "description": "Empty your Amazon cart, save it for later, and manage multiple carts with reusable Amazon Lists.",
   "permissions": [
     "storage",
     "activeTab",
