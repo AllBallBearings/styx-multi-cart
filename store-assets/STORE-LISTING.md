@@ -69,8 +69,6 @@ To send a whole cart back to Amazon in one step, Styx uses Amazon's bulk add-to-
 
 Your live Amazon cart is always first-class and always free — Styx never breaks core Amazon shopping, even if Premium lapses.
 
-Works on Chrome, Edge, Brave, Arc, Opera, Vivaldi, and other Chromium browsers.
-
 ---
 
 ## Notes for reviewer / permissions justification
