@@ -95,6 +95,17 @@ function buildInitScript(initial) {
             });
             return;
 
+          case "MC_PREFETCH_AMAZON_LISTS":
+            // Production queues these reads in the service worker. The popup
+            // fixture only needs to acknowledge the fire-and-forget request;
+            // item reads remain user-visible in the expand-path assertions.
+            respond({
+              ok: true,
+              queued: Array.isArray(message.lists) ? message.lists.length : 0,
+              concurrency: 3,
+            });
+            return;
+
           case "MC_GET_AMAZON_LIST": {
             const list = store.amazonLists.find((entry) => entry.listId === message.listId);
             if (!list) { respond({ ok: false, error: "list not found" }); return; }

@@ -1831,6 +1831,33 @@
     return list;
   }
 
+  // Warm list contents after the cards are on screen. This is deliberately
+  // fire-and-forget: the panel paints labels immediately, while the service
+  // worker reads up to three list pages at a time in helper tabs. Locked lists
+  // are skipped because their contents are not usable on the current tier.
+  function scheduleAmazonListPrefetch(lists, forceRefresh = false) {
+    const warmable = (Array.isArray(lists) ? lists : [])
+      .filter((list) => list && list.listId && list.access !== "locked")
+      .map((list) => ({ listId: list.listId }));
+    if (!warmable.length) return;
+    const host = listHostname(
+      (lists.find((list) => list && list.url) || {}).url || ""
+    );
+    const run = () => {
+      void send({
+        type: "MC_PREFETCH_AMAZON_LISTS",
+        host,
+        lists: warmable,
+        forceRefresh: forceRefresh === true,
+      }).catch(() => {});
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(run, { timeout: 1000 });
+    } else {
+      setTimeout(run, 0);
+    }
+  }
+
   function renderAmazonListCard(list, forceItems = false) {
     const node = $amazonListTemplate.content.firstElementChild.cloneNode(true);
     const fullHost = listHostname(list.url);
@@ -1844,8 +1871,8 @@
     open.href = list.url || "#";
     // Show the item count when we already know it. It's often unknown at first
     // paint (the wishlist index page prints no reliable count), so fall back to
-    // the "View items" affordance and let the background count backfill fill it
-    // in latently (pollListCounts). `data-count-known` marks cards the poll can
+    // the "View items" affordance and let background prefetch fill it in
+    // latently (pollListCounts). `data-count-known` marks cards the poll can
     // skip. updateAmazonListCard replaces this with "N items · M qty" on expand.
     const countEl = node.querySelector(".mc-item-count");
     // Guard null/"" explicitly — Number(null) and Number("") are both 0, which
@@ -1888,7 +1915,10 @@
       $amazonListsStatus.hidden = false;
       $amazonListsStatus.textContent = "Loading your Amazon lists…";
       $amazonLists.innerHTML = "";
-      const res = await send({ type: "MC_LIST_AMAZON_LISTS" });
+      const res = await send({
+        type: "MC_LIST_AMAZON_LISTS",
+        forceRefresh: forceRefresh === true,
+      });
       if (!res.ok) {
         $amazonListsStatus.textContent =
           res.error || "Couldn't load your Amazon lists.";
@@ -1914,10 +1944,12 @@
         $amazonLists.appendChild(renderAmazonListCard(list, forceRefresh))
       );
       amazonListsLoaded = true;
-      // Labels are up. The service worker fills missing counts in the
-      // background (invisible tabs); poll the cheap counts map and drop each
-      // number in as it lands, so the user never waits on a spinner.
+      // Labels are up. The service worker fills missing counts in its
+      // background prefetch queue (invisible tabs); poll the cheap counts map
+      // and drop each number in as it lands, so the user never waits on a
+      // spinner.
       pollListCounts();
+      scheduleAmazonListPrefetch(lists, forceRefresh);
     })();
 
     try {
