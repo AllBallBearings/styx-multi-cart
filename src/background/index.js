@@ -4966,7 +4966,7 @@ function pageSetListQuantities(map) {
 // not "service worker").
 console.log("[Styx] background loaded", new Date().toISOString());
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return false;
 
   (async () => {
@@ -5176,6 +5176,49 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           } catch (err) {
             console.error("[Styx Multi-Cart] openPaymentPage failed:", err);
             sendResponse({ ok: false, error: "Couldn't open checkout." });
+          }
+          break;
+        }
+
+        case "MC_OPEN_IN_ACTIVE_TAB": {
+          // Navigate the sender's active tab to `msg.url`. Routed through the
+          // service worker (rather than calling chrome.tabs.* from popup.js
+          // directly) because on Safari the floating in-page modal is
+          // popup.html loaded as an iframe INSIDE the Amazon page's own
+          // document — Safari restricts chrome.tabs access from that nested
+          // context differently than Chrome does, silently failing there and
+          // falling back to opening (and then losing) a stray new tab. The
+          // background page is always a first-class extension context on
+          // every platform, so it can always do this reliably.
+          const url = typeof msg.url === "string" ? msg.url : null;
+          if (!url) {
+            sendResponse({ ok: false, error: "Missing url" });
+            break;
+          }
+          try {
+            // The floating modal is popup.html in an iframe INSIDE the Amazon
+            // page, so the request already tells us which tab to move: the one
+            // it came from. Prefer that over guessing via an active-tab query.
+            // The toolbar popup and side panel aren't tabs, so sender.tab is
+            // undefined there and we fall back to the active tab.
+            let tabId = sender && sender.tab && sender.tab.id;
+            if (tabId == null) {
+              const [tab] = await chrome.tabs.query({
+                active: true,
+                currentWindow: true,
+              });
+              tabId = tab && tab.id != null ? tab.id : null;
+            }
+            dlog("[Styx Multi-Cart] MC_OPEN_IN_ACTIVE_TAB", { url, tabId });
+            if (tabId == null) {
+              sendResponse({ ok: false, error: "No tab to navigate." });
+              break;
+            }
+            await chrome.tabs.update(tabId, { url });
+            sendResponse({ ok: true });
+          } catch (err) {
+            dwarn("[Styx Multi-Cart] MC_OPEN_IN_ACTIVE_TAB failed:", err);
+            sendResponse({ ok: false, error: "Couldn't navigate the tab." });
           }
           break;
         }

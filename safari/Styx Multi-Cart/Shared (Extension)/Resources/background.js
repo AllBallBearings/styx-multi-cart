@@ -3439,7 +3439,7 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
     }
   }
   console.log("[Styx] background loaded", (/* @__PURE__ */ new Date()).toISOString());
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (!msg || typeof msg !== "object") return false;
     (async () => {
       try {
@@ -3592,6 +3592,34 @@ Would you like to restore all ${allItems.length} items one at a time instead?`) 
             } catch (err) {
               console.error("[Styx Multi-Cart] openPaymentPage failed:", err);
               sendResponse({ ok: false, error: "Couldn't open checkout." });
+            }
+            break;
+          }
+          case "MC_OPEN_IN_ACTIVE_TAB": {
+            const url = typeof msg.url === "string" ? msg.url : null;
+            if (!url) {
+              sendResponse({ ok: false, error: "Missing url" });
+              break;
+            }
+            try {
+              let tabId = sender && sender.tab && sender.tab.id;
+              if (tabId == null) {
+                const [tab] = await chrome.tabs.query({
+                  active: true,
+                  currentWindow: true
+                });
+                tabId = tab && tab.id != null ? tab.id : null;
+              }
+              dlog("[Styx Multi-Cart] MC_OPEN_IN_ACTIVE_TAB", { url, tabId });
+              if (tabId == null) {
+                sendResponse({ ok: false, error: "No tab to navigate." });
+                break;
+              }
+              await chrome.tabs.update(tabId, { url });
+              sendResponse({ ok: true });
+            } catch (err) {
+              dwarn("[Styx Multi-Cart] MC_OPEN_IN_ACTIVE_TAB failed:", err);
+              sendResponse({ ok: false, error: "Couldn't navigate the tab." });
             }
             break;
           }

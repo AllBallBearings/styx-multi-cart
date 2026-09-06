@@ -408,67 +408,6 @@
     <details id="mc-debug" class="mc-debug" hidden>
       <summary class="mc-debug-toggle">Debug</summary>
       <div class="mc-debug-body">
-        <!-- MC_DEBUG_ENT_START -->
-        <!--
-          DEVELOPER-ONLY entitlement presets. These forge a premium/lapsed/free
-          state directly into storage, so scripts/build-zip.sh strips this whole
-          marked block out of the Chrome Web Store build.
-        -->
-        <div class="mc-debug-section">
-          <div class="mc-debug-section-title">Entitlement</div>
-          <div id="mc-debug-ent-state" class="mc-debug-state">loading…</div>
-          <div class="mc-debug-btn-row">
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="premium"
-            >
-              Premium · 1y
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="premium-warn"
-            >
-              Premium · 5d
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="lapsed"
-            >
-              Lapsed
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="free"
-            >
-              Free
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="unlock"
-            >
-              Unlock (use real)
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="reset-dismiss"
-            >
-              Reset dismissed
-            </button>
-          </div>
-          <div class="mc-debug-hint">
-            <strong>Ctrl/Cmd+Alt+P</strong> flips Premium ⇄ Free instantly (no
-            panel needed) and locks it so ExtPay/StoreKit won't revert it —
-            clean for screenshots and video. Ctrl+Alt+D toggles this panel.
-            "Unlock" clears the pin and re-syncs the real account.
-          </div>
-        </div>
-        <!-- MC_DEBUG_ENT_END -->
 
         <div class="mc-debug-section">
           <div class="mc-debug-section-title">Cart diagnostics</div>

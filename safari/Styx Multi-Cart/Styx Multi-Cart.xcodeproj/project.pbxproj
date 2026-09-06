@@ -44,6 +44,7 @@
 		C1B0B1EA2FBBB5B6006F37EF /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D22FBBB5B6006F37EF /* popup.html */; };
 		C1B0B1EB2FBBB5B6006F37EF /* observer.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D32FBBB5B6006F37EF /* observer.js */; };
 		C1B0B1EC2FBBB5B6006F37EF /* icons in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D42FBBB5B6006F37EF /* icons */; };
+		9874517D320AF958E9065488 /* guide-assets in Resources */ = {isa = PBXBuildFile; fileRef = C1C4605E304BC4CF00D7B38E /* guide-assets */; };
 		C1B0B1EE2FBBB5B6006F37EF /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D62FBBB5B6006F37EF /* manifest.json */; };
 		C1B0B1EF2FBBB5B6006F37EF /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D72FBBB5B6006F37EF /* popup.css */; };
 		C1B0B1F02FBBB5B6006F37EF /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D82FBBB5B6006F37EF /* content.js */; };
@@ -133,6 +134,7 @@
 		C1C00BAF303A11B400E11D0D /* Styx Multi-Cart Extension (macOS).entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Styx Multi-Cart Extension (macOS).entitlements"; sourceTree = "<group>"; };
 		C1C00BB1303A122B00E11D0D /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		C1C00BB3303A141D00E11D0D /* StyxMultiCart.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = StyxMultiCart.storekit; sourceTree = "<group>"; };
+		C1C4605E304BC4CF00D7B38E /* guide-assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "guide-assets"; path = "Resources/guide-assets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -268,6 +270,7 @@
 		C1B0B1CD2FBBB5B6006F37EF /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				C1C4605E304BC4CF00D7B38E /* guide-assets */,
 				C1B0B1CF2FBBB5B6006F37EF /* popup.js */,
 				C1B0B1D02FBBB5B6006F37EF /* LICENSE */,
 				C1B0B1D12FBBB5B6006F37EF /* background.js */,
@@ -366,6 +369,8 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
 			);
 			name = "Styx Multi-Cart Extension (macOS)";
 			packageProductDependencies = (
@@ -478,6 +483,7 @@
 				C1B0B1E22FBBB5B6006F37EF /* manifest.json in Resources */,
 				C1B0B1DC2FBBB5B6006F37EF /* LICENSE in Resources */,
 				C1B0B1E02FBBB5B6006F37EF /* icons in Resources */,
+				9874517D320AF958E9065488 /* guide-assets in Resources */,
 				C1B0B1DB2FBBB5B6006F37EF /* popup.js in Resources */,
 				C1B0B1F32FBBB5B6006F37EF /* ExtPay.js in Resources */,
 			);
@@ -702,7 +708,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -735,7 +741,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -774,7 +780,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -814,7 +820,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -855,7 +861,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -893,7 +899,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -928,6 +934,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "macOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Styx Multi-Cart";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -935,7 +942,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.4;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -973,6 +980,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "macOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Styx Multi-Cart";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -980,7 +988,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.4;
-				MARKETING_VERSION = 1.0.1;
+				MARKETING_VERSION = 1.0.7;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

@@ -932,16 +932,20 @@
   // than spawning a new tab. (A plain <a> can't do this: inside the floating
   // iframe a same-tab link would try to load Amazon INTO the iframe, which
   // Amazon blocks, and target=_blank always forks a new tab.)
+  //
+  // Routed through the service worker rather than calling chrome.tabs.*
+  // directly: on Safari this code also runs inside the floating in-page
+  // modal, which is popup.html loaded as an iframe INSIDE the Amazon page's
+  // own document. Safari restricts chrome.tabs access from that nested
+  // context differently than Chrome does — direct calls silently fail there.
+  // The background page is always a first-class extension context on every
+  // platform.
   async function openInActiveTab(url) {
     if (!url || url === "#") return;
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.id != null) {
-        await chrome.tabs.update(tab.id, { url });
-        return;
-      }
-    } catch (_e) { /* fall through to a new tab */ }
-    try { await chrome.tabs.create({ url }); } catch (_e) { /* give up quietly */ }
+    const res = await send({ type: "MC_OPEN_IN_ACTIVE_TAB", url });
+    if (!res || !res.ok) {
+      toast((res && res.error) || "Couldn't open that on Amazon.", "error");
+    }
   }
 
   // ---- Settings: open as side panel vs popup (Chrome only) ---------------
