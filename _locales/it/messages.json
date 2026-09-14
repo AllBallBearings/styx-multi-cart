@@ -1,0 +1,2175 @@
+{
+  "manifest_name": {
+    "message": "Styx Multi-Cart"
+  },
+  "manifest_description": {
+    "message": "Svuota il tuo carrello Amazon, salvalo per dopo e gestisci più carrelli con Liste Amazon riutilizzabili."
+  },
+  "manifest_actionTitle": {
+    "message": "Styx Multi-Cart"
+  },
+  "popup_header_premiumBadge": {
+    "message": "Premium"
+  },
+  "popup_header_premiumBadge_title": {
+    "message": "Hai Premium"
+  },
+  "popup_header_tagline": {
+    "message": "Dal caos del carrello alla serenità del checkout"
+  },
+  "popup_header_settingsToggle_ariaLabel": {
+    "message": "Apri impostazioni"
+  },
+  "popup_header_settingsToggle_title": {
+    "message": "Impostazioni"
+  },
+  "popup_header_themeToggle": {
+    "message": "Attiva/disattiva modalità chiara/scura"
+  },
+  "popup_save_label": {
+    "message": "Salva il carrello Amazon attuale come"
+  },
+  "popup_save_input_placeholder": {
+    "message": "es. Regali di compleanno"
+  },
+  "popup_save_button": {
+    "message": "Salva carrello"
+  },
+  "popup_save_button_title": {
+    "message": "Salva il carrello Amazon attuale"
+  },
+  "popup_intercept_toggle_title": {
+    "message": "Quando fai clic su «Aggiungi al carrello» di Amazon in una pagina prodotto, scegli invece un carrello salvato."
+  },
+  "popup_intercept_prefix": {
+    "message": "Intercetta"
+  },
+  "popup_action_addToCart": {
+    "message": "Aggiungi al carrello"
+  },
+  "popup_intercept_sub": {
+    "message": "Scegli un carrello salvato invece del carrello attivo di Amazon."
+  },
+  "popup_tier_free": {
+    "message": "Gratuito"
+  },
+  "popup_action_upgrade": {
+    "message": "Passa a Premium"
+  },
+  "popup_action_hideThis": {
+    "message": "Nascondi"
+  },
+  "popup_tier_hideAriaLabel": {
+    "message": "Nascondi indicatore piano"
+  },
+  "popup_lapsed_hideAriaLabel": {
+    "message": "Nascondi banner di scadenza"
+  },
+  "popup_tier_usage": {
+    "message": "$1 / $2 carrelli salvati",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_lapsed_suffix_one": {
+    "message": " carrello è di sola lettura"
+  },
+  "popup_lapsed_suffix_other": {
+    "message": " carrelli sono di sola lettura"
+  },
+  "popup_lapsed_renewNote": {
+    "message": "— Rinnova Premium per modificarli di nuovo."
+  },
+  "popup_action_renew": {
+    "message": "Rinnova"
+  },
+  "popup_list_title": {
+    "message": "I tuoi carrelli"
+  },
+  "popup_list_gotoCarts_title": {
+    "message": "Apri i tuoi carrelli su Amazon"
+  },
+  "popup_list_cartsWord": {
+    "message": "carrelli"
+  },
+  "popup_list_refresh_title": {
+    "message": "Aggiorna i tuoi carrelli da Amazon"
+  },
+  "popup_clear_button": {
+    "message": "Svuota carrello Amazon"
+  },
+  "popup_clear_button_title": {
+    "message": "Rimuovi tutti gli articoli dal tuo carrello Amazon attivo"
+  },
+  "popup_saveForLater_button": {
+    "message": "Salva carrello Amazon per dopo"
+  },
+  "popup_saveForLater_button_title": {
+    "message": "Salva tutto il contenuto del tuo carrello Amazon come nuovo carrello, senza svuotarlo"
+  },
+  "popup_lists_loading": {
+    "message": "Caricamento delle tue liste Amazon…"
+  },
+  "popup_lists_empty": {
+    "message": "Nessuna lista Amazon trovata. Assicurati di aver eseguito l'accesso ad Amazon."
+  },
+  "popup_action_continue": {
+    "message": "Continua →"
+  },
+  "popup_action_cancel": {
+    "message": "Annulla"
+  },
+  "popup_action_ok": {
+    "message": "OK"
+  },
+  "popup_action_done": {
+    "message": "Fatto"
+  },
+  "popup_action_delete": {
+    "message": "Elimina"
+  },
+  "popup_action_create": {
+    "message": "Crea"
+  },
+  "popup_action_rename": {
+    "message": "Rinomina"
+  },
+  "popup_action_switch": {
+    "message": "Passa a"
+  },
+  "popup_action_update": {
+    "message": "Aggiorna"
+  },
+  "popup_action_saveToAmazon": {
+    "message": "Salva su Amazon"
+  },
+  "popup_action_addAll": {
+    "message": "Aggiungi tutto"
+  },
+  "popup_combine_title": {
+    "message": "Unisci carrelli"
+  },
+  "popup_combine_sub": {
+    "message": "Scegli una direzione. Gli articoli vengono uniti per ASIN; per i duplicati viene mantenuta la quantità maggiore."
+  },
+  "popup_combine_movePrefix": {
+    "message": "Sposta"
+  },
+  "popup_combine_moveInfix": {
+    "message": "in"
+  },
+  "popup_combine_pickTwo": {
+    "message": "Scegli 2 carrelli da unire."
+  },
+  "popup_combine_pickOneMore": {
+    "message": "Scegline ancora 1."
+  },
+  "popup_combine_readyToMerge": {
+    "message": "Pronto per unire?"
+  },
+  "popup_combine_mergeCarts": {
+    "message": "Unisci carrelli"
+  },
+  "popup_combine_selectAriaLabel": {
+    "message": "Seleziona il carrello «$1» da unire",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_loadBothCartsFailed": {
+    "message": "Impossibile caricare entrambi i carrelli."
+  },
+  "popup_err_crossRegionMerge": {
+    "message": "Impossibile unire: «$1» è su $2 ma «$3» è su $4.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "popup_err_combineCartsFailed": {
+    "message": "Impossibile unire i carrelli."
+  },
+  "popup_combine_itemsAdded": {
+    "message": "$1 aggiunti",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_combine_qtyBumped": {
+    "message": "quantità aumentata per $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_combine_merged": {
+    "message": "«$1» è stato unito a «$2»$3.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "popup_move_title": {
+    "message": "Sposta articolo"
+  },
+  "popup_move_sub": {
+    "message": "Scegli il carrello in cui spostarlo."
+  },
+  "popup_move_createNew": {
+    "message": "Crea nuovo carrello"
+  },
+  "popup_move_noOtherCarts": {
+    "message": "Ancora nessun altro carrello in cui spostare."
+  },
+  "popup_untitled": {
+    "message": "(senza titolo)"
+  },
+  "popup_err_moveItemFailed": {
+    "message": "Impossibile spostare l'articolo."
+  },
+  "popup_genericCart": {
+    "message": "carrello"
+  },
+  "popup_toast_moved": {
+    "message": "«$1» spostato in «$2».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_err_createDestinationFailed": {
+    "message": "Impossibile creare una destinazione per questo articolo."
+  },
+  "popup_prompt_createDestination_title": {
+    "message": "Crea carrello di destinazione"
+  },
+  "popup_err_createCartFailed": {
+    "message": "Impossibile creare il carrello."
+  },
+  "popup_err_createdButNotMoved": {
+    "message": "Carrello creato, ma non è stato possibile spostare l'articolo."
+  },
+  "popup_err_updateQtyFailed": {
+    "message": "Impossibile aggiornare la quantità"
+  },
+  "popup_confirm_removeLast_title": {
+    "message": "Rimuovere l'ultimo articolo?"
+  },
+  "popup_confirm_removeLast_before": {
+    "message": "Rimuovendo "
+  },
+  "popup_confirm_removeLast_after": {
+    "message": " svuoterai ed eliminerai questo carrello."
+  },
+  "popup_confirm_removeLast_okLabel": {
+    "message": "Rimuovi ed elimina"
+  },
+  "popup_err_removeItemFailed": {
+    "message": "Impossibile rimuovere l'articolo"
+  },
+  "popup_toast_cartEmptiedRemoved": {
+    "message": "Carrello svuotato — verrà rimosso dall'elenco"
+  },
+  "popup_lockPill_title": {
+    "message": "Rinnova Premium per modificare questo carrello"
+  },
+  "popup_lockPill_label": {
+    "message": "Sola lettura — Passare a Premium?"
+  },
+  "popup_locked_renameTitle": {
+    "message": "Bloccato — rinnova Premium per rinominare"
+  },
+  "popup_locked_useTitle": {
+    "message": "Bloccato — rinnova Premium per usare questo carrello"
+  },
+  "popup_item_countQty": {
+    "message": "$1 · quantità $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_item_hostSaved": {
+    "message": "$1 · salvato $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_sync_synced": {
+    "message": "✓ Sincronizzato $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_sync_viewList": {
+    "message": "Visualizza lista"
+  },
+  "popup_sync_updateAmazonList": {
+    "message": "Aggiorna lista Amazon"
+  },
+  "popup_count_item_one": {
+    "message": "$1 articolo",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_count_item_other": {
+    "message": "$1 articoli",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_unavailable": {
+    "message": "Non disponibile"
+  },
+  "popup_genericItem": {
+    "message": "Articolo"
+  },
+  "popup_thumb_moveAriaLabel": {
+    "message": "$1 — clicca per spostare in un altro carrello",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_removeTitle": {
+    "message": "Rimuovi articolo"
+  },
+  "popup_thumb_removeAriaLabel": {
+    "message": "Rimuovi $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_qtyTitle": {
+    "message": "Modifica quantità"
+  },
+  "popup_thumb_qtyAriaLabel": {
+    "message": "Quantità $1, clicca per modificare",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_showLess": {
+    "message": "Mostra meno"
+  },
+  "popup_thumb_showFewerAriaLabel": {
+    "message": "Mostra meno articoli"
+  },
+  "popup_thumb_showMoreAriaLabel": {
+    "message": "Mostra altri $1 articoli",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_viewOnAmazon_ariaLabel": {
+    "message": "Visualizza lista su Amazon"
+  },
+  "popup_amazonList_viewOnAmazon_title": {
+    "message": "Visualizza su Amazon"
+  },
+  "popup_amazonList_addAll_ariaLabel": {
+    "message": "Aggiungi tutto al carrello Amazon"
+  },
+  "popup_amazonList_addAll_title": {
+    "message": "Aggiungi tutto al carrello Amazon"
+  },
+  "popup_amazonList_addAvailable_title": {
+    "message": "Aggiungi $1 al tuo carrello Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_noAvailableItems": {
+    "message": "Questa lista non ha articoli disponibili"
+  },
+  "popup_amazonList_viewItems": {
+    "message": "Visualizza articoli"
+  },
+  "popup_amazonList_genericName": {
+    "message": "Lista Amazon"
+  },
+  "popup_amazonList_unavailableSuffix": {
+    "message": " · $1 non disponibili",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_premiumUpgradeToUse": {
+    "message": "Carrello Premium — esegui l'upgrade per usarlo"
+  },
+  "popup_amazonList_unlockAriaLabel": {
+    "message": "Sblocca $1 con Premium",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_showItemsAriaLabel": {
+    "message": "Mostra articoli in $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_loadingItems": {
+    "message": "Caricamento articoli da Amazon…"
+  },
+  "popup_err_loadAmazonListFailed": {
+    "message": "Impossibile caricare questa lista Amazon."
+  },
+  "popup_err_loadAmazonListsFailed": {
+    "message": "Impossibile caricare le tue liste Amazon."
+  },
+  "popup_err_noAvailableItemsToAdd": {
+    "message": "Questa lista non ha articoli disponibili da aggiungere."
+  },
+  "popup_confirm_sendToCart_title": {
+    "message": "Inviare questi articoli al tuo carrello Amazon?"
+  },
+  "popup_confirm_sendToCart_message": {
+    "message": "Aggiungere $1 da «$2» al tuo carrello Amazon attivo? Gli articoli già presenti rimarranno.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_confirm_sendToCart_unavailableNote": {
+    "message": "$1 verranno ignorati.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_addingToCart": {
+    "message": "Aggiunta di $1 al tuo carrello Amazon…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_addListToCartFailed": {
+    "message": "Impossibile aggiungere questa lista al tuo carrello."
+  },
+  "popup_prompt_createNewCart_title": {
+    "message": "Crea un nuovo carrello"
+  },
+  "popup_toast_created": {
+    "message": "«$1» creato.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thisFallback": {
+    "message": "questo"
+  },
+  "popup_thisCartFallback": {
+    "message": "questo carrello"
+  },
+  "popup_confirm_switch_title": {
+    "message": "Passare a questo carrello?"
+  },
+  "popup_confirm_switch_message": {
+    "message": "Questo sostituirà il tuo carrello Amazon attuale con il contenuto di «$1».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_switchingCarts": {
+    "message": "Cambio carrello — caricamento di $1. Se Amazon mostra un'offerta aggiuntiva, scegli un'opzione per continuare.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_switchCartsFailed": {
+    "message": "Impossibile cambiare carrello"
+  },
+  "popup_confirm_updateList_title": {
+    "message": "Aggiornare la lista Amazon?"
+  },
+  "popup_confirm_saveToList_title": {
+    "message": "Salvare come lista Amazon?"
+  },
+  "popup_confirm_updateList_message": {
+    "message": "Risincronizza «$1» con la sua lista Amazon. Styx apre schede Amazon per aggiungere gli articoli — lasciale aperte finché non termina.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_confirm_saveToList_message": {
+    "message": "Crea una lista Amazon privata chiamata «$1» e aggiungi i suoi articoli. Styx apre schede Amazon per farlo — lasciale aperte finché non termina. Devi aver eseguito l'accesso ad Amazon.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_savingToAmazonList": {
+    "message": "Salvataggio nella tua lista Amazon — Styx sta aprendo schede Amazon. Potrebbe richiedere un momento…"
+  },
+  "popup_toast_savedPartial": {
+    "message": "$1/$2 salvati. $3 non è stato possibile aggiungerli.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "popup_toast_savedToAmazonList": {
+    "message": "$1 salvati nella tua lista Amazon.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveToAmazonFailed": {
+    "message": "Impossibile salvare su Amazon"
+  },
+  "popup_prompt_renameCart_title": {
+    "message": "Rinomina carrello"
+  },
+  "popup_prompt_renameCart_placeholder": {
+    "message": "Nome del carrello"
+  },
+  "popup_err_renameFailed": {
+    "message": "Impossibile rinominare"
+  },
+  "popup_confirm_deleteCart_title": {
+    "message": "Eliminare il carrello salvato?"
+  },
+  "popup_confirm_deleteCart_message": {
+    "message": "«$1» verrà rimosso definitivamente.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_deleted": {
+    "message": "Eliminato"
+  },
+  "popup_err_deleteFailed": {
+    "message": "Impossibile eliminare"
+  },
+  "popup_item_rename_title": {
+    "message": "Rinomina carrello"
+  },
+  "popup_item_switchTo": {
+    "message": "Passa a questo carrello"
+  },
+  "popup_item_switchTo_title": {
+    "message": "Sposta tutti gli articoli nel tuo carrello Amazon"
+  },
+  "popup_item_saveToList": {
+    "message": "Salva come lista Amazon"
+  },
+  "popup_item_saveToList_title": {
+    "message": "Salva questo carrello come lista Amazon in modo che si sincronizzi tra i dispositivi"
+  },
+  "popup_item_delete_title": {
+    "message": "Elimina l'intero carrello"
+  },
+  "popup_qty_ariaLabel": {
+    "message": "Modifica quantità articolo"
+  },
+  "popup_qty_decrease": {
+    "message": "Diminuisci quantità"
+  },
+  "popup_qty_increase": {
+    "message": "Aumenta quantità"
+  },
+  "popup_confirm_defaultTitle": {
+    "message": "Sei sicuro/a?"
+  },
+  "popup_prompt_defaultTitle": {
+    "message": "Inserisci un valore"
+  },
+  "popup_paywall_title": {
+    "message": "Passa a Premium"
+  },
+  "popup_paywall_sub": {
+    "message": "Stai usando tutti i tuoi carrelli gratuiti salvati. Premium ti offre più spazio per fare acquisti a modo tuo."
+  },
+  "popup_paywall_ctaSub": {
+    "message": "Risparmia tempo negli acquisti — liste regalo, riordini, occasioni, confronti fianco a fianco."
+  },
+  "popup_paywall_limitTitle": {
+    "message": "Hai usato tutti i tuoi $1 carrelli gratuiti",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_paywall_limitSub": {
+    "message": "Passa a Premium per salvarne di più — i tuoi carrelli esistenti restano esattamente come sono."
+  },
+  "popup_paywall_renewTitle": {
+    "message": "Bentornato/a"
+  },
+  "popup_paywall_renewSub": {
+    "message": "Rinnova Premium per sbloccare i tuoi carrelli di sola lettura. Tutto ciò che hai salvato è ancora qui ad aspettarti."
+  },
+  "popup_paywall_feature_unlimited": {
+    "message": "Carrelli illimitati (contro 3 gratuiti)"
+  },
+  "popup_paywall_feature_curated": {
+    "message": "Conserva liste curate per regali, riordini, occasioni"
+  },
+  "popup_paywall_feature_cancelAnytime": {
+    "message": "Annulla in qualsiasi momento — tutti i carrelli restano visibili con 3 gratuiti"
+  },
+  "popup_paywall_haveCode": {
+    "message": "Hai un codice?"
+  },
+  "popup_paywall_promoCode": {
+    "message": "Codice promozionale"
+  },
+  "popup_paywall_enterCode": {
+    "message": "Inserisci il codice"
+  },
+  "popup_paywall_redeem": {
+    "message": "Riscatta"
+  },
+  "popup_paywall_annual": {
+    "message": "Annuale"
+  },
+  "popup_paywall_annualPrice": {
+    "message": "9,99 $ / anno"
+  },
+  "popup_paywall_lifetime": {
+    "message": "A vita"
+  },
+  "popup_paywall_lifetimePrice": {
+    "message": "19,99 $ una tantum"
+  },
+  "popup_paywall_maybeLater": {
+    "message": "Forse più tardi"
+  },
+  "popup_paywall_openingCheckout": {
+    "message": "Apertura del pagamento…"
+  },
+  "popup_err_openCheckoutFailed": {
+    "message": "Impossibile aprire il pagamento."
+  },
+  "popup_promo_enterCode": {
+    "message": "Inserisci un codice."
+  },
+  "popup_promo_checking": {
+    "message": "Verifica in corso…"
+  },
+  "popup_promo_genericError": {
+    "message": "Qualcosa è andato storto. Riprova."
+  },
+  "popup_promo_unlocked90": {
+    "message": "Premium sbloccato per 90 giorni!"
+  },
+  "popup_promo_unlockedToast": {
+    "message": "Premium sbloccato — buon divertimento!"
+  },
+  "popup_debug_toggle": {
+    "message": "Debug"
+  },
+  "popup_debug_diagnostics_title": {
+    "message": "Diagnostica carrello"
+  },
+  "popup_debug_diagnostics_run": {
+    "message": "Esegui diagnostica carrello"
+  },
+  "popup_debug_backup_title": {
+    "message": "Backup / ripristino (dev)"
+  },
+  "popup_debug_backup_export": {
+    "message": "Esporta backup"
+  },
+  "popup_debug_backup_restore": {
+    "message": "Ripristina da file…"
+  },
+  "popup_debug_backup_hint": {
+    "message": "L'esportazione legge gli articoli di ogni lista Amazon (lento — una scheda per lista) e li raggruppa con l'archiviazione locale mc.* in un file JSON. Il ripristino ricrea ogni lista personalizzata su Amazon da quel file (anche lento — esegue «Aggiungi alla lista» per ogni articolo). Osserva la finestra di stato per l'avanzamento. Il ripristino non tocca i diritti d'uso né sovrascrive l'archiviazione."
+  },
+  "popup_debug_logs_title": {
+    "message": "Log di diagnostica"
+  },
+  "popup_debug_logs_copy": {
+    "message": "Copia log di diagnostica"
+  },
+  "popup_debug_logs_hint": {
+    "message": "Copia la versione dell'estensione, lo stato attuale e i log recenti da ogni contesto (service worker, content script, popup) negli appunti. Mantieni attiva la modalità sviluppatore, riproduci il problema, quindi copia e invia il risultato al supporto."
+  },
+  "popup_settings_title": {
+    "message": "Impostazioni"
+  },
+  "popup_settings_amazon_heading": {
+    "message": "Amazon"
+  },
+  "popup_settings_relabel_label": {
+    "message": "Rinomina le liste Amazon in «carrelli»"
+  },
+  "popup_settings_relabel_sub": {
+    "message": "Attivo rinomina la pagina Liste di Amazon in «I tuoi carrelli Styx» e aggiunge «Carrello» a ciascuno dei nomi delle tue liste (es. «Lista di Giulia» → «Lista di Giulia Carrello»). Disattivo lascia Amazon invariato."
+  },
+  "popup_settings_fab_heading": {
+    "message": "Pulsante flottante"
+  },
+  "popup_settings_fabpulse_label": {
+    "message": "Fai pulsare il pulsante flottante"
+  },
+  "popup_settings_fabpulse_sub": {
+    "message": "Il pulsante rotondo Styx si illumina d'arancione sulle pagine Amazon come promemoria per usarlo. Disattiva per un pulsante statico."
+  },
+  "popup_settings_display_heading": {
+    "message": "Visualizzazione"
+  },
+  "popup_settings_sidepanel_label": {
+    "message": "Apri nel pannello laterale"
+  },
+  "popup_settings_sidepanel_sub": {
+    "message": "Attivo ancora Styx come pannello laterale (predefinito). Disattivo apre un popup compatto dalla barra degli strumenti."
+  },
+  "popup_settings_dev_heading": {
+    "message": "Sviluppatore"
+  },
+  "popup_settings_devmode_label": {
+    "message": "Modalità sviluppatore"
+  },
+  "popup_settings_devmode_sub": {
+    "message": "Mostra il pannello di debug in fondo al popup e attiva log dettagliati nella console del service worker. Puoi lasciarlo disattivato senza problemi."
+  },
+  "popup_settings_affiliate_heading": {
+    "message": "Informativa di affiliazione"
+  },
+  "popup_settings_affiliate_body": {
+    "message": "Quando invii un intero carrello ad Amazon, Styx utilizza l'endpoint di aggiunta in blocco di Amazon, che aggiungerà i tuoi articoli solo se il link contiene un tag Amazon Associates (tag=styxmcart-20). Styx fornisce questo tag segnaposto solo per far funzionare il ripristino in blocco del carrello — non si tratta di un account Associates registrato, e Styx non guadagna alcuna commissione o compenso di segnalazione dai tuoi acquisti."
+  },
+  "popup_settings_affiliate_learnMore": {
+    "message": "Scopri di più"
+  },
+  "popup_settings_versionLabel": {
+    "message": "Styx Multi-Cart v$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_settings_version_ariaLabel": {
+    "message": "Versione"
+  },
+  "popup_support_options_ariaLabel": {
+    "message": "Opzioni di supporto"
+  },
+  "popup_support_needHelp": {
+    "message": "Hai bisogno di aiuto?"
+  },
+  "popup_support_reportBug": {
+    "message": "Segnala un bug"
+  },
+  "popup_support_reportBug_sub": {
+    "message": "Apri un nuovo issue su GitHub"
+  },
+  "popup_support_howToReport": {
+    "message": "Come segnalare"
+  },
+  "popup_support_howToReport_sub": {
+    "message": "Consigli per una buona segnalazione"
+  },
+  "popup_support_knownIssues": {
+    "message": "Problemi noti"
+  },
+  "popup_support_knownIssues_sub": {
+    "message": "Sfoglia i bug segnalati"
+  },
+  "popup_support_toggle_ariaLabel": {
+    "message": "Supporto e segnalazione bug"
+  },
+  "popup_support_toggle_title": {
+    "message": "Supporto · Segnala un bug"
+  },
+  "popup_theme_switchToLight": {
+    "message": "Passa alla modalità chiara"
+  },
+  "popup_theme_switchToDark": {
+    "message": "Passa alla modalità scura"
+  },
+  "popup_defaultCartName": {
+    "message": "Carrello · $1, $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_toast_saved": {
+    "message": "$1 salvati",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveCartFailed": {
+    "message": "Impossibile salvare il carrello"
+  },
+  "popup_thisItem": {
+    "message": "questo articolo"
+  },
+  "popup_theseNItems": {
+    "message": "questi $1 articoli",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_theseItems": {
+    "message": "questi articoli"
+  },
+  "popup_confirm_clear_title": {
+    "message": "Svuotare il tuo carrello Amazon?"
+  },
+  "popup_confirm_clear_message": {
+    "message": "Salva $1 per un checkout successivo: ti aspetteranno in un carrello Styx unico nelle tue liste Amazon — oppure svuota semplicemente il carrello per fare acquisti per un'altra occasione.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_confirm_clear_altLabel": {
+    "message": "Salva e svuota"
+  },
+  "popup_confirm_clear_okLabel": {
+    "message": "Svuota!"
+  },
+  "popup_toast_savingThenClearing": {
+    "message": "Salvataggio del carrello in una nuova lista Amazon, poi svuotamento…"
+  },
+  "popup_toast_cartAlreadyEmpty": {
+    "message": "Il tuo carrello Amazon è già vuoto."
+  },
+  "popup_toast_clearingCart": {
+    "message": "Svuotamento del carrello — controlla la scheda Amazon."
+  },
+  "popup_err_clearCartFailed": {
+    "message": "Impossibile svuotare il carrello"
+  },
+  "popup_toast_savingForLater": {
+    "message": "Salvataggio di $1 in un nuovo carrello — il tuo carrello Amazon resta invariato.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveSettingFailed": {
+    "message": "Impossibile salvare l'impostazione"
+  },
+  "popup_toast_relabelOn": {
+    "message": "Le liste Amazon ora vengono mostrate come i tuoi carrelli Styx."
+  },
+  "popup_toast_relabelOff": {
+    "message": "Le liste Amazon restano invariate."
+  },
+  "popup_toast_fabPulseOn": {
+    "message": "Il pulsante flottante pulserà."
+  },
+  "popup_toast_fabPulseOff": {
+    "message": "Pulsazione del pulsante flottante disattivata."
+  },
+  "popup_toast_surfaceSidepanel": {
+    "message": "Si apre come pannello laterale. Clicca sull'icona della barra degli strumenti per riaprire."
+  },
+  "popup_toast_surfacePopup": {
+    "message": "Si apre come popup. Clicca sull'icona della barra degli strumenti per riaprire."
+  },
+  "popup_toast_devModeOn": {
+    "message": "Modalità sviluppatore attivata"
+  },
+  "popup_toast_devModeOff": {
+    "message": "Modalità sviluppatore disattivata"
+  },
+  "popup_time_justNow": {
+    "message": "proprio ora"
+  },
+  "popup_time_minAgo": {
+    "message": "$1 min fa",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_time_hrAgo": {
+    "message": "$1 h fa",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_time_dayAgo": {
+    "message": "$1 giorni fa",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_noSwResponse": {
+    "message": "Nessuna risposta dal service worker dell'estensione."
+  },
+  "popup_err_unknownError": {
+    "message": "Errore sconosciuto"
+  },
+  "popup_err_premiumLimitReached": {
+    "message": "Hai raggiunto il limite di carrelli. Elimina o unisci carrelli per liberare spazio."
+  },
+  "popup_err_cartLocked": {
+    "message": "Questo carrello è bloccato — rinnova Premium o eliminane altri per liberare uno slot."
+  },
+  "observer_close": {
+    "message": "Chiudi"
+  },
+  "observer_closeImage": {
+    "message": "Chiudi immagine"
+  },
+  "observer_screenshot": {
+    "message": "Screenshot"
+  },
+  "observer_back": {
+    "message": "← Indietro"
+  },
+  "observer_backToCarts": {
+    "message": "← Torna ai carrelli"
+  },
+  "observer_notNow": {
+    "message": "Non ora"
+  },
+  "observer_tryAgain": {
+    "message": "Riprova"
+  },
+  "observer_pleaseTryAgain": {
+    "message": "Riprova."
+  },
+  "observer_genericCart": {
+    "message": "Carrello"
+  },
+  "observer_genericItem": {
+    "message": "(articolo)"
+  },
+  "observer_cartWord": {
+    "message": "Carrello"
+  },
+  "observer_readOnly": {
+    "message": "Sola lettura"
+  },
+  "observer_lockedRenewTitle": {
+    "message": "Bloccato — clicca per rinnovare Premium"
+  },
+  "observer_addToWhichCart": {
+    "message": "A quale carrello aggiungere?"
+  },
+  "observer_createNewCartRow": {
+    "message": "+ Crea nuovo carrello"
+  },
+  "observer_addToAmazonCart": {
+    "message": "Aggiungi al carrello Amazon"
+  },
+  "observer_addToAmazonCartCaps": {
+    "message": "Aggiungi al carrello Amazon"
+  },
+  "observer_addDirectlyToAmazonCart": {
+    "message": "Aggiungi direttamente al carrello Amazon"
+  },
+  "observer_noAmazonListsYet": {
+    "message": "Ancora nessuna lista Amazon — creane una qui sotto."
+  },
+  "observer_addingToCart": {
+    "message": "Aggiunta a «$1» — osserva la finestra di stato…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_err_addItemFailed": {
+    "message": "Impossibile aggiungere l'articolo."
+  },
+  "observer_addedTo": {
+    "message": "Aggiunto a «$1» ✓",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_qtyBumpedIn": {
+    "message": "Quantità aumentata in «$1» ✓",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_qtyLabel": {
+    "message": "Qtà"
+  },
+  "observer_create_title": {
+    "message": "Nuovo carrello per questo articolo"
+  },
+  "observer_create_sub": {
+    "message": "Assegna un nome e aggiungeremo subito «$1».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_create_submit": {
+    "message": "Crea e aggiungi"
+  },
+  "observer_create_needName": {
+    "message": "Assegna prima un nome."
+  },
+  "observer_create_creating": {
+    "message": "Creazione della tua lista — osserva la finestra di stato…"
+  },
+  "observer_err_createListFailed": {
+    "message": "Impossibile creare la lista."
+  },
+  "observer_upgrade_limitTitle": {
+    "message": "Limite di carrelli raggiunto"
+  },
+  "observer_upgrade_limitSub": {
+    "message": "Hai raggiunto il limite gratuito di 3 carrelli. Passa a Premium per creare carrelli illimitati e sbloccare la modifica completa!"
+  },
+  "observer_upgrade_renewTitle": {
+    "message": "Rinnova Premium"
+  },
+  "observer_upgrade_renewSub": {
+    "message": "Questo carrello è di sola lettura nel piano gratuito. Passa a Premium per aggiungere articoli a tutti i tuoi carrelli salvati!"
+  },
+  "observer_upgrade_feature_unlimited": {
+    "message": "Carrelli illimitati"
+  },
+  "observer_upgrade_feature_fullEditing": {
+    "message": "Modifica, ripristina, rinomina, unisci — funzionalità completa"
+  },
+  "observer_upgrade_feature_cancelAnytime": {
+    "message": "Annulla in qualsiasi momento; i carrelli restano leggibili"
+  },
+  "observer_upgrade_premiumCartTitle": {
+    "message": "Carrello Premium"
+  },
+  "observer_upgrade_premiumCartSub": {
+    "message": "Questo carrello è bloccato nel piano gratuito. Esegui l'upgrade per inviarlo al tuo carrello Amazon e sbloccare tutti i tuoi carrelli."
+  },
+  "observer_upgrade_feature_allCarts": {
+    "message": "Usa tutti i tuoi carrelli da liste Amazon"
+  },
+  "observer_upgrade_feature_sendAny": {
+    "message": "Invia qualsiasi carrello al tuo carrello Amazon"
+  },
+  "observer_yourStyxCarts": {
+    "message": "I tuoi carrelli Styx"
+  },
+  "observer_addToStyxCart": {
+    "message": "Aggiungi al carrello Styx"
+  },
+  "observer_viewYourStyxCart": {
+    "message": "Visualizza il tuo carrello Styx"
+  },
+  "observer_addToAStyxCart": {
+    "message": "Aggiungi a un carrello Styx"
+  },
+  "observer_createStyxCartTitle": {
+    "message": "Crea un nuovo carrello Styx (lista Amazon)"
+  },
+  "observer_styxCartNamePrefix": {
+    "message": "Nome del carrello Styx"
+  },
+  "observer_sendAllToAmazonCart": {
+    "message": "Invia tutto al carrello Amazon"
+  },
+  "observer_noItemsFound": {
+    "message": "Nessun articolo trovato"
+  },
+  "observer_addingN": {
+    "message": "Aggiunta di $1…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_sendingNToCart": {
+    "message": "Invio di $1 al carrello…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_buildingAmazonList": {
+    "message": "Creazione della tua lista Amazon"
+  },
+  "observer_working": {
+    "message": "Elaborazione in corso…"
+  },
+  "observer_cartSaved": {
+    "message": "Carrello salvato"
+  },
+  "observer_nameYourNewList": {
+    "message": "Assegna un nome alla tua nuova lista Amazon (nuovo carrello Styx):"
+  },
+  "observer_saveCartHelp": {
+    "message": "Dopo aver salvato questo carrello, puoi accedervi tramite le tue liste Amazon o l'estensione Styx Multi-Cart."
+  },
+  "observer_clearCartConfirmBody": {
+    "message": "Salva questi articoli in un nuovo carrello Styx per dopo, oppure svuota il carrello ora per fare acquisti per un'altra occasione."
+  },
+  "observer_savingAndClearing": {
+    "message": "Salvataggio e svuotamento…"
+  },
+  "observer_clearingCart": {
+    "message": "Svuotamento del carrello…"
+  },
+  "observer_savingThenClearing": {
+    "message": "Salvataggio del carrello, poi svuotamento…"
+  },
+  "observer_clearingAmazonCart": {
+    "message": "Svuotamento del tuo carrello Amazon…"
+  },
+  "observer_savingYourCart": {
+    "message": "Salvataggio del carrello"
+  },
+  "observer_clearingYourCart": {
+    "message": "Svuotamento del carrello"
+  },
+  "observer_cartSavedAndCleared": {
+    "message": "Carrello salvato e svuotato"
+  },
+  "observer_cartClearingStarted": {
+    "message": "Svuotamento del carrello avviato"
+  },
+  "observer_checkAmazonTab": {
+    "message": "Controlla la scheda Amazon per l'avanzamento."
+  },
+  "observer_couldntClearCart": {
+    "message": "Impossibile svuotare il carrello"
+  },
+  "observer_saveEverythingTitle": {
+    "message": "Salva tutto il contenuto di questo carrello come nuova lista Amazon"
+  },
+  "observer_savingToAmazon": {
+    "message": "Salvataggio su Amazon…"
+  },
+  "observer_openingAmazonTabs": {
+    "message": "Apertura di schede Amazon per aggiungere ogni articolo — mantieni aperta questa scheda."
+  },
+  "observer_listSaved": {
+    "message": "Lista salvata"
+  },
+  "observer_savedPartialOpeningList": {
+    "message": "$1/$2 salvati in «$3». $4 richiedono l'aggiunta manuale. Apertura della tua lista…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "observer_savedOpeningList": {
+    "message": "$1 salvati in «$2». Apertura della tua lista…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_extensionContextInvalid": {
+    "message": "Contesto dell'estensione non valido"
+  },
+  "observer_openStyxMultiCart": {
+    "message": "Apri Styx Multi-Cart"
+  },
+  "observer_proceedToCheckout": {
+    "message": "Procedi al pagamento"
+  },
+  "observer_guide_ariaLabel": {
+    "message": "Guida rapida di Styx Multi-Cart"
+  },
+  "observer_guide_kicker": {
+    "message": "Guida rapida"
+  },
+  "observer_guide_fabButtonAlt": {
+    "message": "Il pulsante rotondo Styx"
+  },
+  "observer_guide_introText": {
+    "message": "Clicca sul pulsante Styx in basso a destra di qualsiasi pagina Amazon per aprire il pannello."
+  },
+  "observer_guide_stepOf": {
+    "message": "Passaggio $1 di $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_guideFinish": {
+    "message": "Fine"
+  },
+  "observer_guideNext": {
+    "message": "Avanti"
+  },
+  "observer_guide1_title": {
+    "message": "Svuota il tuo carrello Amazon"
+  },
+  "observer_guide1_option1": {
+    "message": "Opzione 1 — nel pannello Styx"
+  },
+  "observer_guide1_bullet1_text": {
+    "message": "Clicca su $1 per svuotare il carrello attivo, oppure su $2 per conservarne prima una copia in un nuovo carrello Styx.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_guide1_shot1_alt": {
+    "message": "Pulsanti «Svuota carrello Amazon» e «Salva carrello Amazon per dopo» in cima al pannello Styx"
+  },
+  "observer_guide1_sublist1": {
+    "message": "I carrelli Styx sono semplicemente liste Amazon con funzionalità aggiuntive."
+  },
+  "observer_guide1_option2": {
+    "message": "Opzione 2 — sulla tua pagina del carrello Amazon"
+  },
+  "observer_guide1_bullet2_text": {
+    "message": "Gli stessi due pulsanti si trovano subito sotto $1.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide1_shot2_alt": {
+    "message": "Pulsanti «Svuota carrello Amazon» e «Salva carrello Amazon per dopo» sotto «Procedi al pagamento» nella pagina del carrello Amazon"
+  },
+  "observer_guide2_title": {
+    "message": "Metti gli articoli in carrelli diversi per acquisti separati"
+  },
+  "observer_guide2_copy1": {
+    "message": "Vuoi organizzare i tuoi acquisti mentre fai shopping?…"
+  },
+  "observer_guide2_copy2": {
+    "message": "Scegli $1 nella pagina di un articolo o tramite il suo pulsante «aggiungi»",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide2_copy3": {
+    "message": "Poi scegli un carrello esistente oppure $1.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide2_shot1_alt": {
+    "message": "Pulsante «Aggiungi a un carrello Styx» su una pagina prodotto Amazon"
+  },
+  "observer_guide2_shot2_alt": {
+    "message": "Il selettore di carrello Styx con l'elenco dei tuoi carrelli e l'opzione «Crea nuovo carrello»"
+  },
+  "observer_guide2_bullet1": {
+    "message": "Usa carrelli separati per viaggi, progetti o persone."
+  },
+  "observer_guide2_bullet2": {
+    "message": "Aggiungere un articolo direttamente al tuo carrello Amazon oppure «Acquista ora» restano opzioni disponibili."
+  },
+  "observer_guide3_title": {
+    "message": "Invia un intero carrello ad Amazon"
+  },
+  "observer_guide3_copy": {
+    "message": "Pronto/a a fare il checkout con un carrello specifico? Puoi inviarlo al tuo carrello Amazon in diversi modi…"
+  },
+  "observer_guide3_option1": {
+    "message": "Opzione 1 — in cima a un carrello"
+  },
+  "observer_guide3_bullet1_text": {
+    "message": "Su qualsiasi pagina di carrello Styx (lista Amazon)."
+  },
+  "observer_guide3_shot1_alt": {
+    "message": "Pulsante «Invia tutto al carrello Amazon» in cima a una pagina di lista"
+  },
+  "observer_guide3_option2": {
+    "message": "Opzione 2 — ancorato durante lo scorrimento"
+  },
+  "observer_guide3_bullet2_text": {
+    "message": "Una volta superato quel pulsante scorrendo, si ancora in basso a destra, sempre a portata di mano nelle liste lunghe."
+  },
+  "observer_guide3_shot2_alt": {
+    "message": "Pulsante «Invia tutto al carrello Amazon» ancorato accanto al pulsante flottante Styx"
+  },
+  "observer_guide3_option3": {
+    "message": "Opzione 3 — nel pannello Styx"
+  },
+  "observer_guide3_bullet3_text": {
+    "message": "Clicca sul pulsante carrello nella riga di qualsiasi carrello nel pannello dell'estensione"
+  },
+  "observer_guide3_shot3_alt": {
+    "message": "Pulsante «Aggiungi tutto al carrello Amazon» in una riga di carrello nel pannello Styx"
+  },
+  "observer_guide3_bullet4": {
+    "message": "Styx aggiunge tutti gli articoli a ciò che è già presente nel tuo carrello Amazon, quindi riporta il risultato al termine."
+  },
+  "observer_guide3_bullet5": {
+    "message": "<strong>Abbiamo già caricato le tue liste Amazon</strong>, quindi puoi iniziare subito a usare i carrelli Styx. Clicca su $1 per iniziare un modo completamente nuovo di fare acquisti su Amazon!",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_done": {
+    "message": "Fatto"
+  },
+  "bg_doneCap": {
+    "message": "Fatto."
+  },
+  "bg_starting": {
+    "message": "Avvio…"
+  },
+  "bg_thisItem": {
+    "message": "questo articolo"
+  },
+  "bg_genericItemLowercase": {
+    "message": "articolo"
+  },
+  "bg_genericListName": {
+    "message": "lista"
+  },
+  "bg_amazonCartFallbackName": {
+    "message": "Carrello Amazon"
+  },
+  "bg_styxCartFallbackName": {
+    "message": "Carrello Styx"
+  },
+  "bg_clearingCart": {
+    "message": "Svuotamento del carrello"
+  },
+  "bg_clearingCartEllipsis": {
+    "message": "Svuotamento del carrello…"
+  },
+  "bg_removedOfTotal": {
+    "message": "$1 di $2 rimossi…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_removedSoFar": {
+    "message": "$1 rimossi finora…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_clearingCartRemovedOfTotal": {
+    "message": "Svuotamento del carrello — $1 di $2 rimossi…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_clearingCartRemovedSoFar": {
+    "message": "Svuotamento del carrello — $1 rimossi finora…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldNotClearCartRemaining": {
+    "message": "Impossibile svuotare il carrello — $1 ancora presenti",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_cartClearedRemoved": {
+    "message": "Carrello svuotato — $1 rimossi",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_restoringCart": {
+    "message": "Ripristino di $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingFirstProduct": {
+    "message": "Caricamento del primo prodotto…"
+  },
+  "bg_batchOf": {
+    "message": "gruppo $1/$2 ($3 articoli)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_itemsInOneGo": {
+    "message": "$1 articoli in un'unica volta",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingBulkAddFor": {
+    "message": "Caricamento dell'aggiunta in blocco per $1…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingBulkAddBatch": {
+    "message": "Caricamento dell'aggiunta in blocco — gruppo $1 di $2 ($3 articoli)…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_loadingBulkAddForItems": {
+    "message": "Caricamento dell'aggiunta in blocco per $1…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkRejectedFallback": {
+    "message": "Amazon non è riuscita a preparare questi articoli in blocco — vengono aggiunti uno alla volta…"
+  },
+  "bg_amazonRejectedBulkAdd": {
+    "message": "Amazon ha rifiutato gli articoli dell'aggiunta in blocco"
+  },
+  "bg_addToCartFallback": {
+    "message": "Aggiungi al carrello"
+  },
+  "bg_clickHighlightedBatch": {
+    "message": "Clicca su «$1» evidenziato per confermare il gruppo $2 di $3 ($4 articoli)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "bg_clickHighlightedItems": {
+    "message": "Clicca su «$1» evidenziato per aggiungere $2 al tuo carrello Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_waitingForConfirmation": {
+    "message": "In attesa della tua conferma…"
+  },
+  "bg_userDidNotConfirmBulkAdd": {
+    "message": "L'utente non ha confermato l'aggiunta in blocco: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldntFindConfirmButton": {
+    "message": "Pulsante di conferma non trovato — controllo del tuo carrello…"
+  },
+  "bg_clickAddToCartManual": {
+    "message": "Clicca su «Aggiungi al carrello» nella pagina quando sei pronto/a — il ripristino continuerà automaticamente"
+  },
+  "bg_bulkRestorePartial": {
+    "message": "Il ripristino in blocco ha aggiunto $1 di $2 articoli — $3 ignorati",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_bulkRestoreZero": {
+    "message": "Il ripristino in blocco non ha aggiunto alcun articolo — riprova oppure ripristina uno alla volta"
+  },
+  "bg_noProductsOnBulkPage": {
+    "message": "Amazon non ha mostrato alcun prodotto nella pagina di aggiunta in blocco"
+  },
+  "bg_confirmButtonNotFound": {
+    "message": "Pulsante di conferma non trovato entro 10 s"
+  },
+  "bg_savedCartHasNoItems": {
+    "message": "Questo carrello salvato non contiene articoli."
+  },
+  "bg_productUnavailable": {
+    "message": "Prodotto non disponibile"
+  },
+  "bg_skippingUnavailableItem": {
+    "message": "Articolo non disponibile ignorato $1 di $2: $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_unavailableSkipped": {
+    "message": "Non disponibile — ignorato: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_noFormatSelected": {
+    "message": "Non è stato selezionato un formato acquistabile"
+  },
+  "bg_itemOf": {
+    "message": "Articolo $1 di $2: $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_restoringCartAdding": {
+    "message": "Ripristino del carrello — aggiunta di $1 di $2: $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_atcButtonNotFound": {
+    "message": "Pulsante «Aggiungi al carrello» non trovato"
+  },
+  "bg_ageEarlierToday": {
+    "message": "prima oggi"
+  },
+  "bg_ageRecently": {
+    "message": "di recente"
+  },
+  "bg_ageFromBefore": {
+    "message": "da prima"
+  },
+  "bg_noCoverage": {
+    "message": "Nessuna copertura"
+  },
+  "bg_selectedOption": {
+    "message": "opzione selezionata"
+  },
+  "bg_applyingChoiceAge": {
+    "message": "Applicazione della tua scelta $1: $2…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_applyingSavedChoice": {
+    "message": "Applicazione della tua scelta salvata: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_cartRestoredPartial": {
+    "message": "Carrello ripristinato — $1 di $2 aggiunti ($3 falliti)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_cartRestoredAll": {
+    "message": "Carrello ripristinato — $1 aggiunti",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingWishlistToCart": {
+    "message": "Aggiunta della lista dei desideri al carrello"
+  },
+  "bg_addingItemsFromListPage": {
+    "message": "Aggiunta di $1 dalla pagina della lista…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingItemsFromList": {
+    "message": "Aggiunta di $1 dalla lista…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addedItemsToCart": {
+    "message": "$1 aggiunti al tuo carrello Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldNotSaveCart": {
+    "message": "Impossibile salvare il tuo carrello."
+  },
+  "bg_couldntSaveLeftUntouched": {
+    "message": "Salvataggio non riuscito — carrello invariato. $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldntSaveCartTitle": {
+    "message": "Impossibile salvare il tuo carrello"
+  },
+  "bg_cartLeftAsIs": {
+    "message": "Il tuo carrello Amazon è stato lasciato invariato. $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedNOfTotal": {
+    "message": "$1/$2 articoli salvati",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedNItems": {
+    "message": "$1 salvati",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedNoteToCartUntouched": {
+    "message": "$1 in «$2» — il tuo carrello resta invariato.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_cartSavedForLater": {
+    "message": "Carrello salvato per dopo"
+  },
+  "bg_savedNoteToCartUntouchedDetail": {
+    "message": "$1 in «$2». Il tuo carrello Amazon resta invariato.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedNoteNowClearing": {
+    "message": "$1 — svuotamento del carrello in corso…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedAndCleared": {
+    "message": "Salvato e svuotato"
+  },
+  "bg_savedNoteToCartEmpty": {
+    "message": "$1 in «$2». Il tuo carrello Amazon è vuoto.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedButCouldntClear": {
+    "message": "Salvato, ma svuotamento non riuscito"
+  },
+  "bg_savedNoteCouldntClear": {
+    "message": "$1 in «$2», ma non è stato possibile svuotare il tuo carrello Amazon. Riprova con «Svuota carrello Amazon».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_amazonNeedsFormatChoice": {
+    "message": "Amazon richiede una scelta del formato"
+  },
+  "bg_chooseCartableFormat": {
+    "message": "Scegli un formato acquistabile per «$1» per continuare ad aggiungere il resto.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_chooseFormatOnAmazon": {
+    "message": "Scegli un formato su Amazon"
+  },
+  "bg_savedFormatCannotBeAdded": {
+    "message": "Il formato salvato di «$1» non può essere aggiunto al carrello. Scegli un altro formato o edizione su questa pagina che offra «Aggiungi al carrello». Styx riprenderà automaticamente.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_choiceChooseFormat": {
+    "message": "Scegli un formato"
+  },
+  "bg_choiceSkipThisItem": {
+    "message": "Ignora questo articolo"
+  },
+  "bg_couldNotShowFormatPrompt": {
+    "message": "Impossibile mostrare il selettore di formato"
+  },
+  "bg_skippedFormatUnavailable": {
+    "message": "Ignorato perché il formato salvato non è disponibile"
+  },
+  "bg_chooseFormatShowsAtc": {
+    "message": "Scegli per «$1» un formato che mostri «Aggiungi al carrello» — Styx riprenderà automaticamente",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_amazonTabWasClosed": {
+    "message": "La scheda Amazon è stata chiusa"
+  },
+  "bg_selectedFormatUnavailable": {
+    "message": "Il formato selezionato non è disponibile"
+  },
+  "bg_noFormatSelectedTimeout": {
+    "message": "Nessun formato acquistabile selezionato entro 10 minuti"
+  },
+  "bg_savedFormatUnavailableChooseAnother": {
+    "message": "Il formato salvato non è disponibile; scegline un altro"
+  },
+  "bg_pageNoLongerExists": {
+    "message": "La pagina del prodotto non esiste più"
+  },
+  "bg_productCurrentlyUnavailable": {
+    "message": "Prodotto attualmente non disponibile"
+  },
+  "bg_waitingOnYourChoice": {
+    "message": "In attesa della tua scelta"
+  },
+  "bg_pickProtectionOption": {
+    "message": "Scegli un'opzione di protezione per «$1» sulla pagina Amazon — il ripristino continuerà automaticamente.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_amazonNeedsProtectionPlanChoice": {
+    "message": "Amazon richiede la tua scelta sul piano di protezione per «$1». Scegli un'opzione qui sotto — Styx continuerà a ripristinare il resto del tuo carrello non appena scegli.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addToListDropdownNotFound": {
+    "message": "Menu a discesa «Aggiungi a una lista» non trovato in questa pagina."
+  },
+  "bg_createEntryNotFound": {
+    "message": "Voce «Crea una lista» non trovata nel selettore."
+  },
+  "bg_createListFormDidNotAppear": {
+    "message": "Il modulo di creazione della lista non è apparso."
+  },
+  "bg_createButtonNotFound": {
+    "message": "Pulsante «Crea» non trovato nel modulo di creazione della lista."
+  },
+  "bg_noConfirmationAfterCreate": {
+    "message": "Nessuna conferma dopo aver cliccato su «Crea»."
+  },
+  "bg_noResultFromCreateList": {
+    "message": "nessun risultato da pageCreateListAndAdd"
+  },
+  "bg_listNotFoundInMenu": {
+    "message": "Lista __LISTID__ non trovata nel menu «Aggiungi a una lista».",
+    "placeholders": {}
+  },
+  "bg_noResult": {
+    "message": "nessun risultato"
+  },
+  "bg_bulkIncomplete_title": {
+    "message": "Aggiunta in blocco incompleta"
+  },
+  "bg_bulkIncomplete_stillMissing": {
+    "message": "Ancora mancanti:\n$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_andNMore": {
+    "message": "… e altri $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_summaryPartial": {
+    "message": "L'aggiunta in blocco ha inserito nel carrello solo $1 di $2 articoli.\n\nVuoi ripristinare i restanti $3 uno alla volta? È più lento ma più affidabile.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_bulkIncomplete_summaryNone": {
+    "message": "L'aggiunta in blocco non ha inserito alcun articolo nel carrello — è possibile che l'endpoint in blocco di Amazon li abbia scartati silenziosamente (spesso perché il tag di affiliazione non viene riconosciuto).\n\nVuoi invece ripristinare tutti i $1 articoli uno alla volta?",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_choiceManual": {
+    "message": "Clicco io stesso/a su «Aggiungi al carrello»"
+  },
+  "bg_bulkIncomplete_choiceFallback": {
+    "message": "Ripristina uno alla volta"
+  },
+  "bg_bulkIncomplete_choiceSkip": {
+    "message": "Ignora gli articoli mancanti"
+  },
+  "bg_savingCart": {
+    "message": "Salvataggio del carrello"
+  },
+  "bg_savingItemsToNewList": {
+    "message": "Salvataggio di $1 in una nuova lista Amazon…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingToList": {
+    "message": "Aggiunta a $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_openingProductPage": {
+    "message": "Apertura della pagina del prodotto…"
+  },
+  "bg_addToListFailed": {
+    "message": "Aggiunta alla lista non riuscita."
+  },
+  "bg_creatingList": {
+    "message": "Creazione di $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_settingUpYourList": {
+    "message": "Configurazione della tua lista…"
+  },
+  "bg_cartAppearsEmpty": {
+    "message": "Il carrello sembra vuoto — niente da salvare."
+  },
+  "bg_amazonCartLooksEmpty": {
+    "message": "Il tuo carrello Amazon sembra vuoto — niente da salvare."
+  },
+  "bg_missingListIdOrAsin": {
+    "message": "ID lista o ASIN mancante."
+  },
+  "bg_missingAsin": {
+    "message": "ASIN mancante."
+  },
+  "bg_missingListId": {
+    "message": "ID lista mancante."
+  },
+  "bg_paymentServiceNotAvailable": {
+    "message": "Servizio di pagamento non disponibile."
+  },
+  "bg_couldntOpenCheckout": {
+    "message": "Impossibile aprire il pagamento."
+  },
+  "bg_purchasesHandledInApp": {
+    "message": "Gli acquisti vengono gestiti nell'app Styx Multi-Cart."
+  },
+  "bg_noAvailableItemsOnWishlist": {
+    "message": "Non sono stati trovati articoli disponibili in questa lista dei desideri."
+  },
+  "bg_cartLimitReachedUpgrade": {
+    "message": "Limite di carrelli raggiunto — esegui l'upgrade per aggiungerne altri."
+  },
+  "bg_noResultPeriod": {
+    "message": "Nessun risultato."
+  },
+  "bg_promoCodeInvalid": {
+    "message": "Quel codice non è valido."
+  },
+  "bg_promoCodeAlreadyUsed": {
+    "message": "Questo codice è già stato usato su questo dispositivo."
+  },
+  "bg_firstError": {
+    "message": "Primo errore: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_nothingWasAdded": {
+    "message": "Non è stato aggiunto nulla."
+  },
+  "bg_cartHasNoItemsToSave": {
+    "message": "Questo carrello non contiene articoli da salvare."
+  },
+  "bg_savingLabelToAmazon": {
+    "message": "Salvataggio di $1 su Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_atcButtonNotFoundFull": {
+    "message": "Pulsante «Aggiungi al carrello» non trovato o non visibile"
+  },
+  "bg_atcButtonStayedDisabled": {
+    "message": "Il pulsante «Aggiungi al carrello» è rimasto disattivato"
+  },
+  "promo_tagline1": {
+    "message": "Svuota il tuo carrello Amazon."
+  },
+  "promo_tagline2": {
+    "message": "O salvalo per dopo."
+  },
+  "promo_subtext": {
+    "message": "Gratuito e illimitato · Nessun tracciamento"
+  }
+}

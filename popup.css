@@ -485,7 +485,8 @@ html[data-surface="panel"] .mc-toggle {
   line-height: 1.2;
   font-weight: 800;
   letter-spacing: 0;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
   box-shadow: 0 2px 5px rgba(15, 23, 42, 0.24);
   transition: transform 100ms ease, filter 120ms ease, box-shadow 120ms ease;
 }

@@ -49,6 +49,17 @@ FILES=(
   guide-assets/SendAllDockedPill.png
   guide-assets/SendAllPanelButton.png
   guide-assets/CartButtons.png
+  _locales/en/messages.json
+  _locales/en_GB/messages.json
+  _locales/en_CA/messages.json
+  _locales/en_AU/messages.json
+  _locales/de/messages.json
+  _locales/fr/messages.json
+  _locales/es/messages.json
+  _locales/es_419/messages.json
+  _locales/it/messages.json
+  _locales/ja/messages.json
+  _locales/pt_BR/messages.json
 )
 
 for f in "${FILES[@]}"; do

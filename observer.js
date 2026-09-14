@@ -16,6 +16,22 @@
 (function () {
   "use strict";
 
+  // ---- i18n ---------------------------------------------------------------
+  // chrome.i18n is available in content-script contexts, so on-page injected
+  // UI (buttons, modals, toasts) resolves _locales/<locale>/messages.json the
+  // same way the popup does. `t()` mirrors popup.js's helper.
+  function t(key, subs) {
+    try {
+      const msg = chrome.i18n.getMessage(key, subs);
+      return msg || key;
+    } catch (_e) {
+      return key;
+    }
+  }
+  function itemCountTextObserver(n) {
+    return n === 1 ? t("popup_count_item_one", [n]) : t("popup_count_item_other", [n]);
+  }
+
   // Diagnostic logging — mirrors the popup's Developer mode switch (the
   // mc.dev.v1 flag in chrome.storage.local). When it's on, dlog/dwarn print to
   // this page's console AND forward to the service worker's in-memory ring
@@ -878,7 +894,7 @@
       // Minimal fallback — we know the ASIN but couldn't enrich.
       return {
         asin: asin.toUpperCase(),
-        title: buttonTitle || "(item)",
+        title: buttonTitle || t("observer_genericItem"),
         quantity,
         price: "",
         image: "",
@@ -1047,10 +1063,10 @@
             resolve({ ok: false, error: chrome.runtime.lastError.message });
             return;
           }
-          resolve(response || { ok: false, error: "No response" });
+          resolve(response || { ok: false, error: t("popup_err_noSwResponse") });
         });
       } catch (_e) {
-        resolve({ ok: false, error: "Extension context invalid" });
+        resolve({ ok: false, error: t("observer_extensionContextInvalid") });
       }
     });
   }
@@ -1881,33 +1897,33 @@
       modal.dataset.styxOriginalHtml = modal.innerHTML;
     }
     const isLimit = reason === "limit";
-    const title = isLimit ? "Cart Limit Reached" : "Renew Premium";
+    const title = isLimit ? t("observer_upgrade_limitTitle") : t("observer_upgrade_renewTitle");
     const sub = isLimit
-      ? "You've reached the free limit of 3 carts. Upgrade to Premium to create unlimited carts and unlock full editing!"
-      : "This cart is read-only on the free plan. Upgrade to Premium to add items to all your saved carts!";
+      ? t("observer_upgrade_limitSub")
+      : t("observer_upgrade_renewSub");
 
     modal.innerHTML = `
-      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="${escapeHtml(t("observer_close"))}">×</button>
       <div class="styx-pk-upgrade">
         <div class="styx-pk-upgrade-title">${title}</div>
         <div class="styx-pk-upgrade-sub">${sub}</div>
         <div class="styx-pk-upgrade-plan">
           <ul class="styx-pk-upgrade-features">
-            <li>Unlimited carts</li>
-            <li>Edit, restore, rename, merge — full functionality</li>
-            <li>Cancel anytime; carts stay readable</li>
+            <li>${t("observer_upgrade_feature_unlimited")}</li>
+            <li>${t("observer_upgrade_feature_fullEditing")}</li>
+            <li>${t("observer_upgrade_feature_cancelAnytime")}</li>
           </ul>
         </div>
         <div class="styx-pk-upgrade-actions">
           <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="annual">
-            <span class="styx-pk-upgrade-cta-label">Annual</span>
-            <span class="styx-pk-upgrade-cta-price">$9.99 / yr</span>
+            <span class="styx-pk-upgrade-cta-label">${t("popup_paywall_annual")}</span>
+            <span class="styx-pk-upgrade-cta-price">${t("popup_paywall_annualPrice")}</span>
           </button>
           <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="lifetime">
-            <span class="styx-pk-upgrade-cta-label">Lifetime</span>
-            <span class="styx-pk-upgrade-cta-price">$19.99 once</span>
+            <span class="styx-pk-upgrade-cta-label">${t("popup_paywall_lifetime")}</span>
+            <span class="styx-pk-upgrade-cta-price">${t("popup_paywall_lifetimePrice")}</span>
           </button>
-          <button type="button" class="styx-pk-upgrade-back" data-styx-action="upgrade-back">← Back to carts</button>
+          <button type="button" class="styx-pk-upgrade-back" data-styx-action="upgrade-back">${t("observer_backToCarts")}</button>
         </div>
       </div>
     `;
@@ -1932,34 +1948,33 @@
     root.innerHTML = `
       <div class="styx-pk-backdrop" data-styx-action="cancel"></div>
       <div class="styx-pk-modal">
-        <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+        <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="${escapeHtml(t("observer_close"))}">×</button>
         <div class="styx-pk-brand">
           <svg class="styx-pk-brand-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131a22"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/></g><circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/></g><circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/></g><circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
           <span class="styx-pk-brand-name">Styx Multi-Cart</span>
         </div>
         <div class="styx-pk-upgrade">
-          <div class="styx-pk-upgrade-title">Premium cart</div>
+          <div class="styx-pk-upgrade-title">${t("observer_upgrade_premiumCartTitle")}</div>
           <div class="styx-pk-upgrade-sub">
-            This cart is locked on the free plan. Upgrade to send it to your
-            Amazon cart and unlock all your carts.
+            ${t("observer_upgrade_premiumCartSub")}
           </div>
           <div class="styx-pk-upgrade-plan">
             <ul class="styx-pk-upgrade-features">
-              <li>Use <b>all</b> your Amazon-list carts</li>
-              <li>Send any cart to your Amazon cart</li>
-              <li>Cancel anytime</li>
+              <li>${t("observer_upgrade_feature_allCarts")}</li>
+              <li>${t("observer_upgrade_feature_sendAny")}</li>
+              <li>${t("observer_upgrade_feature_cancelAnytime")}</li>
             </ul>
           </div>
           <div class="styx-pk-upgrade-actions">
             <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="annual">
-              <span class="styx-pk-upgrade-cta-label">Annual</span>
-              <span class="styx-pk-upgrade-cta-price">$9.99 / yr</span>
+              <span class="styx-pk-upgrade-cta-label">${t("popup_paywall_annual")}</span>
+              <span class="styx-pk-upgrade-cta-price">${t("popup_paywall_annualPrice")}</span>
             </button>
             <button type="button" class="styx-pk-upgrade-cta" data-styx-action="upgrade-go" data-styx-plan="lifetime">
-              <span class="styx-pk-upgrade-cta-label">Lifetime</span>
-              <span class="styx-pk-upgrade-cta-price">$19.99 once</span>
+              <span class="styx-pk-upgrade-cta-label">${t("popup_paywall_lifetime")}</span>
+              <span class="styx-pk-upgrade-cta-price">${t("popup_paywall_lifetimePrice")}</span>
             </button>
-            <button type="button" class="styx-pk-upgrade-back" data-styx-action="cancel">← Not now</button>
+            <button type="button" class="styx-pk-upgrade-back" data-styx-action="cancel">${t("observer_notNow")}</button>
           </div>
         </div>
       </div>`;
@@ -2002,17 +2017,17 @@
       modal.dataset.styxOriginalHtml = modal.innerHTML;
     }
     modal.innerHTML = `
-      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+      <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="${escapeHtml(t("observer_close"))}">×</button>
       <div class="styx-pk-create">
-        <div class="styx-pk-create-title">New cart for this item</div>
+        <div class="styx-pk-create-title">${t("observer_create_title")}</div>
         <div class="styx-pk-create-sub">
-          Name it, and we'll add "${escapeHtml(truncateForLabel(item.title, 60))}" right in.
+          ${t("observer_create_sub", [escapeHtml(truncateForLabel(item.title, 60))])}
         </div>
         <input
           type="text"
           class="styx-pk-create-input"
           tabindex="0"
-          placeholder="e.g. Birthday gifts"
+          placeholder="${escapeHtml(t("popup_save_input_placeholder"))}"
           maxlength="80"
           autocomplete="off"
           spellcheck="false"
@@ -2020,8 +2035,8 @@
         />
         <div class="styx-pk-create-err" aria-live="polite"></div>
         <div class="styx-pk-create-actions">
-          <button type="button" class="styx-pk-create-back" data-styx-action="create-back">← Back</button>
-          <button type="button" class="styx-pk-create-submit" data-styx-create-submit>Create &amp; add</button>
+          <button type="button" class="styx-pk-create-back" data-styx-action="create-back">${t("observer_back")}</button>
+          <button type="button" class="styx-pk-create-submit" data-styx-create-submit>${t("observer_create_submit")}</button>
         </div>
       </div>
     `;
@@ -2076,7 +2091,7 @@
       const name = (input.value || "").trim();
       if (!name) {
         input.classList.add("styx-pk-create-error");
-        if (errSlot) errSlot.textContent = "Give it a name first.";
+        if (errSlot) errSlot.textContent = t("observer_create_needName");
         try { input.focus(); } catch (_e) {}
         return;
       }
@@ -2085,7 +2100,7 @@
 
       // Create a new Amazon list seeded with this item (one SW round-trip that
       // drives Amazon). The new list IS the cart — there is no local store.
-      if (errSlot) errSlot.textContent = "Creating your list — watch the status window…";
+      if (errSlot) errSlot.textContent = t("observer_create_creating");
       const res = await sendRequest({
         type: "MC_CREATE_AMAZON_LIST_WITH_ITEM",
         name,
@@ -2098,14 +2113,14 @@
           showPickerUpgradeScreen(root, "limit");
           return;
         }
-        if (errSlot) errSlot.textContent = (res && res.error) || "Could not create list.";
+        if (errSlot) errSlot.textContent = (res && res.error) || t("observer_err_createListFailed");
         submitBtn && submitBtn.removeAttribute("disabled");
         backBtn && backBtn.removeAttribute("disabled");
         return;
       }
       const confirm = document.createElement("div");
       confirm.className = "styx-pk-confirm";
-      confirm.textContent = `Added to "${name}" ✓`;
+      confirm.textContent = t("observer_addedTo", [name]);
       modal.appendChild(confirm);
       setTimeout(dismissPicker, 1200);
     }
@@ -2183,18 +2198,18 @@
       .map((cart) => {
         const count = parseCartCount(cart.count);
         const countText = count !== null
-          ? `${count} ${count === 1 ? "item" : "items"}`
-          : "Cart";
+          ? t(count === 1 ? "popup_count_item_one" : "popup_count_item_other", [count])
+          : t("observer_genericCart");
         const isEditable = ctx.editableSet.has(cart.id);
         const rowClass = isEditable
           ? "styx-pk-row styx-pk-editable"
           : "styx-pk-row styx-pk-locked";
         const ariaAttr = isEditable
           ? ""
-          : 'aria-disabled="true" title="Locked — click to renew Premium"';
+          : `aria-disabled="true" title="${escapeHtml(t("observer_lockedRenewTitle"))}"`;
         const readOnlyPill = isEditable
           ? ""
-          : `<span class="styx-pk-row-readonly">Read-only</span>`;
+          : `<span class="styx-pk-row-readonly">${t("observer_readOnly")}</span>`;
         const metaBits = [readOnlyPill, countText].filter(Boolean).join(" · ");
         const countHtml = `<div class="styx-pk-row-count">${metaBits}</div>`;
         return `
@@ -2233,7 +2248,7 @@
 
     const cartsHtml = sortedCarts.length
       ? renderTargetRows(sortedCarts, ctx)
-      : `<li class="styx-pk-loading" aria-live="polite">Loading your Amazon lists…</li>`;
+      : `<li class="styx-pk-loading" aria-live="polite">${t("popup_lists_loading")}</li>`;
 
     const thumbHtml = isUsablePickerThumb(item.image)
       ? `<img class="styx-pk-thumb" src="${escapeHtml(item.image)}" alt="" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'" />`
@@ -2242,7 +2257,7 @@
     root.innerHTML = `
       <div class="styx-pk-backdrop" data-styx-action="cancel"></div>
       <div class="styx-pk-modal" role="document">
-        <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="Close">×</button>
+        <button type="button" class="styx-pk-close" data-styx-action="cancel" aria-label="${escapeHtml(t("observer_close"))}">×</button>
         <div class="styx-pk-brand">
           <svg class="styx-pk-brand-logo" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#131a22"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z"/><path d="M12 8.6 L10.5 7.3"/></g><circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900"/><circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z"/><path d="M4 14.4 L2.5 13.1"/></g><circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900"/><g stroke="#ff9900" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z"/><path d="M21 14.4 L19.5 13.1"/></g><circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900"/><circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z" fill="#1a3a5c" opacity="0.55"/><path d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8" stroke="#5db5ff" stroke-width="1" fill="none" stroke-linecap="round"/></svg>
           <span class="styx-pk-brand-name">Styx Multi-Cart</span>
@@ -2250,15 +2265,15 @@
         <div class="styx-pk-header">
           ${thumbHtml}
           <div class="styx-pk-meta">
-            <div class="styx-pk-title" title="${escapeHtml(item.title || "(untitled)")}" aria-label="${escapeHtml(item.title || "(untitled)")}">${escapeHtml(item.title || "(untitled)")}</div>
-            <div class="styx-pk-sub">${priceBit}Qty <b>${qty}</b></div>
+            <div class="styx-pk-title" title="${escapeHtml(item.title || t("popup_untitled"))}" aria-label="${escapeHtml(item.title || t("popup_untitled"))}">${escapeHtml(item.title || t("popup_untitled"))}</div>
+            <div class="styx-pk-sub">${priceBit}${escapeHtml(t("observer_qtyLabel"))} <b>${qty}</b></div>
           </div>
         </div>
-        <div class="styx-pk-prompt">Add to which cart?</div>
+        <div class="styx-pk-prompt">${t("observer_addToWhichCart")}</div>
         <ul class="styx-pk-list">${cartsHtml}</ul>
-        <button type="button" class="styx-pk-create-row" data-styx-action="create-new">+ Create new cart</button>
+        <button type="button" class="styx-pk-create-row" data-styx-action="create-new">${t("observer_createNewCartRow")}</button>
         <div class="styx-pk-footer">
-          <button type="button" class="styx-pk-escape" data-styx-action="escape">Add to Amazon cart</button>
+          <button type="button" class="styx-pk-escape" data-styx-action="escape">${t("observer_addToAmazonCart")}</button>
         </div>
       </div>
     `;
@@ -2289,7 +2304,7 @@
       const sorted = sortCartsForDisplay(ctx.targets, ctx.editableSet);
       ul.innerHTML = sorted.length
         ? renderTargetRows(sorted, ctx)
-        : `<li class="styx-pk-empty">No Amazon lists yet — create one below.</li>`;
+        : `<li class="styx-pk-empty">${t("observer_noAmazonListsYet")}</li>`;
     });
 
     root.addEventListener("click", async (e) => {
@@ -2316,11 +2331,11 @@
           const plan = action.dataset.styxPlan || null;
           const goBtns = root.querySelectorAll('[data-styx-action="upgrade-go"]');
           goBtns.forEach((b) => { b.disabled = true; });
-          action.textContent = "Opening checkout…";
+          action.textContent = t("popup_paywall_openingCheckout");
           sendRequest({ type: "MC_OPEN_PAYMENT_PAGE", plan }).then((res) => {
             if (!res || !res.ok) {
               goBtns.forEach((b) => { b.disabled = false; });
-              action.textContent = "Try again";
+              action.textContent = t("observer_tryAgain");
             }
           });
         } else if (action.dataset.styxAction === "create-new") {
@@ -2359,14 +2374,14 @@
       );
       pickerRows.forEach((r) => r.setAttribute("disabled", ""));
 
-      const cartName = row.dataset.cartName || "cart";
+      const cartName = row.dataset.cartName || t("popup_genericCart");
       const listId = row.dataset.listId || null;
 
       // Every row is an Amazon list. The Add-to-List flow is slow (helper tab),
       // so reflect that in the header before the round-trip.
       const sub = root.querySelector(".styx-pk-sub");
       if (sub) {
-        sub.textContent = `Adding to "${cartName}" — watch the status window…`;
+        sub.textContent = t("observer_addingToCart", [cartName]);
         sub.style.color = "";
       }
 
@@ -2387,17 +2402,19 @@
         });
         const sub = root.querySelector(".styx-pk-sub");
         if (sub) {
-          sub.textContent = (res && res.error) || "Could not add item.";
+          sub.textContent = (res && res.error) || t("observer_err_addItemFailed");
           sub.style.color = "#ff8d80";
         }
         return;
       }
 
-      const verb = res.action === "bumped" ? "Quantity bumped in" : "Added to";
       const modal = root.querySelector(".styx-pk-modal");
       const confirm = document.createElement("div");
       confirm.className = "styx-pk-confirm";
-      confirm.textContent = `${verb} "${cartName}" ✓`;
+      confirm.textContent = t(
+        res.action === "bumped" ? "observer_qtyBumpedIn" : "observer_addedTo",
+        [cartName]
+      );
       modal.appendChild(confirm);
       setTimeout(dismissPicker, 1200);
     });
@@ -2406,7 +2423,7 @@
   // ---- Amazon wishlist "Send All to Amazon Cart" -------------------------
 
   const STYX_WL_BTN_ID = "styx-wishlist-add-all";
-  const STYX_WL_LABEL = "Send All to Amazon Cart";
+  const STYX_WL_LABEL = t("observer_sendAllToAmazonCart");
 
   function isWishlistPage() {
     return /\/hz\/wishlist\//i.test(location.pathname);
@@ -2518,14 +2535,14 @@
 
       const items = scrapeWishlistItems();
       if (!items.length) {
-        setWishlistBtnLabel(btn, "No items found");
+        setWishlistBtnLabel(btn, t("observer_noItemsFound"));
         setTimeout(() => setWishlistBtnLabel(btn, STYX_WL_LABEL), 2000);
         return;
       }
 
       btn.dataset.busy = "1";
       btn.classList.add("a-button-disabled");
-      setWishlistBtnLabel(btn, `Adding ${items.length}…`);
+      setWishlistBtnLabel(btn, t("observer_addingN", [items.length]));
 
       const res = await sendRequest({
         type: "MC_WISHLIST_ADD_ALL",
@@ -2535,7 +2552,7 @@
       });
 
       if (!res || !res.ok) {
-        setWishlistBtnLabel(btn, (res && res.error) || "Try again");
+        setWishlistBtnLabel(btn, (res && res.error) || t("observer_tryAgain"));
         btn.dataset.busy = "";
         btn.classList.remove("a-button-disabled");
         setTimeout(() => setWishlistBtnLabel(btn, STYX_WL_LABEL), 2500);
@@ -2544,7 +2561,7 @@
 
       // Background drives the confirm flow in a helper tab (often THIS tab,
       // which then navigates away). Reset the button in case it survives.
-      setWishlistBtnLabel(btn, `Sending ${items.length} to cart…`);
+      setWishlistBtnLabel(btn, t("observer_sendingNToCart", [items.length]));
       setTimeout(() => {
         btn.dataset.busy = "";
         btn.classList.remove("a-button-disabled");
@@ -2732,6 +2749,103 @@
   const STYX_CART_RELABEL_FLAG = "styxCartRelabeled";
   const STYX_CART_ORIG_ATTR = "data-styx-cart-orig";
 
+  // Amazon renders its OWN native UI text in whatever language IT decided to
+  // serve that page in — a signal independent of chrome.i18n's message catalog
+  // (which follows Chrome's UI language). The relabel functions below search
+  // for exact matches of Amazon's own copy, so the search targets must track
+  // Amazon's real per-locale strings, not our translation of them.
+  //
+  // KNOWN LIMITATION / TODO before relying on this for real users: these
+  // phrases are our best good-faith knowledge of Amazon's UI text per
+  // marketplace, NOT verified against a live page load in this session. A
+  // wrong guess here soft-fails (the relabel silently doesn't apply — no
+  // crash, no visible bug) rather than breaking anything, but it does mean
+  // the "Lists → Carts" rebrand may not fire on non-English Amazon sites
+  // until someone visits amazon.de / .fr / .it / .es / .co.jp / .com.mx /
+  // .com.br once each and confirms (or corrects) the strings below.
+  const AMAZON_NATIVE_PHRASES = {
+    en: {
+      addToCart: "add to cart",
+      addToList: "Add to List",
+      viewYourList: "View Your List",
+      yourLists: "Your Lists",
+      createListOrRegistry: "Create a new list or registry",
+    },
+    de: {
+      addToCart: "in den einkaufswagen",
+      addToList: "Zur Liste hinzufügen",
+      viewYourList: "Liste anzeigen",
+      yourLists: "Meine Listen",
+      createListOrRegistry: "Neue Liste oder Geschenkeliste erstellen",
+    },
+    fr: {
+      addToCart: "ajouter au panier",
+      addToList: "Ajouter à une liste",
+      viewYourList: "Afficher votre liste",
+      yourLists: "Vos listes",
+      createListOrRegistry: "Créer une nouvelle liste ou liste de cadeaux",
+    },
+    it: {
+      addToCart: "aggiungi al carrello",
+      addToList: "Aggiungi alla lista",
+      viewYourList: "Visualizza la tua lista",
+      yourLists: "Le tue liste",
+      createListOrRegistry: "Crea una nuova lista o wish list",
+    },
+    es: {
+      addToCart: "añadir a la cesta",
+      addToList: "Añadir a una lista",
+      viewYourList: "Ver tu lista",
+      yourLists: "Tus listas",
+      createListOrRegistry: "Crear una lista o lista de regalos nueva",
+    },
+    ja: {
+      addToCart: "カートに入れる",
+      addToList: "リストに追加",
+      viewYourList: "リストを表示",
+      yourLists: "あなたのリスト",
+      createListOrRegistry: "新しいリストまたは登録リストを作成",
+    },
+    "es-419": {
+      addToCart: "agregar al carrito",
+      addToList: "Añadir a una lista",
+      viewYourList: "Ver tu lista",
+      yourLists: "Tus listas",
+      createListOrRegistry: "Crear una lista o lista de regalos nueva",
+    },
+    "pt-br": {
+      addToCart: "adicionar ao carrinho",
+      addToList: "Adicionar à lista",
+      viewYourList: "Ver sua lista",
+      yourLists: "Suas listas",
+      createListOrRegistry: "Criar uma nova lista ou lista de presentes",
+    },
+    pt: {
+      addToCart: "adicionar ao carrinho",
+      addToList: "Adicionar à lista",
+      viewYourList: "Ver sua lista",
+      yourLists: "Suas listas",
+      createListOrRegistry: "Criar uma nova lista ou lista de presentes",
+    },
+  };
+
+  // document.documentElement.lang reflects the PAGE's own rendered language
+  // (set by Amazon), which is what we need here — independent of Chrome's UI
+  // language (chrome.i18n.getMessage's driving signal). Falls back to "en".
+  // Amazon.com.mx/most Latin American storefronts typically render "es-MX" or
+  // similar; the short-code "es" fallback below lands on Spain Spanish, which
+  // is close enough for these near-identical phrases — the es-419 table entry
+  // above is used only if Amazon happens to set lang="es-419" exactly.
+  function amazonNativePhrases() {
+    const raw = (document.documentElement.lang || "en").toLowerCase();
+    const short = raw.split("-")[0];
+    return (
+      AMAZON_NATIVE_PHRASES[raw] ||
+      AMAZON_NATIVE_PHRASES[short] ||
+      AMAZON_NATIVE_PHRASES.en
+    );
+  }
+
   // Append " Cart" to every list name that doesn't already contain "cart".
   // Non-destructive: the original name stays readable, so even Amazon's
   // defaults keep their identity ("Wish List" → "Wish List Cart", "Mila Wish
@@ -2740,8 +2854,13 @@
   function rebrandListName(name) {
     const trimmed = (name || "").trim();
     if (!trimmed) return null;
-    if (/cart/i.test(trimmed)) return null; // already a "cart"
-    return trimmed + " Cart";
+    const cartWord = t("observer_cartWord");
+    // Idempotency check must match the translated suffix we append below, not
+    // the English word "cart" — otherwise re-running this in a non-English
+    // locale would keep re-appending the suffix every pass.
+    const already = new RegExp(cartWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    if (already.test(trimmed)) return null; // already rebranded
+    return trimmed + " " + cartWord;
   }
 
   function relabelEnabled() {
@@ -2764,12 +2883,13 @@
 
   function relabelStyxCarts() {
     if (!relabelEnabled()) return;
+    const native = amazonNativePhrases();
     // 1. Page heading: the active "Your Lists" tab.
     document
       .querySelectorAll(".a-tab-heading a, .a-tab-heading span")
       .forEach((el) => {
-        if ((el.textContent || "").trim() === "Your Lists") {
-          relabelNode(el, () => "Your Styx Carts");
+        if ((el.textContent || "").trim() === native.yourLists) {
+          relabelNode(el, () => t("observer_yourStyxCarts"));
         }
       });
 
@@ -2794,7 +2914,7 @@
       )
       .forEach((el) =>
         relabelNode(el, (orig) =>
-          orig.toLowerCase() === "add to cart" ? "Add to Amazon Cart" : orig
+          orig.toLowerCase() === native.addToCart ? t("observer_addToAmazonCartCaps") : orig
         )
       );
   }
@@ -2841,21 +2961,27 @@
   // visible atwl popover so nothing else on the page is affected.
   function relabelAtlModal() {
     if (!relabelEnabled()) return;
+    const native = amazonNativePhrases();
     document.querySelectorAll(".a-popover-modal, .a-popover").forEach((pop) => {
       if (!pop.offsetWidth && !pop.offsetHeight) return; // hidden template
       const isAtl =
         pop.querySelector('[id^="atwl-"], [class*="atwl"]') ||
-        /\b(Add to List|Add to Styx Cart)\b/.test(pop.textContent || "");
+        new RegExp(
+          "\\b(" + native.addToList + "|" + t("observer_addToStyxCart") + ")\\b"
+        ).test(pop.textContent || "");
       if (!isAtl) return;
 
       // Fixed phrases first so the list-name pass below skips these nodes.
-      relabelLeafPhrase(pop, "Add to List", "Add to Styx Cart");
-      relabelLeafPhrase(pop, "View Your List", "View Your Styx Cart");
+      relabelLeafPhrase(pop, native.addToList, t("observer_addToStyxCart"));
+      relabelLeafPhrase(pop, native.viewYourList, t("observer_viewYourStyxCart"));
 
       // Confirmation header: Amazon renders "N item(s) added to" and the list
       // name as SIBLING spans (class huc-atwl-header-main), not nested. Rebrand
       // the name span — every header span that isn't the count/"added to"
       // prefix. Also covers the name being a link, in case the markup shifts.
+      // NOTE: this prefix regex is English-only — on a non-English Amazon page
+      // it simply won't match, so the list-name rebrand below is skipped there
+      // (safe no-op) until this is extended with a verified per-locale pattern.
       const PREFIX_RE = /item[s]?\s+added\s+to|^\s*\d+\s+item/i;
       pop
         .querySelectorAll(
@@ -2877,18 +3003,24 @@
   // Text-only + reversible; scoped to the visible modal via its title text.
   function relabelCreateListModal() {
     if (!relabelEnabled()) return;
+    const native = amazonNativePhrases();
     document
       .querySelectorAll(".a-popover-modal, .a-popover, [role='dialog'], .a-modal")
       .forEach((pop) => {
         if (!pop.offsetWidth && !pop.offsetHeight) return; // hidden template
-        if (!/Create a new list or registry/i.test(pop.textContent || "")) return;
+        const createRe = new RegExp(
+          native.createListOrRegistry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "i"
+        );
+        if (!createRe.test(pop.textContent || "")) return;
         relabelLeafPhrase(
           pop,
-          "Create a new list or registry",
-          "Create a new Styx Cart (Amazon list)"
+          native.createListOrRegistry,
+          t("observer_createStyxCartTitle")
         );
-        // "List name" / "List name (required)" → "Styx Cart name …"
-        relabelLeafPrefix(pop, /^List name/i, "Styx Cart name");
+        // "List name" / "List name (required)" → "Styx Cart name …". English-
+        // only prefix match for now — see AMAZON_NATIVE_PHRASES note above.
+        relabelLeafPrefix(pop, /^List name/i, t("observer_styxCartNamePrefix"));
       });
   }
 
@@ -2958,10 +3090,10 @@
   // to Amazon. The button names the list and shows status.
 
   const STYX_SAVE_CART_BTN_ID = "styx-save-cart";
-  const STYX_SAVE_CART_LABEL = "Save Amazon cart for later";
+  const STYX_SAVE_CART_LABEL = t("popup_saveForLater_button");
   const STYX_SAVE_CART_STYLE_ID = "styx-save-cart-style";
   const STYX_CLEAR_CART_BTN_ID = "styx-clear-cart";
-  const STYX_CLEAR_CART_LABEL = "Clear Amazon cart";
+  const STYX_CLEAR_CART_LABEL = t("popup_clear_button");
   const STYX_CLEAR_CART_CONFIRM_ID = "styx-clear-cart-confirm";
   const STYX_SAVE_CART_PROMPT_ID = "styx-save-cart-prompt";
 
@@ -3215,7 +3347,7 @@
         '<span class="styx-toast-bang">!</span>' +
         '</div></div>' +
         '<div class="styx-toast-body">' +
-        '<div class="styx-toast-title">Building your Amazon list</div>' +
+        '<div class="styx-toast-title">' + escapeHtml(t("observer_buildingAmazonList")) + '</div>' +
         '<div class="styx-toast-detail"></div></div>';
       document.body.appendChild(el);
       requestAnimationFrame(() => el.classList.add("styx-toast-in"));
@@ -3268,11 +3400,11 @@
     chrome.runtime.onMessage.addListener((m) => {
       if (!m) return;
       if (m.type === "MC_LIST_SAVE_PROGRESS") {
-        showStyxToast(m.detail || "Working…", m.title);
+        showStyxToast(m.detail || t("observer_working"), m.title);
       } else if (m.type === "MC_LIST_SAVE_DONE") {
         finishStyxToast(
           m.ok ? "done" : "error",
-          m.title || (m.ok ? "Cart saved" : "Couldn't save to Amazon"),
+          m.title || (m.ok ? t("observer_cartSaved") : t("popup_err_saveToAmazonFailed")),
           m.detail || "",
           m.hideAfter
         );
@@ -3325,12 +3457,12 @@
         <div class="styx-save-cart-prompt-card">
           <p class="styx-save-cart-prompt-kicker">Styx Multi-Cart</p>
           <form class="styx-save-cart-prompt-form" autocomplete="off">
-            <label id="styx-save-cart-prompt-title" class="styx-save-cart-prompt-title" for="styx-save-cart-prompt-input">Name your new Amazon list (new Styx cart):</label>
+            <label id="styx-save-cart-prompt-title" class="styx-save-cart-prompt-title" for="styx-save-cart-prompt-input">${t("observer_nameYourNewList")}</label>
             <input id="styx-save-cart-prompt-input" class="styx-save-cart-prompt-input" type="text" maxlength="60" autocomplete="off" />
-            <p class="styx-save-cart-prompt-help">After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension.</p>
+            <p class="styx-save-cart-prompt-help">${t("observer_saveCartHelp")}</p>
             <div class="styx-save-cart-prompt-actions">
-              <button type="button" data-styx-save-prompt-choice="cancel">Cancel</button>
-              <button type="submit" data-styx-save-prompt-choice="ok">OK</button>
+              <button type="button" data-styx-save-prompt-choice="cancel">${t("popup_action_cancel")}</button>
+              <button type="submit" data-styx-save-prompt-choice="ok">${t("popup_action_ok")}</button>
             </div>
           </form>
         </div>
@@ -3377,12 +3509,12 @@
     dialog.innerHTML = `
       <div class="styx-clear-cart-confirm-card">
         <p class="styx-clear-cart-confirm-kicker">Styx Multi-Cart</p>
-        <h2 id="styx-clear-cart-confirm-title">Clear your Amazon cart?</h2>
-        <p>Save these items to a new Styx cart for later, or clear them now to shop for a different occasion.</p>
+        <h2 id="styx-clear-cart-confirm-title">${t("popup_confirm_clear_title")}</h2>
+        <p>${t("observer_clearCartConfirmBody")}</p>
         <div class="styx-clear-cart-confirm-actions">
-          <button type="button" data-styx-clear-choice="clear">Clear it!</button>
-          <button type="button" data-styx-clear-choice="save">Save &amp; Clear</button>
-          <button type="button" data-styx-clear-choice="cancel">Cancel</button>
+          <button type="button" data-styx-clear-choice="clear">${t("popup_confirm_clear_okLabel")}</button>
+          <button type="button" data-styx-clear-choice="save">${t("popup_confirm_clear_altLabel")}</button>
+          <button type="button" data-styx-clear-choice="cancel">${t("popup_action_cancel")}</button>
         </div>
       </div>
     `;
@@ -3398,26 +3530,26 @@
       actionButton.disabled = true;
       dialog.querySelectorAll("button").forEach((el) => { el.disabled = true; });
       btn.disabled = true;
-      setClearCartLabel(btn, choice === "save" ? "Saving & clearing…" : "Clearing cart…");
+      setClearCartLabel(btn, choice === "save" ? t("observer_savingAndClearing") : t("observer_clearingCart"));
       close();
       showStyxToast(
-        choice === "save" ? "Saving your cart, then clearing it…" : "Clearing your Amazon cart…",
-        choice === "save" ? "Saving your cart" : "Clearing your cart"
+        choice === "save" ? t("observer_savingThenClearing") : t("observer_clearingAmazonCart"),
+        choice === "save" ? t("observer_savingYourCart") : t("observer_clearingYourCart")
       );
 
       const res = await sendRequest({
         type: choice === "save" ? "MC_SAVE_AND_CLEAR" : "MC_CLEAR_CURRENT",
-        ...(choice === "save" ? { name: `Cart ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}` } : {})
+        ...(choice === "save" ? { name: `${t("observer_cartWord")} ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}` } : {})
       });
       if (res && res.ok) {
         finishStyxToast(
           "done",
-          choice === "save" ? "Cart saved and cleared" : "Cart clearing started",
-          res.alreadyEmpty ? "Your Amazon cart is already empty." : "Check the Amazon tab for progress.",
+          choice === "save" ? t("observer_cartSavedAndCleared") : t("observer_cartClearingStarted"),
+          res.alreadyEmpty ? t("popup_toast_cartAlreadyEmpty") : t("observer_checkAmazonTab"),
           5000
         );
       } else {
-        finishStyxToast("error", "Couldn't clear cart", (res && res.error) || "Please try again.", 6000);
+        finishStyxToast("error", t("observer_couldntClearCart"), (res && res.error) || t("observer_pleaseTryAgain"), 6000);
         btn.disabled = false;
         setClearCartLabel(btn, STYX_CLEAR_CART_LABEL);
       }
@@ -3432,7 +3564,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = STYX_CLEAR_CART_BTN_ID;
-    btn.title = "Clear every item from your active Amazon cart";
+    btn.title = t("popup_clear_button_title");
     btn.innerHTML =
       STYX_CLEAR_CART_MARK_SVG() +
       '<span class="styx-clear-cart-label">' + STYX_CLEAR_CART_LABEL + "</span>";
@@ -3588,7 +3720,7 @@
     const btn = document.createElement("button");
     btn.type = "button";
     btn.id = STYX_SAVE_CART_BTN_ID;
-    btn.title = "Save everything in this cart to a new Amazon list";
+    btn.title = t("observer_saveEverythingTitle");
     btn.innerHTML =
       STYX_SAVE_CART_MARK_SVG() +
       '<span class="styx-save-cart-label">' + STYX_SAVE_CART_LABEL + "</span>";
@@ -3605,7 +3737,7 @@
       e.stopPropagation();
       if (btn.disabled) return;
 
-      const defaultName = `Cart ${new Date().toLocaleDateString(undefined, {
+      const defaultName = `${t("observer_cartWord")} ${new Date().toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
       })}`;
@@ -3614,10 +3746,10 @@
       const name = raw.trim() || defaultName;
 
       btn.disabled = true;
-      setSaveCartLabel(btn, "Saving to Amazon…");
+      setSaveCartLabel(btn, t("observer_savingToAmazon"));
       showStyxToast(
-        "Opening Amazon tabs to add each item — please keep this tab open.",
-        "Building your Amazon list"
+        t("observer_openingAmazonTabs"),
+        t("observer_buildingAmazonList")
       );
 
       // Long-running: background creates the list + adds items via Amazon tabs,
@@ -3635,14 +3767,14 @@
         const added = res.added || 0;
         finishStyxToast(
           "done",
-          "List saved",
+          t("observer_listSaved"),
           res.failed
-            ? `Saved ${added}/${res.total} to "${name}". ${res.failed} need a manual add. Opening your list…`
-            : `Saved ${added} item${added === 1 ? "" : "s"} to "${name}". Opening your list…`,
+            ? t("observer_savedPartialOpeningList", [added, res.total, res.failed, name])
+            : t("observer_savedOpeningList", [itemCountTextObserver(added), name]),
           8000
         );
       } else {
-        finishStyxToast("error", "Couldn't save to Amazon", (res && res.error) || "Please try again.", 6000);
+        finishStyxToast("error", t("popup_err_saveToAmazonFailed"), (res && res.error) || t("observer_pleaseTryAgain"), 6000);
         btn.disabled = false;
         setSaveCartLabel(btn, STYX_SAVE_CART_LABEL);
       }
@@ -3781,7 +3913,9 @@
     // Match the Lists→Carts rebrand: when it's on, this reads as a Styx cart
     // action; off, keep Amazon's native wording so the surface stays coherent.
     if (label) {
-      label.textContent = relabelEnabled() ? "Add to a Styx cart" : "Add to List";
+      label.textContent = relabelEnabled()
+        ? t("observer_addToAStyxCart")
+        : amazonNativePhrases().addToList;
     }
 
     // Left button opens the chooser instead of adding to the default list.
@@ -3799,7 +3933,7 @@
     const label =
       (wrap && wrap.querySelector(".a-button-text")) ||
       document.getElementById("submit.add-to-cart-announce");
-    if (label) relabelNode(label, () => "Add directly to Amazon cart");
+    if (label) relabelNode(label, () => t("observer_addDirectlyToAmazonCart"));
   }
 
   function injectPdpAddToListButton() {
@@ -4366,7 +4500,7 @@
     const fab = document.createElement("button");
     fab.id = FAB_ID;
     fab.type = "button";
-    fab.setAttribute("aria-label", "Open Styx Multi-Cart");
+    fab.setAttribute("aria-label", t("observer_openStyxMultiCart"));
     const icon = document.createElement("img");
     try { icon.src = chrome.runtime.getURL("icons/icon48.png"); } catch (_e) { /* ignore */ }
     icon.alt = "";
@@ -4380,59 +4514,62 @@
     guide.id = FAB_GUIDE_ID;
     guide.hidden = true;
     guide.setAttribute("role", "dialog");
-    guide.setAttribute("aria-label", "Styx Multi-Cart quick start");
+    guide.setAttribute("aria-label", t("observer_guide_ariaLabel"));
     const guidePages = [
       {
-        title: "Clear your Amazon cart",
+        title: t("observer_guide1_title"),
         copy: "",
         // No hero image: the first instruction has to be the first thing under
         // the title, so each step carries its own inline screenshot instead.
         image: "",
         alt: "",
         bullets: [
-          '<span class="styx-guide-option">Option 1 — in the Styx panel</span>' +
-            'Click <strong>Clear Amazon cart</strong> to empty the live cart, or <strong>Save Amazon cart for later</strong> to keep a copy in a new Styx Cart first.' +
-            '<img class="styx-guide-inline-shot styx-guide-inline-shot-wide" src="guide-assets/guide-clear-save.png" alt="Clear Amazon cart and Save Amazon cart for later buttons at the top of the Styx panel">' +
-            '<ul class="styx-guide-sublist"><li>Styx Carts are simply Amazon lists with added versatility.</li></ul>',
-          '<span class="styx-guide-option">Option 2 — on your Amazon cart page</span>' +
-            'The same two buttons sit right under <strong>Proceed to checkout</strong>.' +
-            '<img class="styx-guide-inline-shot styx-guide-inline-shot-tall" src="guide-assets/CartButtons.png" alt="Clear Amazon cart and Save Amazon cart for later buttons below Proceed to checkout on the Amazon cart page">'
+          `<span class="styx-guide-option">${t("observer_guide1_option1")}</span>` +
+            t("observer_guide1_bullet1_text", [
+              `<strong>${t("popup_clear_button")}</strong>`,
+              `<strong>${t("popup_saveForLater_button")}</strong>`,
+            ]) +
+            `<img class="styx-guide-inline-shot styx-guide-inline-shot-wide" src="guide-assets/guide-clear-save.png" alt="${escapeHtml(t("observer_guide1_shot1_alt"))}">` +
+            `<ul class="styx-guide-sublist"><li>${t("observer_guide1_sublist1")}</li></ul>`,
+          `<span class="styx-guide-option">${t("observer_guide1_option2")}</span>` +
+            t("observer_guide1_bullet2_text", [`<strong>${t("observer_proceedToCheckout")}</strong>`]) +
+            `<img class="styx-guide-inline-shot styx-guide-inline-shot-tall" src="guide-assets/CartButtons.png" alt="${escapeHtml(t("observer_guide1_shot2_alt"))}">`
         ]
       },
       {
-        title: "Put items in different carts for separate purchases",
+        title: t("observer_guide2_title"),
         copy: [
-          "Want to organize your purchases as you shop?...",
-          "Choose <strong>Add to a Styx cart</strong> on an item's page or 'add' button",
-          "Then pick an existing cart or <strong>+ Create new cart</strong>."
+          t("observer_guide2_copy1"),
+          t("observer_guide2_copy2", [`<strong>${t("observer_addToAStyxCart")}</strong>`]),
+          t("observer_guide2_copy3", [`<strong>${t("observer_createNewCartRow")}</strong>`]),
         ],
         image: "",
         alt: "",
         images: [
-          { src: "guide-assets/AddtoStyxCart.png", alt: "Add to a Styx cart button on an Amazon product page" },
-          { src: "guide-assets/CartList.png", alt: "The Styx cart picker listing your carts, with a Create new cart option" }
+          { src: "guide-assets/AddtoStyxCart.png", alt: t("observer_guide2_shot1_alt") },
+          { src: "guide-assets/CartList.png", alt: t("observer_guide2_shot2_alt") }
         ],
-        bullets: ["Use separate carts for trips, projects, or people.", "Adding an item directly to your Amazon cart or 'Buy now' are still available options."]
+        bullets: [t("observer_guide2_bullet1"), t("observer_guide2_bullet2")]
       },
       {
-        title: "Send a whole cart to Amazon",
+        title: t("observer_guide3_title"),
         // No hero image — this step is a tour of the three places the action
         // lives, so each surface gets its own inline screenshot inside a bullet.
-        copy: "Ready to checkout with a specific cart? You can send it to your Amazon cart multiple ways...",
+        copy: t("observer_guide3_copy"),
         image: "",
         alt: "",
         bullets: [
-          '<span class="styx-guide-option">Option 1 — at the top of a cart</span>' +
-            'On any Styx cart (Amazon list) page.' +
-            '<img class="styx-guide-inline-shot" src="guide-assets/SendAllToAmazonCart.png" alt="Send All to Amazon Cart button at the top of a list page">',
-          '<span class="styx-guide-option">Option 2 — docked while you scroll</span>' +
-            'Once you scroll past that button it docks in the bottom-right, so it is always in reach on long lists.' +
-            '<img class="styx-guide-inline-shot" src="guide-assets/SendAllDockedPill.png" alt="Send All to Amazon Cart button docked beside the floating Styx button">',
-          '<span class="styx-guide-option">Option 3 — in the Styx panel</span>' +
-            'Click the cart button on any cart\'s row in the extension panel' +
-            '<img class="styx-guide-inline-shot styx-guide-inline-shot-wide" src="guide-assets/SendAllPanelButton.png" alt="Add All to Amazon Cart button on a cart row in the Styx panel">',
-          'Styx adds all the items to whatever is already in your Amazon cart, then reports the result when it is done.',
-          "<strong> We've already loaded your Amazon lists</strong> so you can start using Styx carts right away. Click <strong>Finish</strong> to start a whole new way to shop on Amazon!"
+          `<span class="styx-guide-option">${t("observer_guide3_option1")}</span>` +
+            t("observer_guide3_bullet1_text") +
+            `<img class="styx-guide-inline-shot" src="guide-assets/SendAllToAmazonCart.png" alt="${escapeHtml(t("observer_guide3_shot1_alt"))}">`,
+          `<span class="styx-guide-option">${t("observer_guide3_option2")}</span>` +
+            t("observer_guide3_bullet2_text") +
+            `<img class="styx-guide-inline-shot" src="guide-assets/SendAllDockedPill.png" alt="${escapeHtml(t("observer_guide3_shot2_alt"))}">`,
+          `<span class="styx-guide-option">${t("observer_guide3_option3")}</span>` +
+            t("observer_guide3_bullet3_text") +
+            `<img class="styx-guide-inline-shot styx-guide-inline-shot-wide" src="guide-assets/SendAllPanelButton.png" alt="${escapeHtml(t("observer_guide3_shot3_alt"))}">`,
+          t("observer_guide3_bullet4"),
+          t("observer_guide3_bullet5", [`<strong>${t("observer_guideFinish")}</strong>`])
         ]
       }
     ];
@@ -4470,23 +4607,23 @@
         : "";
       guide.innerHTML = `
         <div class="styx-guide-body">
-          <p class="styx-guide-kicker">Quick start</p>
+          <p class="styx-guide-kicker">${t("observer_guide_kicker")}</p>
           <p class="styx-guide-intro">
-            <img src="${guideImageUrl("guide-assets/StyxFabButton.png")}" alt="The round Styx button">
-            <span>Click the Styx button in the bottom-right of any Amazon page to open the panel.</span>
+            <img src="${guideImageUrl("guide-assets/StyxFabButton.png")}" alt="${escapeHtml(t("observer_guide_fabButtonAlt"))}">
+            <span>${t("observer_guide_introText")}</span>
           </p>
-          <p class="styx-guide-progress">Step ${guidePage + 1} of ${guidePages.length}</p>
+          <p class="styx-guide-progress">${t("observer_guide_stepOf", [guidePage + 1, guidePages.length])}</p>
           <h2 class="styx-guide-title">${page.title}</h2>
           ${copyHtml}
-          ${page.image ? `<img class="styx-guide-shot" src="${guideImageUrl(page.image)}" alt="${page.alt}">` : ""}
+          ${page.image ? `<img class="styx-guide-shot" src="${guideImageUrl(page.image)}" alt="${escapeHtml(page.alt)}">` : ""}
           ${imagesHtml}
           <ul class="styx-guide-list">${bulletsHtml}</ul>
         </div>
         <div class="styx-guide-actions">
-          ${guidePage > 0 ? `<button class="styx-guide-btn" type="button" data-action="guide-back">Back</button>` : ""}
-          <button class="styx-guide-btn" type="button" data-action="dismiss-guide">Not now</button>
+          ${guidePage > 0 ? `<button class="styx-guide-btn" type="button" data-action="guide-back">${t("observer_back")}</button>` : ""}
+          <button class="styx-guide-btn" type="button" data-action="dismiss-guide">${t("observer_notNow")}</button>
           <span class="styx-guide-spacer"></span>
-          <button class="styx-guide-btn styx-guide-btn-primary" type="button" data-action="${isLast ? "finish-guide" : "guide-next"}">${isLast ? "Finish" : "Next"}</button>
+          <button class="styx-guide-btn styx-guide-btn-primary" type="button" data-action="${isLast ? "finish-guide" : "guide-next"}">${isLast ? t("observer_guideFinish") : t("observer_guideNext")}</button>
         </div>
       `;
     }
@@ -4500,7 +4637,7 @@
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "styx-fab-bar-close";
-    closeBtn.setAttribute("aria-label", "Close");
+    closeBtn.setAttribute("aria-label", t("observer_close"));
     closeBtn.textContent = "✕";
     bar.appendChild(title);
     bar.appendChild(closeBtn);
@@ -4567,14 +4704,14 @@
       box.id = FAB_LIGHTBOX_ID;
       box.setAttribute("role", "dialog");
       box.setAttribute("aria-modal", "true");
-      box.setAttribute("aria-label", alt || "Screenshot");
+      box.setAttribute("aria-label", alt || t("observer_screenshot"));
       const img = document.createElement("img");
       img.src = src;
       img.alt = alt || "";
       const close = document.createElement("button");
       close.type = "button";
       close.className = "styx-guide-lightbox-close";
-      close.setAttribute("aria-label", "Close image");
+      close.setAttribute("aria-label", t("observer_closeImage"));
       close.textContent = "✕";
       box.appendChild(img);
       box.appendChild(close);

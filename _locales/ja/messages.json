@@ -1,0 +1,2175 @@
+{
+  "manifest_name": {
+    "message": "Styx Multi-Cart"
+  },
+  "manifest_description": {
+    "message": "Amazonカートを空にしたり、後で使うために保存したり、再利用可能なAmazonリストで複数のカートを管理できます。"
+  },
+  "manifest_actionTitle": {
+    "message": "Styx Multi-Cart"
+  },
+  "popup_header_premiumBadge": {
+    "message": "プレミアム"
+  },
+  "popup_header_premiumBadge_title": {
+    "message": "プレミアムをご利用中です"
+  },
+  "popup_header_tagline": {
+    "message": "カートの混乱からスッキリ会計へ"
+  },
+  "popup_header_settingsToggle_ariaLabel": {
+    "message": "設定を開く"
+  },
+  "popup_header_settingsToggle_title": {
+    "message": "設定"
+  },
+  "popup_header_themeToggle": {
+    "message": "ライト/ダークモードを切り替え"
+  },
+  "popup_save_label": {
+    "message": "現在のAmazonカートを保存する名前"
+  },
+  "popup_save_input_placeholder": {
+    "message": "例: 誕生日プレゼント"
+  },
+  "popup_save_button": {
+    "message": "カートを保存"
+  },
+  "popup_save_button_title": {
+    "message": "現在のAmazonカートを保存します"
+  },
+  "popup_intercept_toggle_title": {
+    "message": "商品ページでAmazonの「カートに入れる」をクリックしたときに、代わりに保存済みカートを選択します。"
+  },
+  "popup_intercept_prefix": {
+    "message": "Amazonの"
+  },
+  "popup_action_addToCart": {
+    "message": "カートに入れる"
+  },
+  "popup_intercept_sub": {
+    "message": "Amazonの現在のカートの代わりに、保存済みカートを選択します。"
+  },
+  "popup_tier_free": {
+    "message": "無料"
+  },
+  "popup_action_upgrade": {
+    "message": "アップグレード"
+  },
+  "popup_action_hideThis": {
+    "message": "非表示"
+  },
+  "popup_tier_hideAriaLabel": {
+    "message": "プラン表示を非表示にする"
+  },
+  "popup_lapsed_hideAriaLabel": {
+    "message": "期限切れバナーを非表示にする"
+  },
+  "popup_tier_usage": {
+    "message": "保存済みカート $1 / $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_lapsed_suffix_one": {
+    "message": "個のカートが読み取り専用です"
+  },
+  "popup_lapsed_suffix_other": {
+    "message": "個のカートが読み取り専用です"
+  },
+  "popup_lapsed_renewNote": {
+    "message": "— プレミアムを更新すると再編集できます。"
+  },
+  "popup_action_renew": {
+    "message": "更新"
+  },
+  "popup_list_title": {
+    "message": "あなたのカート"
+  },
+  "popup_list_gotoCarts_title": {
+    "message": "Amazonでカートを開く"
+  },
+  "popup_list_cartsWord": {
+    "message": "カート"
+  },
+  "popup_list_refresh_title": {
+    "message": "Amazonからカートを更新"
+  },
+  "popup_clear_button": {
+    "message": "Amazonカートを空にする"
+  },
+  "popup_clear_button_title": {
+    "message": "現在有効なAmazonカートからすべての商品を削除します"
+  },
+  "popup_saveForLater_button": {
+    "message": "Amazonカートを後で使うために保存"
+  },
+  "popup_saveForLater_button_title": {
+    "message": "Amazonカートの中身を空にせず、新しいカートとしてすべて保存します"
+  },
+  "popup_lists_loading": {
+    "message": "Amazonリストを読み込んでいます…"
+  },
+  "popup_lists_empty": {
+    "message": "Amazonリストが見つかりません。Amazonにサインインしているかご確認ください。"
+  },
+  "popup_action_continue": {
+    "message": "続ける →"
+  },
+  "popup_action_cancel": {
+    "message": "キャンセル"
+  },
+  "popup_action_ok": {
+    "message": "OK"
+  },
+  "popup_action_done": {
+    "message": "完了"
+  },
+  "popup_action_delete": {
+    "message": "削除"
+  },
+  "popup_action_create": {
+    "message": "作成"
+  },
+  "popup_action_rename": {
+    "message": "名前を変更"
+  },
+  "popup_action_switch": {
+    "message": "切り替える"
+  },
+  "popup_action_update": {
+    "message": "更新"
+  },
+  "popup_action_saveToAmazon": {
+    "message": "Amazonに保存"
+  },
+  "popup_action_addAll": {
+    "message": "すべて追加"
+  },
+  "popup_combine_title": {
+    "message": "カートを結合"
+  },
+  "popup_combine_sub": {
+    "message": "方向を選んでください。商品はASINで結合され、重複するものは数量の多い方が残ります。"
+  },
+  "popup_combine_movePrefix": {
+    "message": "移動:"
+  },
+  "popup_combine_moveInfix": {
+    "message": "→"
+  },
+  "popup_combine_pickTwo": {
+    "message": "結合するカートを2つ選んでください。"
+  },
+  "popup_combine_pickOneMore": {
+    "message": "あと1つ選んでください。"
+  },
+  "popup_combine_readyToMerge": {
+    "message": "結合の準備はできましたか？"
+  },
+  "popup_combine_mergeCarts": {
+    "message": "カートを結合"
+  },
+  "popup_combine_selectAriaLabel": {
+    "message": "結合するカート「$1」を選択",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_loadBothCartsFailed": {
+    "message": "両方のカートを読み込めませんでした。"
+  },
+  "popup_err_crossRegionMerge": {
+    "message": "結合できません:「$1」は$2、「$3」は$4のカートです。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "popup_err_combineCartsFailed": {
+    "message": "カートを結合できませんでした。"
+  },
+  "popup_combine_itemsAdded": {
+    "message": "$1件追加",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_combine_qtyBumped": {
+    "message": "$1件の数量を増加",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_combine_merged": {
+    "message": "「$1」を「$2」に結合しました$3。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "popup_move_title": {
+    "message": "商品を移動"
+  },
+  "popup_move_sub": {
+    "message": "移動先のカートを選んでください。"
+  },
+  "popup_move_createNew": {
+    "message": "新しいカートを作成"
+  },
+  "popup_move_noOtherCarts": {
+    "message": "移動できる他のカートがまだありません。"
+  },
+  "popup_untitled": {
+    "message": "（名称未設定）"
+  },
+  "popup_err_moveItemFailed": {
+    "message": "商品を移動できませんでした。"
+  },
+  "popup_genericCart": {
+    "message": "カート"
+  },
+  "popup_toast_moved": {
+    "message": "「$1」を「$2」に移動しました。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_err_createDestinationFailed": {
+    "message": "この商品の移動先を作成できませんでした。"
+  },
+  "popup_prompt_createDestination_title": {
+    "message": "移動先のカートを作成"
+  },
+  "popup_err_createCartFailed": {
+    "message": "カートを作成できませんでした。"
+  },
+  "popup_err_createdButNotMoved": {
+    "message": "カートは作成されましたが、商品を移動できませんでした。"
+  },
+  "popup_err_updateQtyFailed": {
+    "message": "数量を更新できませんでした"
+  },
+  "popup_confirm_removeLast_title": {
+    "message": "最後の商品を削除しますか？"
+  },
+  "popup_confirm_removeLast_before": {
+    "message": ""
+  },
+  "popup_confirm_removeLast_after": {
+    "message": "を削除すると、このカートは空になり削除されます。"
+  },
+  "popup_confirm_removeLast_okLabel": {
+    "message": "削除する"
+  },
+  "popup_err_removeItemFailed": {
+    "message": "商品を削除できませんでした"
+  },
+  "popup_toast_cartEmptiedRemoved": {
+    "message": "カートが空になったため、一覧から削除します"
+  },
+  "popup_lockPill_title": {
+    "message": "プレミアムを更新するとこのカートを編集できます"
+  },
+  "popup_lockPill_label": {
+    "message": "読み取り専用 — プレミアムにする？"
+  },
+  "popup_locked_renameTitle": {
+    "message": "ロック中 — プレミアムを更新すると名前を変更できます"
+  },
+  "popup_locked_useTitle": {
+    "message": "ロック中 — プレミアムを更新するとこのカートを使用できます"
+  },
+  "popup_item_countQty": {
+    "message": "$1 · 数量 $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_item_hostSaved": {
+    "message": "$1 · $2に保存",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_sync_synced": {
+    "message": "✓ $1に同期済み",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_sync_viewList": {
+    "message": "リストを見る"
+  },
+  "popup_sync_updateAmazonList": {
+    "message": "Amazonリストを更新"
+  },
+  "popup_count_item_one": {
+    "message": "$1点",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_count_item_other": {
+    "message": "$1点",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_unavailable": {
+    "message": "利用不可"
+  },
+  "popup_genericItem": {
+    "message": "商品"
+  },
+  "popup_thumb_moveAriaLabel": {
+    "message": "$1 — クリックして別のカートに移動",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_removeTitle": {
+    "message": "商品を削除"
+  },
+  "popup_thumb_removeAriaLabel": {
+    "message": "$1を削除",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_qtyTitle": {
+    "message": "数量を変更"
+  },
+  "popup_thumb_qtyAriaLabel": {
+    "message": "数量$1、クリックして変更",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_showLess": {
+    "message": "少なく表示"
+  },
+  "popup_thumb_showFewerAriaLabel": {
+    "message": "表示する商品を減らす"
+  },
+  "popup_thumb_showMoreAriaLabel": {
+    "message": "あと$1件の商品を表示",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_viewOnAmazon_ariaLabel": {
+    "message": "Amazonでリストを見る"
+  },
+  "popup_amazonList_viewOnAmazon_title": {
+    "message": "Amazonで見る"
+  },
+  "popup_amazonList_addAll_ariaLabel": {
+    "message": "すべてAmazonカートに追加"
+  },
+  "popup_amazonList_addAll_title": {
+    "message": "すべてAmazonカートに追加"
+  },
+  "popup_amazonList_addAvailable_title": {
+    "message": "$1をAmazonカートに追加",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_noAvailableItems": {
+    "message": "このリストには利用可能な商品がありません"
+  },
+  "popup_amazonList_viewItems": {
+    "message": "商品を見る"
+  },
+  "popup_amazonList_genericName": {
+    "message": "Amazonリスト"
+  },
+  "popup_amazonList_unavailableSuffix": {
+    "message": " · $1件利用不可",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_premiumUpgradeToUse": {
+    "message": "プレミアムカート — 利用するにはアップグレードしてください"
+  },
+  "popup_amazonList_unlockAriaLabel": {
+    "message": "プレミアムで$1のロックを解除",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_showItemsAriaLabel": {
+    "message": "$1の商品を表示",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_loadingItems": {
+    "message": "Amazonから商品を読み込んでいます…"
+  },
+  "popup_err_loadAmazonListFailed": {
+    "message": "このAmazonリストを読み込めませんでした。"
+  },
+  "popup_err_loadAmazonListsFailed": {
+    "message": "Amazonリストを読み込めませんでした。"
+  },
+  "popup_err_noAvailableItemsToAdd": {
+    "message": "このリストには追加できる商品がありません。"
+  },
+  "popup_confirm_sendToCart_title": {
+    "message": "これらの商品をAmazonカートに送りますか？"
+  },
+  "popup_confirm_sendToCart_message": {
+    "message": "「$2」から$1を現在有効なAmazonカートに追加しますか？既存のカートの商品はそのまま残ります。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_confirm_sendToCart_unavailableNote": {
+    "message": "$1はスキップされます。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_addingToCart": {
+    "message": "$1をAmazonカートに追加しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_addListToCartFailed": {
+    "message": "このリストをカートに追加できませんでした。"
+  },
+  "popup_prompt_createNewCart_title": {
+    "message": "新しいカートを作成"
+  },
+  "popup_toast_created": {
+    "message": "「$1」を作成しました。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thisFallback": {
+    "message": "これ"
+  },
+  "popup_thisCartFallback": {
+    "message": "このカート"
+  },
+  "popup_confirm_switch_title": {
+    "message": "このカートに切り替えますか？"
+  },
+  "popup_confirm_switch_message": {
+    "message": "現在のAmazonカートが「$1」の内容に置き換わります。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_switchingCarts": {
+    "message": "カートを切り替えています — $1を読み込み中です。Amazonに追加特典の案内が表示された場合は、いずれかのオプションを選んで続行してください。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_switchCartsFailed": {
+    "message": "カートを切り替えられませんでした"
+  },
+  "popup_confirm_updateList_title": {
+    "message": "Amazonリストを更新しますか？"
+  },
+  "popup_confirm_saveToList_title": {
+    "message": "Amazonリストとして保存しますか？"
+  },
+  "popup_confirm_updateList_message": {
+    "message": "「$1」をAmazonリストと再同期します。Styxは商品を追加するためにAmazonのタブを開きます — 完了するまで開いたままにしてください。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_confirm_saveToList_message": {
+    "message": "「$1」という名前の非公開Amazonリストを作成し、商品を追加します。Styxはそのために Amazon のタブを開きます — 完了するまで開いたままにしてください。Amazonにサインインしている必要があります。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_savingToAmazonList": {
+    "message": "Amazonリストに保存しています — StyxがAmazonのタブを開いています。少し時間がかかる場合があります…"
+  },
+  "popup_toast_savedPartial": {
+    "message": "$1/$2件を保存しました。$3件は追加できませんでした。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "popup_toast_savedToAmazonList": {
+    "message": "$1をAmazonリストに保存しました。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveToAmazonFailed": {
+    "message": "Amazonに保存できませんでした"
+  },
+  "popup_prompt_renameCart_title": {
+    "message": "カートの名前を変更"
+  },
+  "popup_prompt_renameCart_placeholder": {
+    "message": "カート名"
+  },
+  "popup_err_renameFailed": {
+    "message": "名前を変更できませんでした"
+  },
+  "popup_confirm_deleteCart_title": {
+    "message": "保存済みカートを削除しますか？"
+  },
+  "popup_confirm_deleteCart_message": {
+    "message": "「$1」は完全に削除されます。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_deleted": {
+    "message": "削除しました"
+  },
+  "popup_err_deleteFailed": {
+    "message": "削除できませんでした"
+  },
+  "popup_item_rename_title": {
+    "message": "カートの名前を変更"
+  },
+  "popup_item_switchTo": {
+    "message": "このカートに切り替える"
+  },
+  "popup_item_switchTo_title": {
+    "message": "すべての商品をAmazonカートに移動します"
+  },
+  "popup_item_saveToList": {
+    "message": "Amazonリストとして保存"
+  },
+  "popup_item_saveToList_title": {
+    "message": "このカートをAmazonリストとして保存し、デバイス間で同期します"
+  },
+  "popup_item_delete_title": {
+    "message": "カート全体を削除"
+  },
+  "popup_qty_ariaLabel": {
+    "message": "商品の数量を変更"
+  },
+  "popup_qty_decrease": {
+    "message": "数量を減らす"
+  },
+  "popup_qty_increase": {
+    "message": "数量を増やす"
+  },
+  "popup_confirm_defaultTitle": {
+    "message": "よろしいですか？"
+  },
+  "popup_prompt_defaultTitle": {
+    "message": "値を入力してください"
+  },
+  "popup_paywall_title": {
+    "message": "プレミアムにアップグレード"
+  },
+  "popup_paywall_sub": {
+    "message": "無料の保存済みカートをすべて使い切っています。プレミアムなら、あなたの買い物スタイルに合わせてもっと保存できます。"
+  },
+  "popup_paywall_ctaSub": {
+    "message": "あなたの買い物スタイルに合わせて時間を節約 — ギフトリスト、再購入、特別な機会、見比べもまとめて。"
+  },
+  "popup_paywall_limitTitle": {
+    "message": "無料カート$1個をすべて使い切りました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_paywall_limitSub": {
+    "message": "プレミアムにアップグレードしてもっと保存しましょう — 既存のカートはそのまま変わりません。"
+  },
+  "popup_paywall_renewTitle": {
+    "message": "おかえりなさい"
+  },
+  "popup_paywall_renewSub": {
+    "message": "プレミアムを更新すると、読み取り専用のカートが解除されます。保存したものはすべてそのまま残っています。"
+  },
+  "popup_paywall_feature_unlimited": {
+    "message": "無制限のカート（無料は3個まで）"
+  },
+  "popup_paywall_feature_curated": {
+    "message": "ギフト、再購入、特別な機会ごとに整理したリストを保持"
+  },
+  "popup_paywall_feature_cancelAnytime": {
+    "message": "いつでも解約可能 — 無料の3個分はそのまま表示されます"
+  },
+  "popup_paywall_haveCode": {
+    "message": "コードをお持ちですか？"
+  },
+  "popup_paywall_promoCode": {
+    "message": "プロモーションコード"
+  },
+  "popup_paywall_enterCode": {
+    "message": "コードを入力"
+  },
+  "popup_paywall_redeem": {
+    "message": "利用する"
+  },
+  "popup_paywall_annual": {
+    "message": "年額"
+  },
+  "popup_paywall_annualPrice": {
+    "message": "$9.99 / 年"
+  },
+  "popup_paywall_lifetime": {
+    "message": "買い切り"
+  },
+  "popup_paywall_lifetimePrice": {
+    "message": "$19.99（1回のみ）"
+  },
+  "popup_paywall_maybeLater": {
+    "message": "後で検討する"
+  },
+  "popup_paywall_openingCheckout": {
+    "message": "決済ページを開いています…"
+  },
+  "popup_err_openCheckoutFailed": {
+    "message": "決済ページを開けませんでした。"
+  },
+  "popup_promo_enterCode": {
+    "message": "コードを入力してください。"
+  },
+  "popup_promo_checking": {
+    "message": "確認しています…"
+  },
+  "popup_promo_genericError": {
+    "message": "問題が発生しました。もう一度お試しください。"
+  },
+  "popup_promo_unlocked90": {
+    "message": "プレミアムが90日間ご利用いただけます！"
+  },
+  "popup_promo_unlockedToast": {
+    "message": "プレミアムが解除されました — お楽しみください！"
+  },
+  "popup_debug_toggle": {
+    "message": "デバッグ"
+  },
+  "popup_debug_diagnostics_title": {
+    "message": "カート診断"
+  },
+  "popup_debug_diagnostics_run": {
+    "message": "カート診断を実行"
+  },
+  "popup_debug_backup_title": {
+    "message": "バックアップ / 復元（開発者向け）"
+  },
+  "popup_debug_backup_export": {
+    "message": "バックアップをエクスポート"
+  },
+  "popup_debug_backup_restore": {
+    "message": "ファイルから復元…"
+  },
+  "popup_debug_backup_hint": {
+    "message": "エクスポートは各Amazonリストの商品を読み取り（リストごとに1つタブを開くため低速です）、ローカルのmc.*ストレージとまとめてJSONファイルにします。復元はそのファイルからAmazon上に各カスタムリストを再作成します（こちらも低速で、商品ごとに「リストに追加」を実行します）。進行状況はステータスウィンドウでご確認ください。復元は権限には影響せず、ストレージを上書きすることもありません。"
+  },
+  "popup_debug_logs_title": {
+    "message": "診断ログ"
+  },
+  "popup_debug_logs_copy": {
+    "message": "診断ログをコピー"
+  },
+  "popup_debug_logs_hint": {
+    "message": "拡張機能のバージョン、現在の状態、各コンテキスト（サービスワーカー、コンテンツスクリプト、ポップアップ）の最近のログをクリップボードにコピーします。開発者モードを有効のままにして問題を再現し、結果をコピーしてサポートに送ってください。"
+  },
+  "popup_settings_title": {
+    "message": "設定"
+  },
+  "popup_settings_amazon_heading": {
+    "message": "Amazon"
+  },
+  "popup_settings_relabel_label": {
+    "message": "Amazonリストを「カート」に名称変更"
+  },
+  "popup_settings_relabel_sub": {
+    "message": "オンにすると、Amazonのリストページを「あなたのStyxカート」に名称変更し、各リスト名に「カート」を追加します（例:「太郎のリスト」→「太郎のリスト カート」）。オフにするとAmazonはそのままです。"
+  },
+  "popup_settings_fab_heading": {
+    "message": "フローティングボタン"
+  },
+  "popup_settings_fabpulse_label": {
+    "message": "フローティングボタンを点滅させる"
+  },
+  "popup_settings_fabpulse_sub": {
+    "message": "丸いStyxボタンがAmazonのページでオレンジ色に光り、使い方を思い出させてくれます。静止したボタンにするにはオフにしてください。"
+  },
+  "popup_settings_display_heading": {
+    "message": "表示"
+  },
+  "popup_settings_sidepanel_label": {
+    "message": "サイドパネルで開く"
+  },
+  "popup_settings_sidepanel_sub": {
+    "message": "オンにするとStyxをサイドパネルとして表示します（デフォルト）。オフにするとツールバーからコンパクトなポップアップを開きます。"
+  },
+  "popup_settings_dev_heading": {
+    "message": "開発者"
+  },
+  "popup_settings_devmode_label": {
+    "message": "開発者モード"
+  },
+  "popup_settings_devmode_sub": {
+    "message": "ポップアップ下部にデバッグパネルを表示し、サービスワーカーのコンソールで詳細ログを有効にします。オフのままで問題ありません。"
+  },
+  "popup_settings_affiliate_heading": {
+    "message": "アフィリエイトに関する開示"
+  },
+  "popup_settings_affiliate_body": {
+    "message": "カート全体をAmazonに送信する際、StyxはAmazonの一括カート追加エンドポイントを利用しますが、リンクにAmazonアソシエイトタグ（tag=styxmcart-20）が付いていないと商品が追加されません。Styxは一括カート復元機能を動作させるためだけにこのプレースホルダータグを使用しています — 正式に登録されたアソシエイトアカウントではなく、Styxはお客様の購入から一切の手数料や紹介料を得ていません。"
+  },
+  "popup_settings_affiliate_learnMore": {
+    "message": "詳細を見る"
+  },
+  "popup_settings_versionLabel": {
+    "message": "Styx Multi-Cart v$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_settings_version_ariaLabel": {
+    "message": "バージョン"
+  },
+  "popup_support_options_ariaLabel": {
+    "message": "サポートオプション"
+  },
+  "popup_support_needHelp": {
+    "message": "お困りですか？"
+  },
+  "popup_support_reportBug": {
+    "message": "不具合を報告"
+  },
+  "popup_support_reportBug_sub": {
+    "message": "新しいGitHub Issueを開く"
+  },
+  "popup_support_howToReport": {
+    "message": "報告方法について"
+  },
+  "popup_support_howToReport_sub": {
+    "message": "良い報告を書くためのヒント"
+  },
+  "popup_support_knownIssues": {
+    "message": "既知の問題"
+  },
+  "popup_support_knownIssues_sub": {
+    "message": "報告済みの不具合を確認"
+  },
+  "popup_support_toggle_ariaLabel": {
+    "message": "サポートと不具合報告"
+  },
+  "popup_support_toggle_title": {
+    "message": "サポート · 不具合を報告"
+  },
+  "popup_theme_switchToLight": {
+    "message": "ライトモードに切り替え"
+  },
+  "popup_theme_switchToDark": {
+    "message": "ダークモードに切り替え"
+  },
+  "popup_defaultCartName": {
+    "message": "カート · $1, $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_toast_saved": {
+    "message": "$1を保存しました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveCartFailed": {
+    "message": "カートを保存できませんでした"
+  },
+  "popup_thisItem": {
+    "message": "この商品"
+  },
+  "popup_theseNItems": {
+    "message": "これらの$1点の商品",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_theseItems": {
+    "message": "これらの商品"
+  },
+  "popup_confirm_clear_title": {
+    "message": "Amazonカートを空にしますか？"
+  },
+  "popup_confirm_clear_message": {
+    "message": "$1を保存すれば、後で会計するときにAmazonリスト内の専用Styxカートとして待っていてくれます — または、別の機会に買い物をするために今すぐ空にすることもできます。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_confirm_clear_altLabel": {
+    "message": "保存してから空にする"
+  },
+  "popup_confirm_clear_okLabel": {
+    "message": "空にする！"
+  },
+  "popup_toast_savingThenClearing": {
+    "message": "カートを新しいAmazonリストに保存してから空にしています…"
+  },
+  "popup_toast_cartAlreadyEmpty": {
+    "message": "Amazonカートはすでに空です。"
+  },
+  "popup_toast_clearingCart": {
+    "message": "カートを空にしています — Amazonのタブをご確認ください。"
+  },
+  "popup_err_clearCartFailed": {
+    "message": "カートを空にできませんでした"
+  },
+  "popup_toast_savingForLater": {
+    "message": "$1を新しいカートに保存しています — Amazonカートはそのままです。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveSettingFailed": {
+    "message": "設定を保存できませんでした"
+  },
+  "popup_toast_relabelOn": {
+    "message": "AmazonリストがStyxカートとして表示されるようになりました。"
+  },
+  "popup_toast_relabelOff": {
+    "message": "Amazonリストはそのままです。"
+  },
+  "popup_toast_fabPulseOn": {
+    "message": "フローティングボタンが点滅します。"
+  },
+  "popup_toast_fabPulseOff": {
+    "message": "フローティングボタンの点滅をオフにしました。"
+  },
+  "popup_toast_surfaceSidepanel": {
+    "message": "サイドパネルとして開きます。再度開くにはツールバーのアイコンをクリックしてください。"
+  },
+  "popup_toast_surfacePopup": {
+    "message": "ポップアップとして開きます。再度開くにはツールバーのアイコンをクリックしてください。"
+  },
+  "popup_toast_devModeOn": {
+    "message": "開発者モードをオンにしました"
+  },
+  "popup_toast_devModeOff": {
+    "message": "開発者モードをオフにしました"
+  },
+  "popup_time_justNow": {
+    "message": "たった今"
+  },
+  "popup_time_minAgo": {
+    "message": "$1分前",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_time_hrAgo": {
+    "message": "$1時間前",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_time_dayAgo": {
+    "message": "$1日前",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_noSwResponse": {
+    "message": "拡張機能のサービスワーカーから応答がありません。"
+  },
+  "popup_err_unknownError": {
+    "message": "不明なエラー"
+  },
+  "popup_err_premiumLimitReached": {
+    "message": "カートの上限に達しました。カートを削除または結合して空き容量を確保してください。"
+  },
+  "popup_err_cartLocked": {
+    "message": "このカートはロックされています — プレミアムを更新するか、他のカートを削除して空きを作ってください。"
+  },
+  "observer_close": {
+    "message": "閉じる"
+  },
+  "observer_closeImage": {
+    "message": "画像を閉じる"
+  },
+  "observer_screenshot": {
+    "message": "スクリーンショット"
+  },
+  "observer_back": {
+    "message": "← 戻る"
+  },
+  "observer_backToCarts": {
+    "message": "← カート一覧に戻る"
+  },
+  "observer_notNow": {
+    "message": "後で"
+  },
+  "observer_tryAgain": {
+    "message": "再試行"
+  },
+  "observer_pleaseTryAgain": {
+    "message": "もう一度お試しください。"
+  },
+  "observer_genericCart": {
+    "message": "カート"
+  },
+  "observer_genericItem": {
+    "message": "（商品）"
+  },
+  "observer_cartWord": {
+    "message": "カート"
+  },
+  "observer_readOnly": {
+    "message": "読み取り専用"
+  },
+  "observer_lockedRenewTitle": {
+    "message": "ロック中 — クリックしてプレミアムを更新"
+  },
+  "observer_addToWhichCart": {
+    "message": "どのカートに追加しますか？"
+  },
+  "observer_createNewCartRow": {
+    "message": "+ 新しいカートを作成"
+  },
+  "observer_addToAmazonCart": {
+    "message": "Amazonカートに追加"
+  },
+  "observer_addToAmazonCartCaps": {
+    "message": "Amazonカートに追加"
+  },
+  "observer_addDirectlyToAmazonCart": {
+    "message": "Amazonカートに直接追加"
+  },
+  "observer_noAmazonListsYet": {
+    "message": "Amazonリストがまだありません — 下から作成してください。"
+  },
+  "observer_addingToCart": {
+    "message": "「$1」に追加しています — ステータスウィンドウをご確認ください…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_err_addItemFailed": {
+    "message": "商品を追加できませんでした。"
+  },
+  "observer_addedTo": {
+    "message": "「$1」に追加しました ✓",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_qtyBumpedIn": {
+    "message": "「$1」の数量を増やしました ✓",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_qtyLabel": {
+    "message": "数量"
+  },
+  "observer_create_title": {
+    "message": "この商品用の新しいカート"
+  },
+  "observer_create_sub": {
+    "message": "名前を付けると、すぐに「$1」を追加します。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_create_submit": {
+    "message": "作成して追加"
+  },
+  "observer_create_needName": {
+    "message": "先に名前を付けてください。"
+  },
+  "observer_create_creating": {
+    "message": "リストを作成しています — ステータスウィンドウをご確認ください…"
+  },
+  "observer_err_createListFailed": {
+    "message": "リストを作成できませんでした。"
+  },
+  "observer_upgrade_limitTitle": {
+    "message": "カートの上限に達しました"
+  },
+  "observer_upgrade_limitSub": {
+    "message": "無料プランの上限であるカート3個に達しました。プレミアムにアップグレードすると、カートを無制限に作成でき、完全な編集機能が使えます！"
+  },
+  "observer_upgrade_renewTitle": {
+    "message": "プレミアムを更新"
+  },
+  "observer_upgrade_renewSub": {
+    "message": "このカートは無料プランでは読み取り専用です。プレミアムにアップグレードして、保存済みのすべてのカートに商品を追加できるようにしましょう！"
+  },
+  "observer_upgrade_feature_unlimited": {
+    "message": "無制限のカート"
+  },
+  "observer_upgrade_feature_fullEditing": {
+    "message": "編集、復元、名前変更、結合 — すべての機能をフル活用"
+  },
+  "observer_upgrade_feature_cancelAnytime": {
+    "message": "いつでも解約可能。カートは引き続き閲覧できます"
+  },
+  "observer_upgrade_premiumCartTitle": {
+    "message": "プレミアムカート"
+  },
+  "observer_upgrade_premiumCartSub": {
+    "message": "このカートは無料プランではロックされています。アップグレードしてAmazonカートに送信し、すべてのカートのロックを解除しましょう。"
+  },
+  "observer_upgrade_feature_allCarts": {
+    "message": "Amazonリストのカートをすべて利用可能"
+  },
+  "observer_upgrade_feature_sendAny": {
+    "message": "どのカートもAmazonカートに送信可能"
+  },
+  "observer_yourStyxCarts": {
+    "message": "あなたのStyxカート"
+  },
+  "observer_addToStyxCart": {
+    "message": "Styxカートに追加"
+  },
+  "observer_viewYourStyxCart": {
+    "message": "Styxカートを見る"
+  },
+  "observer_addToAStyxCart": {
+    "message": "Styxカートに追加"
+  },
+  "observer_createStyxCartTitle": {
+    "message": "新しいStyxカートを作成（Amazonリスト）"
+  },
+  "observer_styxCartNamePrefix": {
+    "message": "Styxカート名"
+  },
+  "observer_sendAllToAmazonCart": {
+    "message": "すべてAmazonカートに送信"
+  },
+  "observer_noItemsFound": {
+    "message": "商品が見つかりません"
+  },
+  "observer_addingN": {
+    "message": "$1を追加しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_sendingNToCart": {
+    "message": "$1をカートに送信しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_buildingAmazonList": {
+    "message": "Amazonリストを作成しています"
+  },
+  "observer_working": {
+    "message": "処理中…"
+  },
+  "observer_cartSaved": {
+    "message": "カートを保存しました"
+  },
+  "observer_nameYourNewList": {
+    "message": "新しいAmazonリスト（新しいStyxカート）の名前を入力してください:"
+  },
+  "observer_saveCartHelp": {
+    "message": "このカートを保存すると、Amazonリストまたは Styx Multi-Cart 拡張機能からアクセスできます。"
+  },
+  "observer_clearCartConfirmBody": {
+    "message": "これらの商品を新しいStyxカートに保存して後で使うか、今すぐ空にして別の機会の買い物に備えましょう。"
+  },
+  "observer_savingAndClearing": {
+    "message": "保存して空にしています…"
+  },
+  "observer_clearingCart": {
+    "message": "カートを空にしています…"
+  },
+  "observer_savingThenClearing": {
+    "message": "カートを保存してから空にしています…"
+  },
+  "observer_clearingAmazonCart": {
+    "message": "Amazonカートを空にしています…"
+  },
+  "observer_savingYourCart": {
+    "message": "カートを保存しています"
+  },
+  "observer_clearingYourCart": {
+    "message": "カートを空にしています"
+  },
+  "observer_cartSavedAndCleared": {
+    "message": "カートを保存して空にしました"
+  },
+  "observer_cartClearingStarted": {
+    "message": "カートを空にする処理を開始しました"
+  },
+  "observer_checkAmazonTab": {
+    "message": "進行状況はAmazonのタブでご確認ください。"
+  },
+  "observer_couldntClearCart": {
+    "message": "カートを空にできませんでした"
+  },
+  "observer_saveEverythingTitle": {
+    "message": "このカートの中身をすべて新しいAmazonリストとして保存します"
+  },
+  "observer_savingToAmazon": {
+    "message": "Amazonに保存しています…"
+  },
+  "observer_openingAmazonTabs": {
+    "message": "各商品を追加するためにAmazonのタブを開いています — このタブは開いたままにしてください。"
+  },
+  "observer_listSaved": {
+    "message": "リストを保存しました"
+  },
+  "observer_savedPartialOpeningList": {
+    "message": "「$3」に$1/$2件を保存しました。$4件は手動で追加が必要です。リストを開いています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "observer_savedOpeningList": {
+    "message": "「$2」に$1を保存しました。リストを開いています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_extensionContextInvalid": {
+    "message": "拡張機能のコンテキストが無効です"
+  },
+  "observer_openStyxMultiCart": {
+    "message": "Styx Multi-Cartを開く"
+  },
+  "observer_proceedToCheckout": {
+    "message": "レジに進む"
+  },
+  "observer_guide_ariaLabel": {
+    "message": "Styx Multi-Cart クイックスタート"
+  },
+  "observer_guide_kicker": {
+    "message": "クイックスタート"
+  },
+  "observer_guide_fabButtonAlt": {
+    "message": "丸いStyxボタン"
+  },
+  "observer_guide_introText": {
+    "message": "AmazonページのStyxボタン（右下）をクリックしてパネルを開いてください。"
+  },
+  "observer_guide_stepOf": {
+    "message": "ステップ $1 / $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_guideFinish": {
+    "message": "完了"
+  },
+  "observer_guideNext": {
+    "message": "次へ"
+  },
+  "observer_guide1_title": {
+    "message": "Amazonカートを空にする"
+  },
+  "observer_guide1_option1": {
+    "message": "オプション1 — Styxパネルから"
+  },
+  "observer_guide1_bullet1_text": {
+    "message": "$1をクリックして現在のカートを空にするか、$2をクリックして先に新しいStyxカートにコピーを残しましょう。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_guide1_shot1_alt": {
+    "message": "Styxパネル上部にある「Amazonカートを空にする」と「Amazonカートを後で使うために保存」ボタン"
+  },
+  "observer_guide1_sublist1": {
+    "message": "Styxカートは、機能を追加しただけのAmazonリストです。"
+  },
+  "observer_guide1_option2": {
+    "message": "オプション2 — Amazonカートページから"
+  },
+  "observer_guide1_bullet2_text": {
+    "message": "同じ2つのボタンが、$1のすぐ下にもあります。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide1_shot2_alt": {
+    "message": "Amazonカートページの「レジに進む」の下にある「Amazonカートを空にする」と「Amazonカートを後で使うために保存」ボタン"
+  },
+  "observer_guide2_title": {
+    "message": "別々の買い物のために商品を異なるカートに入れる"
+  },
+  "observer_guide2_copy1": {
+    "message": "買い物をしながら購入内容を整理したいですか？…"
+  },
+  "observer_guide2_copy2": {
+    "message": "商品ページや「追加」ボタンで$1を選択します",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide2_copy3": {
+    "message": "次に、既存のカートまたは$1を選びます。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide2_shot1_alt": {
+    "message": "Amazon商品ページの「Styxカートに追加」ボタン"
+  },
+  "observer_guide2_shot2_alt": {
+    "message": "カート一覧と「新しいカートを作成」オプションを表示するStyxカート選択画面"
+  },
+  "observer_guide2_bullet1": {
+    "message": "旅行、プロジェクト、または人ごとに別々のカートを使いましょう。"
+  },
+  "observer_guide2_bullet2": {
+    "message": "Amazonカートに直接追加する、または「今すぐ買う」も引き続きご利用いただけます。"
+  },
+  "observer_guide3_title": {
+    "message": "カート全体をAmazonに送信する"
+  },
+  "observer_guide3_copy": {
+    "message": "特定のカートで会計する準備はできましたか？いくつかの方法でAmazonカートに送信できます…"
+  },
+  "observer_guide3_option1": {
+    "message": "オプション1 — カート上部から"
+  },
+  "observer_guide3_bullet1_text": {
+    "message": "任意のStyxカート（Amazonリスト）のページで。"
+  },
+  "observer_guide3_shot1_alt": {
+    "message": "リストページ上部にある「すべてAmazonカートに送信」ボタン"
+  },
+  "observer_guide3_option2": {
+    "message": "オプション2 — スクロール中に固定表示"
+  },
+  "observer_guide3_bullet2_text": {
+    "message": "そのボタンを通り過ぎてスクロールすると、右下に固定表示され、長いリストでも常に手が届きます。"
+  },
+  "observer_guide3_shot2_alt": {
+    "message": "フローティングStyxボタンの横に固定表示される「すべてAmazonカートに送信」ボタン"
+  },
+  "observer_guide3_option3": {
+    "message": "オプション3 — Styxパネルから"
+  },
+  "observer_guide3_bullet3_text": {
+    "message": "拡張機能パネル内の任意のカートの行にあるカートボタンをクリックします"
+  },
+  "observer_guide3_shot3_alt": {
+    "message": "Styxパネルのカート行にある「すべてAmazonカートに追加」ボタン"
+  },
+  "observer_guide3_bullet4": {
+    "message": "Styxはすでに Amazon カートにある内容にすべての商品を追加し、完了すると結果を通知します。"
+  },
+  "observer_guide3_bullet5": {
+    "message": "<strong>Amazonリストはすでに読み込まれています</strong>ので、すぐにStyxカートを使い始められます。$1をクリックして、まったく新しいAmazonでの買い物体験を始めましょう！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_done": {
+    "message": "完了"
+  },
+  "bg_doneCap": {
+    "message": "完了しました。"
+  },
+  "bg_starting": {
+    "message": "開始しています…"
+  },
+  "bg_thisItem": {
+    "message": "この商品"
+  },
+  "bg_genericItemLowercase": {
+    "message": "商品"
+  },
+  "bg_genericListName": {
+    "message": "リスト"
+  },
+  "bg_amazonCartFallbackName": {
+    "message": "Amazonカート"
+  },
+  "bg_styxCartFallbackName": {
+    "message": "Styxカート"
+  },
+  "bg_clearingCart": {
+    "message": "カートを空にしています"
+  },
+  "bg_clearingCartEllipsis": {
+    "message": "カートを空にしています…"
+  },
+  "bg_removedOfTotal": {
+    "message": "$2件中$1件を削除しました…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_removedSoFar": {
+    "message": "これまでに$1件削除しました…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_clearingCartRemovedOfTotal": {
+    "message": "カートを空にしています — $2件中$1件を削除しました…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_clearingCartRemovedSoFar": {
+    "message": "カートを空にしています — これまでに$1件削除しました…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldNotClearCartRemaining": {
+    "message": "カートを空にできませんでした — カートに$1が残っています",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_cartClearedRemoved": {
+    "message": "カートを空にしました — $1を削除しました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_restoringCart": {
+    "message": "$1を復元しています",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingFirstProduct": {
+    "message": "最初の商品を読み込んでいます…"
+  },
+  "bg_batchOf": {
+    "message": "バッチ $1/$2（$3件）",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_itemsInOneGo": {
+    "message": "$1件をまとめて",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingBulkAddFor": {
+    "message": "$1の一括追加を読み込んでいます…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingBulkAddBatch": {
+    "message": "一括追加を読み込んでいます — バッチ $1/$2（$3件）…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_loadingBulkAddForItems": {
+    "message": "$1の一括追加を読み込んでいます…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkRejectedFallback": {
+    "message": "Amazonでこれらの商品を一括で準備できませんでした — 1件ずつ追加しています…"
+  },
+  "bg_amazonRejectedBulkAdd": {
+    "message": "Amazonが一括追加の商品を拒否しました"
+  },
+  "bg_addToCartFallback": {
+    "message": "カートに入れる"
+  },
+  "bg_clickHighlightedBatch": {
+    "message": "ハイライトされた「$1」をクリックしてバッチ $2/$3（$4件）を確認してください",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "bg_clickHighlightedItems": {
+    "message": "ハイライトされた「$1」をクリックして$2をAmazonカートに追加してください",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_waitingForConfirmation": {
+    "message": "確認をお待ちしています…"
+  },
+  "bg_userDidNotConfirmBulkAdd": {
+    "message": "ユーザーが一括追加を確認しませんでした: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldntFindConfirmButton": {
+    "message": "確認ボタンが見つかりませんでした — カートを確認しています…"
+  },
+  "bg_clickAddToCartManual": {
+    "message": "準備ができたらページ上の「カートに入れる」をクリックしてください — 復元は自動的に再開します"
+  },
+  "bg_bulkRestorePartial": {
+    "message": "一括復元で$2件中$1件を追加しました — $3件はスキップされました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_bulkRestoreZero": {
+    "message": "一括復元では商品が追加されませんでした — もう一度お試しいただくか、1件ずつ復元してください"
+  },
+  "bg_noProductsOnBulkPage": {
+    "message": "Amazonの一括追加ページに商品が表示されませんでした"
+  },
+  "bg_confirmButtonNotFound": {
+    "message": "確認ボタンが10秒以内に見つかりませんでした"
+  },
+  "bg_savedCartHasNoItems": {
+    "message": "この保存済みカートには商品がありません。"
+  },
+  "bg_productUnavailable": {
+    "message": "商品が利用できません"
+  },
+  "bg_skippingUnavailableItem": {
+    "message": "利用できない商品をスキップしています $1/$2: $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_unavailableSkipped": {
+    "message": "利用不可 — スキップしました: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_noFormatSelected": {
+    "message": "購入可能な形式が選択されませんでした"
+  },
+  "bg_itemOf": {
+    "message": "商品 $1/$2: $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_restoringCartAdding": {
+    "message": "カートを復元しています — $1/$2を追加中: $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_atcButtonNotFound": {
+    "message": "「カートに入れる」ボタンが見つかりません"
+  },
+  "bg_ageEarlierToday": {
+    "message": "今日の早い時間"
+  },
+  "bg_ageRecently": {
+    "message": "最近"
+  },
+  "bg_ageFromBefore": {
+    "message": "以前"
+  },
+  "bg_noCoverage": {
+    "message": "補償なし"
+  },
+  "bg_selectedOption": {
+    "message": "選択したオプション"
+  },
+  "bg_applyingChoiceAge": {
+    "message": "$1の選択（$2）を適用しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_applyingSavedChoice": {
+    "message": "保存済みの選択を適用しています: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_cartRestoredPartial": {
+    "message": "カートを復元しました — $2件中$1件を追加（$3件失敗）",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_cartRestoredAll": {
+    "message": "カートを復元しました — $1を追加",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingWishlistToCart": {
+    "message": "ウィッシュリストをカートに追加しています"
+  },
+  "bg_addingItemsFromListPage": {
+    "message": "リストページから$1を追加しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingItemsFromList": {
+    "message": "リストから$1を追加しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addedItemsToCart": {
+    "message": "$1をAmazonカートに追加しました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldNotSaveCart": {
+    "message": "カートを保存できませんでした。"
+  },
+  "bg_couldntSaveLeftUntouched": {
+    "message": "保存に失敗しました — カートは変更されていません。$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldntSaveCartTitle": {
+    "message": "カートを保存できませんでした"
+  },
+  "bg_cartLeftAsIs": {
+    "message": "Amazonカートはそのままです。$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedNOfTotal": {
+    "message": "$1/$2件を保存しました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedNItems": {
+    "message": "$1を保存しました",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedNoteToCartUntouched": {
+    "message": "「$2」に$1 — カートは変更されていません。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_cartSavedForLater": {
+    "message": "後で使うためにカートを保存しました"
+  },
+  "bg_savedNoteToCartUntouchedDetail": {
+    "message": "「$2」に$1。Amazonカートは変更されていません。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedNoteNowClearing": {
+    "message": "$1 — カートを空にしています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedAndCleared": {
+    "message": "保存して空にしました"
+  },
+  "bg_savedNoteToCartEmpty": {
+    "message": "「$2」に$1。Amazonカートは空です。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedButCouldntClear": {
+    "message": "保存しましたが、空にできませんでした"
+  },
+  "bg_savedNoteCouldntClear": {
+    "message": "「$2」に$1しましたが、Amazonカートを空にできませんでした。「Amazonカートを空にする」をもう一度お試しください。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_amazonNeedsFormatChoice": {
+    "message": "Amazonで形式の選択が必要です"
+  },
+  "bg_chooseCartableFormat": {
+    "message": "残りの追加を続けるには、「$1」の購入可能な形式を選択してください。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_chooseFormatOnAmazon": {
+    "message": "Amazonで形式を選択"
+  },
+  "bg_savedFormatCannotBeAdded": {
+    "message": "「$1」の保存済み形式はカートに追加できません。このページで「カートに入れる」が表示される別の形式または版を選択してください。Styxが自動的に再開します。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_choiceChooseFormat": {
+    "message": "形式を選択"
+  },
+  "bg_choiceSkipThisItem": {
+    "message": "この商品をスキップ"
+  },
+  "bg_couldNotShowFormatPrompt": {
+    "message": "形式選択のプロンプトを表示できませんでした"
+  },
+  "bg_skippedFormatUnavailable": {
+    "message": "保存済み形式が利用できないためスキップしました"
+  },
+  "bg_chooseFormatShowsAtc": {
+    "message": "「カートに入れる」が表示される形式を「$1」で選択してください — Styxが自動的に再開します",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_amazonTabWasClosed": {
+    "message": "Amazonのタブが閉じられました"
+  },
+  "bg_selectedFormatUnavailable": {
+    "message": "選択した形式は利用できません"
+  },
+  "bg_noFormatSelectedTimeout": {
+    "message": "10分以内に購入可能な形式が選択されませんでした"
+  },
+  "bg_savedFormatUnavailableChooseAnother": {
+    "message": "保存済み形式は利用できません。別の形式を選択してください"
+  },
+  "bg_pageNoLongerExists": {
+    "message": "商品ページはもう存在しません"
+  },
+  "bg_productCurrentlyUnavailable": {
+    "message": "現在、この商品は利用できません"
+  },
+  "bg_waitingOnYourChoice": {
+    "message": "選択をお待ちしています"
+  },
+  "bg_pickProtectionOption": {
+    "message": "Amazonのページで「$1」の保証オプションを選択してください — 復元は自動的に再開します。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_amazonNeedsProtectionPlanChoice": {
+    "message": "Amazonが「$1」の保証プランの選択を求めています。以下からオプションを選んでください — 選択後、Styxが残りのカートの復元を続行します。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addToListDropdownNotFound": {
+    "message": "このページで「リストに追加」のドロップダウンが見つかりませんでした。"
+  },
+  "bg_createEntryNotFound": {
+    "message": "選択画面で「リストを作成」の項目が見つかりませんでした。"
+  },
+  "bg_createListFormDidNotAppear": {
+    "message": "リスト作成フォームが表示されませんでした。"
+  },
+  "bg_createButtonNotFound": {
+    "message": "リスト作成フォームに「作成」ボタンが見つかりませんでした。"
+  },
+  "bg_noConfirmationAfterCreate": {
+    "message": "「作成」をクリックしても確認が表示されませんでした。"
+  },
+  "bg_noResultFromCreateList": {
+    "message": "pageCreateListAndAddから結果が返されませんでした"
+  },
+  "bg_listNotFoundInMenu": {
+    "message": "「リストに追加」メニューにリスト __LISTID__ が見つかりませんでした。",
+    "placeholders": {}
+  },
+  "bg_noResult": {
+    "message": "結果がありません"
+  },
+  "bg_bulkIncomplete_title": {
+    "message": "一括追加が未完了です"
+  },
+  "bg_bulkIncomplete_stillMissing": {
+    "message": "まだ不足している商品:\n$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_andNMore": {
+    "message": "…ほか$1件",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_summaryPartial": {
+    "message": "一括追加ではカートに$2件中$1件しか追加されませんでした。\n\n残りの$3件を1件ずつ復元しますか？時間はかかりますが、より確実です。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_bulkIncomplete_summaryNone": {
+    "message": "一括追加ではカートに商品が追加されませんでした — Amazonの一括処理エンドポイントが（多くの場合アソシエイトタグが認識されないため）商品を無視した可能性があります。\n\n代わりに$1件すべてを1件ずつ復元しますか？",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_choiceManual": {
+    "message": "自分で「カートに入れる」をクリックします"
+  },
+  "bg_bulkIncomplete_choiceFallback": {
+    "message": "1件ずつ復元する"
+  },
+  "bg_bulkIncomplete_choiceSkip": {
+    "message": "不足している商品をスキップ"
+  },
+  "bg_savingCart": {
+    "message": "カートを保存しています"
+  },
+  "bg_savingItemsToNewList": {
+    "message": "$1を新しいAmazonリストに保存しています…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingToList": {
+    "message": "$1に追加しています",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_openingProductPage": {
+    "message": "商品ページを開いています…"
+  },
+  "bg_addToListFailed": {
+    "message": "リストへの追加に失敗しました。"
+  },
+  "bg_creatingList": {
+    "message": "$1を作成しています",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_settingUpYourList": {
+    "message": "リストを準備しています…"
+  },
+  "bg_cartAppearsEmpty": {
+    "message": "カートは空のようです — 保存するものがありません。"
+  },
+  "bg_amazonCartLooksEmpty": {
+    "message": "Amazonカートは空のようです — 保存するものがありません。"
+  },
+  "bg_missingListIdOrAsin": {
+    "message": "リストIDまたはASINがありません。"
+  },
+  "bg_missingAsin": {
+    "message": "ASINがありません。"
+  },
+  "bg_missingListId": {
+    "message": "リストIDがありません。"
+  },
+  "bg_paymentServiceNotAvailable": {
+    "message": "決済サービスをご利用いただけません。"
+  },
+  "bg_couldntOpenCheckout": {
+    "message": "決済ページを開けませんでした。"
+  },
+  "bg_purchasesHandledInApp": {
+    "message": "購入はStyx Multi-Cartアプリで処理されます。"
+  },
+  "bg_noAvailableItemsOnWishlist": {
+    "message": "このウィッシュリストには利用可能な商品が見つかりませんでした。"
+  },
+  "bg_cartLimitReachedUpgrade": {
+    "message": "カートの上限に達しました — アップグレードするともっと追加できます。"
+  },
+  "bg_noResultPeriod": {
+    "message": "結果がありません。"
+  },
+  "bg_promoCodeInvalid": {
+    "message": "そのコードは無効です。"
+  },
+  "bg_promoCodeAlreadyUsed": {
+    "message": "このコードはこの端末ですでに使用されています。"
+  },
+  "bg_firstError": {
+    "message": "最初のエラー: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_nothingWasAdded": {
+    "message": "何も追加されませんでした。"
+  },
+  "bg_cartHasNoItemsToSave": {
+    "message": "このカートには保存する商品がありません。"
+  },
+  "bg_savingLabelToAmazon": {
+    "message": "$1をAmazonに保存しています",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_atcButtonNotFoundFull": {
+    "message": "「カートに入れる」ボタンが見つからないか表示されていません"
+  },
+  "bg_atcButtonStayedDisabled": {
+    "message": "「カートに入れる」ボタンが無効のままでした"
+  },
+  "promo_tagline1": {
+    "message": "Amazonカートを空に。"
+  },
+  "promo_tagline2": {
+    "message": "後で使うために保存も。"
+  },
+  "promo_subtext": {
+    "message": "無料・無制限 · トラッキングなし"
+  }
+}
