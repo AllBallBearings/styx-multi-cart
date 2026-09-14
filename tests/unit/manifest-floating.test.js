@@ -131,16 +131,16 @@ describe("floating modal config", () => {
 
   it("adds a cart-page clear button with the shared clear flow", () => {
     expect(observerSrc).toContain('const STYX_CLEAR_CART_BTN_ID = "styx-clear-cart"');
-    expect(observerSrc).toContain("Clear Amazon cart");
+    expect(observerSrc).toContain('t("popup_clear_button")');
     expect(observerSrc).toContain('"MC_CLEAR_CURRENT"');
     expect(observerSrc).toContain('"MC_SAVE_AND_CLEAR"');
     expect(observerSrc).toContain('data-styx-clear-choice="save"');
     expect(observerSrc).toContain("STYX_CLEAR_CART_MARK_SVG");
     expect(observerSrc).toContain("STYX_SAVE_CART_MARK_SVG");
-    expect(observerSrc).toContain("Save Amazon cart for later");
+    expect(observerSrc).toContain('t("popup_saveForLater_button")');
     expect(observerSrc).toContain("promptSaveCartName");
-    expect(observerSrc).toContain("Name your new Amazon list (new Styx cart):");
-    expect(observerSrc).toContain("After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension.");
+    expect(observerSrc).toContain('t("observer_nameYourNewList")');
+    expect(observerSrc).toContain('t("observer_saveCartHelp")');
     expect(observerSrc).not.toContain('window.prompt("Name your new Amazon list:');
   });
 
