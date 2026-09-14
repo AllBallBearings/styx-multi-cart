@@ -73,6 +73,15 @@ importScripts("ExtPay.js");
         lastChecked: nowMs
       };
     }
+    if (n.revoked === true) {
+      return {
+        tier: "free",
+        premiumUntil: null,
+        autoRenew: false,
+        source: null,
+        lastChecked: nowMs
+      };
+    }
     if (activePremiumFloor > 0) {
       return { lastChecked: nowMs };
     }
