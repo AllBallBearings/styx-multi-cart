@@ -2775,6 +2775,9 @@
     for (const b of $paywallPlanBtns) {
       b.disabled = false;
       b.innerHTML = paywallBtnOriginalHtml.get(b);
+      // The cached markup was captured before applyI18n ran, so its label and
+      // price spans are empty — re-translate or the buttons render blank.
+      applyI18n(b);
     }
   }
 

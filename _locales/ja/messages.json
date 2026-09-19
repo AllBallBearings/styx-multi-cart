@@ -109,6 +109,9 @@
   "popup_saveForLater_button": {
     "message": "Amazonカートを後で使うために保存"
   },
+  "popup_saveForLater_button_lines": {
+    "message": "Amazonカートを\n後で使うために保存"
+  },
   "popup_saveForLater_button_title": {
     "message": "Amazonカートの中身を空にせず、新しいカートとしてすべて保存します"
   },
@@ -1316,6 +1319,9 @@
   },
   "observer_guideFinish": {
     "message": "完了"
+  },
+  "observer_startHere": {
+    "message": "ここから開始..."
   },
   "observer_guideNext": {
     "message": "次へ"

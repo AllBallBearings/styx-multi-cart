@@ -4040,6 +4040,8 @@
   const FAB_STYLE_ID = "__styx-fab-style";
   const FAB_GUIDE_ID = "__styx-guide-tip";
   const FAB_LIGHTBOX_ID = "__styx-guide-lightbox";
+  const FAB_HINT_ID = "__styx-start-hint";
+  const FAB_HINT_KEY = "styx.starthint.v1"; // profile-wide "point at the button" flag
   const FAB_POS_KEY = "styx.fab.pos.v1"; // per-tab dragged position
   const FAB_OPEN_KEY = "styx.fab.open.v1"; // per-tab open/closed memory
   const FAB_GUIDE_KEY = "styx.onboarding.v1"; // profile-wide first-run guide state
@@ -4064,6 +4066,46 @@
       #${FAB_ID}:active { transform: translateY(0); }
       #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
       #${FAB_ID}[hidden] { display: none; }
+
+      /* "Start here..." speech bubble shown after the guide's Finish, tail
+         pointing down at the floating button until it is clicked. */
+      #${FAB_HINT_ID} {
+        position: fixed;
+        right: ${FAB_MARGIN + 6}px;
+        bottom: ${FAB_MARGIN + 56 + 14}px;
+        z-index: 2147483639;
+        padding: 9px 16px;
+        border-radius: 12px;
+        border: 2px solid #ff9900;
+        background: #fff;
+        color: #131a22;
+        font: 700 14px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        white-space: nowrap;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        pointer-events: none;
+      }
+      #${FAB_HINT_ID}[hidden] { display: none; }
+      #${FAB_HINT_ID}::after {
+        content: "";
+        position: absolute;
+        right: 16px;
+        bottom: -9px;
+        width: 14px;
+        height: 14px;
+        transform: rotate(45deg);
+        background: #fff;
+        border-right: 2px solid #ff9900;
+        border-bottom: 2px solid #ff9900;
+      }
+      @keyframes styx-hint-bob {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-4px); }
+      }
+      #${FAB_HINT_ID} { animation: styx-hint-bob 1.6s ease-in-out infinite; }
+      @media (prefers-reduced-motion: reduce) {
+        #${FAB_HINT_ID} { animation: none; }
+      }
 
       #${FAB_GUIDE_ID} {
         position: fixed;
@@ -4481,6 +4523,25 @@
     } catch (_e) { /* ignore */ }
   }
 
+  // The "Start here..." hint is pending from the guide's Finish until the user
+  // first opens Styx (FAB click or toolbar icon). Stored profile-wide so it
+  // survives Amazon's full-page navigations.
+  async function readStartHintPending() {
+    try {
+      const got = await chrome.storage.local.get(FAB_HINT_KEY);
+      return !!(got && got[FAB_HINT_KEY]);
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  async function writeStartHintPending(pending) {
+    try {
+      if (pending) await chrome.storage.local.set({ [FAB_HINT_KEY]: true });
+      else await chrome.storage.local.remove(FAB_HINT_KEY);
+    } catch (_e) { /* ignore */ }
+  }
+
   // True while a background-driven multi-navigation operation is running
   // (cart restore sets `restoring`; cart clear / list save set `busy`). Used
   // to hold back the floating window's auto-reopen so it doesn't rebuild and
@@ -4652,7 +4713,13 @@
 
     modal.appendChild(bar);
     modal.appendChild(frame);
+    const hint = document.createElement("div");
+    hint.id = FAB_HINT_ID;
+    hint.hidden = true;
+    hint.setAttribute("role", "status");
+    hint.textContent = t("observer_startHere");
     document.body.appendChild(guide);
+    document.body.appendChild(hint);
     document.body.appendChild(fab);
     document.body.appendChild(modal);
     applyFabPulse();
@@ -4730,8 +4797,18 @@
       if (await readGuideSeen()) return;
       guide.hidden = false;
     }
+    // Show/hide the "Start here..." bubble. It only shows while the FAB is
+    // visible; opening Styx (FAB or toolbar icon) clears it for good.
+    function showStartHint() {
+      hint.hidden = fab.hidden;
+    }
+    function clearStartHint() {
+      hint.hidden = true;
+      writeStartHintPending(false);
+    }
     function openModal() {
       hideGuide();
+      clearStartHint();
       if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
       modal.hidden = false;
       fab.hidden = true;
@@ -4777,6 +4854,8 @@
       } else if (action === "finish-guide") {
         await markGuideSeen("completed");
         hideGuide();
+        await writeStartHintPending(true);
+        showStartHint();
       } else if (action === "dismiss-guide") {
         await markGuideSeen("dismissed");
         hideGuide();
@@ -4840,6 +4919,20 @@
     if (readStoredOpen() && !uiSuspended()) openModal();
 
     setTimeout(() => { maybeShowGuide(); }, 500);
+
+    // Guide finished but Styx not opened yet: keep pointing at the button, on
+    // this page load and in other tabs (until any of them opens Styx).
+    readStartHintPending().then((pending) => {
+      if (pending && modal.hidden) showStartHint();
+    });
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        const c = area === "local" && changes[FAB_HINT_KEY];
+        if (!c) return;
+        if (c.newValue) { if (modal.hidden) showStartHint(); }
+        else hint.hidden = true;
+      });
+    } catch (_e) { /* no storage — ignore */ }
 
     // The FAB now exists; nudge any in-page UI that rides on its visibility
     // (the wishlist "Send All" pill was set up before this ran).

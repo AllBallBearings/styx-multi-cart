@@ -510,10 +510,16 @@ html[data-surface="panel"] .mc-toggle {
 }
 
 .mc-cart-action-icon {
-  width: 20px;
-  height: 20px;
+  /* viewBox is 28x24; keep that aspect so the larger icon isn't squashed. */
+  width: 30px;
+  height: 26px;
   flex: 0 0 auto;
   color: var(--mc-accent);
+}
+
+/* Labels may carry an explicit line break (Save button: "...cart\nfor later"). */
+.mc-btn.mc-cart-action span {
+  white-space: pre-line;
 }
 
 .mc-clear-cart-icon {
@@ -1079,7 +1085,9 @@ button.mc-thumb-qty:focus-visible {
   margin-top: 4px;
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  align-items: center;
+  /* stretch (not center) so the two buttons share one height even when one
+     label wraps to two lines and the other doesn't. */
+  align-items: stretch;
   gap: 6px;
 }
 
@@ -2060,8 +2068,10 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
   gap: 8px;
 }
 
-.mc-paywall-plan-btn {
+.mc-modal-actions .mc-paywall-plan-btn {
   flex: 1 1 0;
+  height: auto;
+  min-height: 34px;
   display: flex;
   flex-direction: column;
   align-items: center;

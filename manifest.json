@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "en",
   "name": "__MSG_manifest_name__",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
   "description": "__MSG_manifest_description__",

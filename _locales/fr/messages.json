@@ -109,6 +109,9 @@
   "popup_saveForLater_button": {
     "message": "Enregistrer le panier Amazon pour plus tard"
   },
+  "popup_saveForLater_button_lines": {
+    "message": "Enregistrer le panier Amazon\npour plus tard"
+  },
   "popup_saveForLater_button_title": {
     "message": "Enregistrer tout le contenu de votre panier Amazon dans un nouveau panier, sans le vider"
   },
@@ -1316,6 +1319,9 @@
   },
   "observer_guideFinish": {
     "message": "Terminer"
+  },
+  "observer_startHere": {
+    "message": "Commencez ici..."
   },
   "observer_guideNext": {
     "message": "Suivant"
