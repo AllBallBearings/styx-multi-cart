@@ -109,6 +109,9 @@
   "popup_saveForLater_button": {
     "message": "Warenkorb für später speichern"
   },
+  "popup_saveForLater_button_lines": {
+    "message": "Warenkorb\nfür später speichern"
+  },
   "popup_saveForLater_button_title": {
     "message": "Alles in Ihrem Amazon-Warenkorb als neuen Warenkorb speichern, ohne ihn zu leeren"
   },
@@ -1316,6 +1319,9 @@
   },
   "observer_guideFinish": {
     "message": "Fertigstellen"
+  },
+  "observer_startHere": {
+    "message": "Hier starten..."
   },
   "observer_guideNext": {
     "message": "Weiter"

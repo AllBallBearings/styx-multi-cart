@@ -109,6 +109,9 @@
   "popup_saveForLater_button": {
     "message": "Save Amazon cart for later"
   },
+  "popup_saveForLater_button_lines": {
+    "message": "Save Amazon cart\nfor later"
+  },
   "popup_saveForLater_button_title": {
     "message": "Save everything in your Amazon cart as a new cart, without clearing it"
   },
@@ -1316,6 +1319,9 @@
   },
   "observer_guideFinish": {
     "message": "Finish"
+  },
+  "observer_startHere": {
+    "message": "Start here..."
   },
   "observer_guideNext": {
     "message": "Next"

@@ -109,6 +109,9 @@
   "popup_saveForLater_button": {
     "message": "Guardar carrito de Amazon para después"
   },
+  "popup_saveForLater_button_lines": {
+    "message": "Guardar carrito de Amazon\npara después"
+  },
   "popup_saveForLater_button_title": {
     "message": "Guardar todo tu carrito de Amazon como un carrito nuevo, sin vaciarlo"
   },
@@ -1316,6 +1319,9 @@
   },
   "observer_guideFinish": {
     "message": "Finalizar"
+  },
+  "observer_startHere": {
+    "message": "Empieza aquí..."
   },
   "observer_guideNext": {
     "message": "Siguiente"

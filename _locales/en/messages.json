@@ -143,6 +143,10 @@
     "message": "Save Amazon cart for later",
     "description": "Button that saves the live Amazon cart as a new cart WITHOUT clearing it."
   },
+  "popup_saveForLater_button_lines": {
+    "message": "Save Amazon cart\nfor later",
+    "description": "Two-line label for the popup Save button (line break after the noun, before the \"for later\" part). Popup-only; the single-line popup_saveForLater_button is used elsewhere (guide, in-page label matching)."
+  },
   "popup_saveForLater_button_title": {
     "message": "Save everything in your Amazon cart as a new cart, without clearing it",
     "description": "Tooltip for the Save Amazon cart for later button."
@@ -1654,6 +1658,10 @@
   "observer_guideFinish": {
     "message": "Finish",
     "description": "Button label on the final page of the onboarding guide."
+  },
+  "observer_startHere": {
+    "message": "Start here...",
+    "description": "Speech bubble shown next to the floating button after the user finishes the onboarding guide; points them to click the button."
   },
   "observer_guideNext": {
     "message": "Next",
