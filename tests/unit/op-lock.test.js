@@ -22,7 +22,7 @@ if (start < 0 || end < 0) throw new Error("op-lock block not found in src/backgr
 const lock = new Function(
   `${src.slice(start, end)}
    return { OP_LOCK_STALE_MS, OP_LOCK_KIND_BY_MESSAGE, isOpLocked, acquireOpLock, releaseOpLock, runLocked,
-            peek: () => _opLock };`
+            peek: () => _opLock, listsVersion: () => _listsVersion };`
 )();
 
 describe("operation lock", () => {
@@ -82,6 +82,50 @@ describe("operation lock", () => {
       MC_ADD_ITEM_TO_AMAZON_LIST: "list",
       MC_CREATE_AMAZON_LIST_WITH_ITEM: "list",
     });
+  });
+});
+
+describe("lists version (tells the panel to reload its carts)", () => {
+  beforeEach(() => lock.releaseOpLock());
+
+  it("bumps when a save finishes", () => {
+    const before = lock.listsVersion();
+    lock.acquireOpLock("save");
+    lock.releaseOpLock();
+    expect(lock.listsVersion()).toBe(before + 1);
+  });
+
+  it("bumps when a create-list / add-to-list operation finishes", () => {
+    const before = lock.listsVersion();
+    lock.acquireOpLock("list");
+    lock.releaseOpLock();
+    expect(lock.listsVersion()).toBe(before + 1);
+  });
+
+  it("does not bump for operations that leave the set of carts alone", () => {
+    const before = lock.listsVersion();
+    for (const kind of ["clear", "restore"]) {
+      lock.acquireOpLock(kind);
+      lock.releaseOpLock();
+    }
+    expect(lock.listsVersion()).toBe(before);
+  });
+
+  it("bumps when the work ends through runLocked, even if it throws", async () => {
+    const before = lock.listsVersion();
+    lock.acquireOpLock("save");
+    await expect(lock.runLocked(async () => { throw new Error("boom"); })).rejects.toThrow();
+    expect(lock.listsVersion()).toBe(before + 1);
+  });
+
+  it("does not bump when nothing was locked", () => {
+    const before = lock.listsVersion();
+    lock.releaseOpLock();
+    expect(lock.listsVersion()).toBe(before);
+  });
+
+  it("is reported by MC_GET_STATUS", () => {
+    expect(src).toMatch(/listsVersion: _listsVersion,/);
   });
 });
 

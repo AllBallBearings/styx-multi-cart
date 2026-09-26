@@ -1126,6 +1126,12 @@ const OP_LOCK_KIND_BY_MESSAGE = {
 };
 let _opLock = null;          // { kind, since } | null
 
+// Bumped whenever an operation that can change the user's set of carts (save,
+// create-list) finishes. The panel compares it on every status poll and reloads
+// its list when it changes, so a new cart appears even if the panel was hidden
+// or closed while the operation ran.
+let _listsVersion = 0;
+
 function isOpLocked() {
   if (_opLock && Date.now() - _opLock.since > OP_LOCK_STALE_MS) _opLock = null;
   return !!_opLock;
@@ -1136,6 +1142,7 @@ function acquireOpLock(kind) {
   return true;
 }
 function releaseOpLock() {
+  if (_opLock && (_opLock.kind === "save" || _opLock.kind === "list")) _listsVersion++;
   _opLock = null;
 }
 /** Run fire-and-forget background work, releasing the lock however it ends. */
@@ -5229,6 +5236,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             // whereas a status left "active" by an error path would otherwise
             // strand the popup in a permanent working state.
             busy: locked,
+            listsVersion: _listsVersion,
             kind: locked ? (base.active ? base.kind : _opLock.kind) : "other",
             title: locked && base.active ? base.title : "",
             detail: locked && base.active ? base.detail : "",

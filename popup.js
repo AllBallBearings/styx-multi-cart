@@ -544,6 +544,7 @@
   ];
   let opBusy = false;
   let opKind = "other";
+  let listsVersionSeen = null;
   let opOptimisticUntil = 0;
   let opPollInFlight = false;
   let opPollTimer = null;
@@ -570,8 +571,6 @@
   function applyOpStatus(status) {
     const busy = !!(status && status.busy);
     const kind = (status && status.kind) || "other";
-    const wasBusy = opBusy;
-    const prevKind = opKind;
     opBusy = busy;
     opKind = busy ? kind : "other";
 
@@ -589,9 +588,6 @@
       }
     }
 
-    // An operation just finished: pick up whatever it changed (new list,
-    // refreshed counts). Clearing the cart doesn't change our lists.
-    if (wasBusy && !busy && prevKind !== "clear") refresh();
   }
 
   async function pollOpStatus() {
@@ -602,6 +598,18 @@
       // A transport failure comes back as {ok:false} with no `busy` — leave the
       // UI as it is rather than flipping it on a dropped message.
       if (!status || typeof status.busy !== "boolean") return;
+      // The service worker bumps this when a save / create-list finishes. Reload
+      // the cards (forced: refresh() is a no-op once the first load is done, and
+      // the worker serves a cached snapshot otherwise) so the new cart shows up,
+      // even if the panel wasn't visible while it was being built.
+      if (typeof status.listsVersion === "number") {
+        if (listsVersionSeen === null) {
+          listsVersionSeen = status.listsVersion;
+        } else if (status.listsVersion !== listsVersionSeen) {
+          listsVersionSeen = status.listsVersion;
+          loadAmazonLists(true);
+        }
+      }
       // We just started something: the service worker may not have taken its
       // lock yet, so don't let an "idle" answer cancel the optimistic state.
       if (!status.busy && Date.now() < opOptimisticUntil) return;

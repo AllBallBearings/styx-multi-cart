@@ -24,7 +24,7 @@ const block = popupSrc.slice(start, end);
 
 const SAVE_LABEL = "Save Amazon cart\nfor later";
 
-function setup({ send, refresh = vi.fn() } = {}) {
+function setup({ send, loadAmazonLists = vi.fn() } = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>
     <section class="mc-list-block">
       <div id="mc-op-status" hidden>
@@ -41,7 +41,7 @@ function setup({ send, refresh = vi.fn() } = {}) {
     "document",
     "t",
     "send",
-    "refresh",
+    "loadAmazonLists",
     "$clear",
     "$saveForLater",
     `${block}
@@ -50,13 +50,13 @@ function setup({ send, refresh = vi.fn() } = {}) {
     document,
     t,
     send || (async () => ({ busy: false })),
-    refresh,
+    loadAmazonLists,
     document.getElementById("mc-clear"),
     document.getElementById("mc-save-for-later")
   );
   return {
     ...api,
-    refresh,
+    loadAmazonLists,
     document,
     $clear: document.getElementById("mc-clear"),
     $save: document.getElementById("mc-save-for-later"),
@@ -127,16 +127,6 @@ describe("applyOpStatus", () => {
     ui.applyOpStatus({ busy: false });
     expect(saveLabel(ui)).toBe(SAVE_LABEL);
   });
-
-  it("refreshes the list after a save finishes, but not after a clear", () => {
-    ui.applyOpStatus({ busy: true, kind: "save" });
-    ui.applyOpStatus({ busy: false });
-    expect(ui.refresh).toHaveBeenCalledTimes(1);
-
-    ui.applyOpStatus({ busy: true, kind: "clear" });
-    ui.applyOpStatus({ busy: false });
-    expect(ui.refresh).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("pollOpStatus", () => {
@@ -156,6 +146,71 @@ describe("pollOpStatus", () => {
     await ui.pollOpStatus();
     expect(ui.state().opBusy).toBe(false);
     expect(ui.$banner.hidden).toBe(true);
+  });
+});
+
+describe("reloading the carts when the service worker says they changed", () => {
+  const status = (listsVersion, busy = false) => ({ busy, kind: "other", title: "", detail: "", listsVersion });
+
+  it("takes the first version it sees as the baseline and does not reload", async () => {
+    const send = vi.fn().mockResolvedValue(status(4));
+    const ui = setup({ send });
+    await ui.pollOpStatus();
+    expect(ui.loadAmazonLists).not.toHaveBeenCalled();
+  });
+
+  it("force-reloads exactly once when the version changes (a save or new cart finished)", async () => {
+    const send = vi.fn();
+    const ui = setup({ send });
+    send.mockResolvedValueOnce(status(4));
+    await ui.pollOpStatus();
+    send.mockResolvedValueOnce(status(5));
+    await ui.pollOpStatus();
+    expect(ui.loadAmazonLists).toHaveBeenCalledTimes(1);
+    expect(ui.loadAmazonLists).toHaveBeenCalledWith(true); // forced: a plain load is a no-op after the first
+    send.mockResolvedValue(status(5));
+    await ui.pollOpStatus();
+    await ui.pollOpStatus();
+    expect(ui.loadAmazonLists).toHaveBeenCalledTimes(1); // same version again -> nothing
+  });
+
+  it("still reloads if the version changed while the panel was hidden (no busy state was ever seen)", async () => {
+    const send = vi.fn();
+    const ui = setup({ send });
+    send.mockResolvedValueOnce(status(7));
+    await ui.pollOpStatus(); // baseline
+    // panel hidden; save runs and finishes; panel shown again -> first poll is already idle
+    send.mockResolvedValueOnce(status(8, false));
+    await ui.pollOpStatus();
+    expect(ui.loadAmazonLists).toHaveBeenCalledWith(true);
+  });
+
+  it("reloads even while the optimistic busy window would swallow an idle answer", async () => {
+    const send = vi.fn();
+    const ui = setup({ send });
+    send.mockResolvedValueOnce(status(1));
+    await ui.pollOpStatus();
+    await ui.runOp("save", async () => {
+      send.mockResolvedValueOnce(status(2, false));
+      await ui.pollOpStatus();
+      expect(ui.loadAmazonLists).toHaveBeenCalledWith(true);
+    });
+  });
+
+  it("does not reload on a transport failure", async () => {
+    const send = vi.fn().mockResolvedValueOnce(status(1)).mockResolvedValueOnce({ ok: false, error: "No response" });
+    const ui = setup({ send });
+    await ui.pollOpStatus();
+    await ui.pollOpStatus();
+    expect(ui.loadAmazonLists).not.toHaveBeenCalled();
+  });
+
+  it("does not reload when a worker without the counter answers (older build)", async () => {
+    const send = vi.fn().mockResolvedValue({ busy: false, kind: "other", title: "", detail: "" });
+    const ui = setup({ send });
+    await ui.pollOpStatus();
+    await ui.pollOpStatus();
+    expect(ui.loadAmazonLists).not.toHaveBeenCalled();
   });
 });
 

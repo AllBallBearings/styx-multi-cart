@@ -846,6 +846,7 @@ importScripts("ExtPay.js");
     MC_CREATE_AMAZON_LIST_WITH_ITEM: "list"
   };
   var _opLock = null;
+  var _listsVersion = 0;
   function isOpLocked() {
     if (_opLock && Date.now() - _opLock.since > OP_LOCK_STALE_MS) _opLock = null;
     return !!_opLock;
@@ -856,6 +857,7 @@ importScripts("ExtPay.js");
     return true;
   }
   function releaseOpLock() {
+    if (_opLock && (_opLock.kind === "save" || _opLock.kind === "list")) _listsVersion++;
     _opLock = null;
   }
   async function runLocked(fn) {
@@ -3646,6 +3648,7 @@ importScripts("ExtPay.js");
               // whereas a status left "active" by an error path would otherwise
               // strand the popup in a permanent working state.
               busy: locked,
+              listsVersion: _listsVersion,
               kind: locked ? base.active ? base.kind : _opLock.kind : "other",
               title: locked && base.active ? base.title : "",
               detail: locked && base.active ? base.detail : ""
