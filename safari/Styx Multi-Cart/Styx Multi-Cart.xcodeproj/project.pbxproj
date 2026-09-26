@@ -45,6 +45,7 @@
 		C1B0B1EB2FBBB5B6006F37EF /* observer.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D32FBBB5B6006F37EF /* observer.js */; };
 		C1B0B1EC2FBBB5B6006F37EF /* icons in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D42FBBB5B6006F37EF /* icons */; };
 		9874517D320AF958E9065488 /* guide-assets in Resources */ = {isa = PBXBuildFile; fileRef = C1C4605E304BC4CF00D7B38E /* guide-assets */; };
+		9874517D320AF958E9065499 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = C1C4605E304BC4CF00D7B39A /* _locales */; };
 		C1B0B1EE2FBBB5B6006F37EF /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D62FBBB5B6006F37EF /* manifest.json */; };
 		C1B0B1EF2FBBB5B6006F37EF /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D72FBBB5B6006F37EF /* popup.css */; };
 		C1B0B1F02FBBB5B6006F37EF /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D82FBBB5B6006F37EF /* content.js */; };
@@ -135,6 +136,7 @@
 		C1C00BB1303A122B00E11D0D /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		C1C00BB3303A141D00E11D0D /* StyxMultiCart.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = StyxMultiCart.storekit; sourceTree = "<group>"; };
 		C1C4605E304BC4CF00D7B38E /* guide-assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "guide-assets"; path = "Resources/guide-assets"; sourceTree = "<group>"; };
+		C1C4605E304BC4CF00D7B39A /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "_locales"; path = "Resources/_locales"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -271,6 +273,7 @@
 			isa = PBXGroup;
 			children = (
 				C1C4605E304BC4CF00D7B38E /* guide-assets */,
+				C1C4605E304BC4CF00D7B39A /* _locales */,
 				C1B0B1CF2FBBB5B6006F37EF /* popup.js */,
 				C1B0B1D02FBBB5B6006F37EF /* LICENSE */,
 				C1B0B1D12FBBB5B6006F37EF /* background.js */,
@@ -484,6 +487,7 @@
 				C1B0B1DC2FBBB5B6006F37EF /* LICENSE in Resources */,
 				C1B0B1E02FBBB5B6006F37EF /* icons in Resources */,
 				9874517D320AF958E9065488 /* guide-assets in Resources */,
+				9874517D320AF958E9065499 /* _locales in Resources */,
 				C1B0B1DB2FBBB5B6006F37EF /* popup.js in Resources */,
 				C1B0B1F32FBBB5B6006F37EF /* ExtPay.js in Resources */,
 			);
@@ -708,7 +712,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -741,7 +745,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -780,7 +784,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -820,7 +824,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -861,7 +865,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -899,7 +903,7 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -942,7 +946,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.4;
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -988,7 +992,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 12.4;
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,

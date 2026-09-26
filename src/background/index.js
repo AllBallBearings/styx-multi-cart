@@ -19,6 +19,39 @@ import { extpayUserToEntitlementPatch } from "../../lib/extpay-sync.js";
 import { nativeEntitlementToPatch } from "../../lib/native-sync.js";
 import { evaluateClearStep } from "../../lib/clear-cart.js";
 
+// ---- i18n -------------------------------------------------------------
+// The service worker IS an extension context, so chrome.i18n works here
+// directly. `function page*(...)` bodies below do NOT have this — they run
+// injected into the Amazon page's own JS world with zero extension API
+// access, so any text they need must be resolved here and passed in via
+// `args`/parameters, never called from inside a page* function itself.
+// Safari bundle stores placeholders as {{N}} (see scripts/safari-i18n-tokens.py);
+// substitute here. Chrome's files still use $N, so this is a no-op there.
+function t(key, subs) {
+  try {
+    const msg = chrome.i18n.getMessage(key, subs);
+    if (!msg) return key;
+    const list = subs == null ? [] : Array.isArray(subs) ? subs : [subs];
+    return msg.replace(/\{\{(D|\d)\}\}/g, (m, n) =>
+      n === "D" ? "$" : list[n - 1] == null ? m : String(list[n - 1]));
+  } catch (_e) {
+    return key;
+  }
+}
+function itemCountTextBg(n) {
+  return n === 1 ? t("popup_count_item_one", [n]) : t("popup_count_item_other", [n]);
+}
+// pageClassifyProductAvailability runs injected into the Amazon page's own JS
+// world (no chrome.i18n access there) — resolve its literal strings here and
+// pass them in as a plain object argument.
+function productAvailabilityI18nStrings() {
+  return {
+    pageNotFound: t("bg_pageNoLongerExists"),
+    currentlyUnavailable: t("bg_productCurrentlyUnavailable"),
+    chooseAnotherFormat: t("bg_savedFormatUnavailableChooseAnother"),
+  };
+}
+
 // Verbose service-worker logging. Controlled at runtime by the `mc.dev.v1`
 // flag. The popup keeps that switch behind a private Settings unlock so normal
 // users don't see developer tooling. This let is intentionally NOT a const:
@@ -259,45 +292,91 @@ async function bumpRememberedListItemCount(listId, delta) {
   }
 }
 
-// --- Latent per-list count backfill --------------------------------------
-// The wishlist index gives labels fast but no reliable per-list count, and
-// reading every list up front would make the popup spin. So callers return the
-// labels immediately and kick this off: read each not-yet-counted list in a
-// background tab (active:false, invisible), persist the count, then merge the
-// results into the cached snapshot so both popup surfaces and the on-page
-// picker pick them up. Singleton — one pass at a time — and it only touches
-// lists we don't already have a count for, so once warm it does nothing.
-let _countBackfillRunning = false;
-async function backfillListCounts(host, lists) {
-  if (_countBackfillRunning) return;
-  _countBackfillRunning = true;
-  try {
-    const usedHost = host || (await inferAmazonHost());
-    const source =
-      Array.isArray(lists) && lists.length
-        ? lists
-        : await listAmazonLists(usedHost).catch(() => []);
-    const remembered = await readRememberedListItemCounts();
-    const pending = source.filter((l) => {
-      const key = l && l.listId ? String(l.listId).toUpperCase() : null;
-      return key && l.count == null && typeof remembered[key] !== "number";
-    });
-    let learnedAny = false;
-    for (const l of pending) {
-      try {
-        // readAmazonList persists the count via rememberListItemCount.
-        await readAmazonList(l.listId, usedHost);
-        learnedAny = true;
-      } catch (_e) {
-        /* one list failing shouldn't stop the rest */
-      }
+// --- Background list-content prefetch -----------------------------------
+// The lists index is cheap enough to load for the panel, but each list page
+// can be expensive and Amazon lazy-loads its rows while scrolling. Keep the
+// panel responsive by doing those reads after the labels paint, in hidden
+// helper tabs, with a small concurrency cap. A queue (rather than one
+// Promise.all) prevents a large account from opening dozens of tabs at once.
+const AMAZON_LIST_PREFETCH_CONCURRENCY = 3;
+const _listPrefetchQueue = [];
+const _listPrefetchQueued = new Map();
+const _listPrefetchActive = new Set();
+let _listPrefetchDraining = false;
+
+function amazonListPrefetchKey(host, listId) {
+  return `${String(host || "").toLowerCase()}:${String(listId || "").toUpperCase()}`;
+}
+
+function enqueueAmazonListPrefetch(host, lists, forceRefresh = false) {
+  let usedHost = host || "";
+  if (!usedHost) {
+    const firstUrl = (Array.isArray(lists) ? lists : []).find((list) => list && list.url);
+    try { usedHost = firstUrl ? new URL(firstUrl.url).hostname : ""; } catch (_e) {}
+  }
+  let queued = 0;
+  for (const list of Array.isArray(lists) ? lists : []) {
+    const listId = String(list && list.listId || "").trim();
+    if (!listId || (list && list.access === "locked")) continue;
+    const key = amazonListPrefetchKey(usedHost, listId);
+    if (_listPrefetchActive.has(key)) continue;
+    const existing = _listPrefetchQueued.get(key);
+    if (existing) {
+      // An explicit panel refresh upgrades an already-queued warm read.
+      existing.forceRefresh = existing.forceRefresh || forceRefresh === true;
+      continue;
     }
-    if (learnedAny) {
-      try { await refreshSnapshotCounts(usedHost); } catch (_e) {}
+    const job = { host: usedHost, listId, forceRefresh: forceRefresh === true };
+    _listPrefetchQueued.set(key, job);
+    _listPrefetchQueue.push(job);
+    queued += 1;
+  }
+  if (queued && !_listPrefetchDraining) {
+    _listPrefetchDraining = true;
+    void drainAmazonListPrefetchQueue();
+  }
+  return queued;
+}
+
+async function drainAmazonListPrefetchQueue() {
+  let warmedAny = false;
+  try {
+    while (_listPrefetchQueue.length) {
+      const batch = _listPrefetchQueue.splice(0, AMAZON_LIST_PREFETCH_CONCURRENCY);
+      await Promise.all(batch.map(async (job) => {
+        const key = amazonListPrefetchKey(job.host, job.listId);
+        _listPrefetchQueued.delete(key);
+        _listPrefetchActive.add(key);
+        try {
+          await readAmazonList(job.listId, job.host, job.forceRefresh);
+          warmedAny = true;
+        } catch (_e) {
+          // A single list failing (sign-in, a deleted list, transient Amazon
+          // error) must not prevent the remaining queue from warming.
+        } finally {
+          _listPrefetchActive.delete(key);
+        }
+      }));
+    }
+    if (warmedAny) {
+      try { await refreshSnapshotCounts(); } catch (_e) {}
     }
   } finally {
-    _countBackfillRunning = false;
+    _listPrefetchDraining = false;
+    // A message can enqueue work between the final loop check and this flag
+    // change. Pick that work up without creating a second drain loop.
+    if (_listPrefetchQueue.length) {
+      _listPrefetchDraining = true;
+      void drainAmazonListPrefetchQueue();
+    }
   }
+}
+
+// Kept for the on-page picker, which historically asked for count backfill.
+// Full item reads now warm both counts and contents using the same bounded
+// queue, so opening a list after the picker or panel has little/no wait.
+function backfillListCounts(host, lists) {
+  enqueueAmazonListPrefetch(host, lists);
 }
 
 // Merge the latest remembered counts into the cached list snapshot in place —
@@ -319,7 +398,34 @@ async function refreshSnapshotCounts() {
   if (changed) await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: snap });
 }
 
-async function listAmazonListsWithAccessCached(host) {
+async function listAmazonListsWithAccessCached(host, { forceRefresh = false } = {}) {
+  // Opening the Amazon Lists index is relatively expensive and, on a first
+  // install, creates a visible tab while Chrome loads the page. Reuse the
+  // snapshot populated by the last successful scrape for a short window so
+  // simply opening the Styx panel never forks a new Amazon tab. The explicit
+  // refresh button (and picker force-refresh) bypasses this cache.
+  if (!forceRefresh) {
+    try {
+      const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+      const cached = got[AMAZON_LISTS_CACHE_KEY];
+      const cacheHost = cached && cached.host;
+      const fresh =
+        cached &&
+        Array.isArray(cached.lists) &&
+        cached.fetchedAt &&
+        Date.now() - cached.fetchedAt < AMAZON_LIST_READ_CACHE_MS &&
+        (!host || !cacheHost || sameAmazonHost(host, cacheHost));
+      if (fresh) {
+        const ent = await readEntitlement();
+        const access = computeListAccess(cached.lists, ent);
+        rememberListAccess(access.lists);
+        return access;
+      }
+    } catch (_e) {
+      // A cache read failure should fall through to a fresh scrape.
+    }
+  }
+
   const rawLists = await listAmazonLists(host);
   // Backfill counts the index scrape couldn't read from what we've learned
   // before, so carts the user has opened/created still show "N items".
@@ -366,17 +472,17 @@ async function redeemPromoCode(rawCode) {
   const norm = String(rawCode || "")
     .trim()
     .toUpperCase();
-  if (!norm) return { ok: false, error: "Enter a code." };
+  if (!norm) return { ok: false, error: t("popup_promo_enterCode") };
 
   const hash = await sha256Hex(norm);
   if (!PROMO_HASHES.includes(hash)) {
-    return { ok: false, error: "That code isn't valid." };
+    return { ok: false, error: t("bg_promoCodeInvalid") };
   }
 
   const got = await chrome.storage.local.get(PROMO_KEY);
   const redeemed = (got[PROMO_KEY] && typeof got[PROMO_KEY] === "object") ? got[PROMO_KEY] : {};
   if (redeemed[hash]) {
-    return { ok: false, error: "This code has already been used on this device." };
+    return { ok: false, error: t("bg_promoCodeAlreadyUsed") };
   }
 
   const now = Date.now();
@@ -1003,7 +1109,7 @@ function setOpStatus(title, detail = "") {
  * Mark the operation done. _opStatus keeps reporting the done title for a few
  * seconds (so a late reader still sees the outcome), then is nulled.
  */
-function clearOpStatus(doneTitle = "Done") {
+function clearOpStatus(doneTitle = t("bg_done")) {
   _opStatus = { active: false, title: doneTitle, detail: "" };
   setTimeout(() => {
     // Only null it out if it hasn't been replaced by a new operation.
@@ -1351,8 +1457,8 @@ async function clearAmazonCartImpl(preferredHost, options = {}) {
   let stalledDeletes = 0;
 
   // Show initial status on the cart tab.
-  setOpStatus("Clearing cart");
-  await showStatus(tabId, 'Clearing cart…', 'loading');
+  setOpStatus(t("bg_clearingCart"));
+  await showStatus(tabId, t("bg_clearingCartEllipsis"), 'loading');
 
   for (let attempt = 0; attempt < 50; attempt++) {
     let result;
@@ -1382,12 +1488,12 @@ async function clearAmazonCartImpl(preferredHost, options = {}) {
       }
       // Re-show status after page reload (the old toast was destroyed).
       const retryMsg = totalToRemove
-        ? `Removed ${removed} of ${totalToRemove}…`
-        : `${removed} removed so far…`;
-      setOpStatus("Clearing cart", retryMsg);
+        ? t("bg_removedOfTotal", [removed, totalToRemove])
+        : t("bg_removedSoFar", [removed]);
+      setOpStatus(t("bg_clearingCart"), retryMsg);
       await showStatus(tabId, totalToRemove
-        ? `Clearing cart — removed ${removed} of ${totalToRemove}…`
-        : `Clearing cart — ${removed} removed so far…`, 'loading');
+        ? t("bg_clearingCartRemovedOfTotal", [removed, totalToRemove])
+        : t("bg_clearingCartRemovedSoFar", [removed]), 'loading');
       continue;
     }
 
@@ -1451,12 +1557,12 @@ async function clearAmazonCartImpl(preferredHost, options = {}) {
     await sleep(300);
     // Re-show status on the freshly-loaded page (previous toast was destroyed).
     const progressMsg = totalToRemove
-      ? `Removed ${removed} of ${totalToRemove}…`
-      : `${removed} removed so far…`;
-    setOpStatus("Clearing cart", progressMsg);
+      ? t("bg_removedOfTotal", [removed, totalToRemove])
+      : t("bg_removedSoFar", [removed]);
+    setOpStatus(t("bg_clearingCart"), progressMsg);
     await showStatus(tabId, totalToRemove
-      ? `Clearing cart — removed ${removed} of ${totalToRemove}…`
-      : `Clearing cart — ${removed} removed so far…`, 'loading');
+      ? t("bg_clearingCartRemovedOfTotal", [removed, totalToRemove])
+      : t("bg_clearingCartRemovedSoFar", [removed]), 'loading');
   }
 
   // Final verification. A rows-sourced reading is authoritative; a
@@ -1474,14 +1580,14 @@ async function clearAmazonCartImpl(preferredHost, options = {}) {
             ? lastKnownCount
             : null;
   if (Number.isFinite(remaining) && remaining > 0) {
-    const errorMsg = `Could not clear cart — ${remaining} item${remaining === 1 ? '' : 's'} still in cart`;
+    const errorMsg = t("bg_couldNotClearCartRemaining", [itemCountTextBg(remaining)]);
     clearOpStatus(errorMsg);
     await showStatus(tabId, errorMsg, 'error');
     return { ok: false, removed, remaining, sawCartSurface: true };
   }
 
   // Show completion state.
-  const doneMsg = `Cart cleared — ${removed} item${removed === 1 ? '' : 's'} removed`;
+  const doneMsg = t("bg_cartClearedRemoved", [itemCountTextBg(removed)]);
   clearOpStatus(doneMsg);
   await showStatus(tabId, doneMsg, 'done');
 
@@ -1762,7 +1868,13 @@ function pageMinimizeFloatingUi() {
  * The injected style and class are idempotent — calling this twice on
  * the same page (e.g. for a multi-chunk restore) is harmless.
  */
-function pageHighlightBulkConfirm() {
+function pageHighlightBulkConfirm(i18n) {
+  var i18nStrings = i18n || {
+    noProductsRendered: "Amazon rendered no products on the bulk-add page",
+    confirmButtonNotFound: "Confirm button not found within 10s",
+    addAllToAmazonCart: "Add All to Amazon Cart",
+    addToCart: "Add To Cart",
+  };
   // NOTE: this function is INJECTED into the Amazon page via
   // chrome.scripting.executeScript. The page context has no access to the
   // service worker's scope, so service-worker helpers like dlog/dinfo/dwarn
@@ -2068,7 +2180,7 @@ function pageHighlightBulkConfirm() {
         resolve({
           ok: false,
           emptyBulkPage: true,
-          error: "Amazon rendered no products on the bulk-add page",
+          error: i18nStrings.noProductsRendered,
         });
         return;
       }
@@ -2081,8 +2193,8 @@ function pageHighlightBulkConfirm() {
           resolve({
             ok: true,
             confirmLabel: goToCartVariant
-              ? "Add All to Amazon Cart"
-              : "Add To Cart",
+              ? i18nStrings.addAllToAmazonCart
+              : i18nStrings.addToCart,
           });
         }
         catch (e) {
@@ -2105,7 +2217,7 @@ function pageHighlightBulkConfirm() {
             ariaLabel: el.getAttribute("aria-label"),
           }))
         );
-        resolve({ ok: false, error: "Confirm button not found within 10s" });
+        resolve({ ok: false, error: i18nStrings.confirmButtonNotFound });
         return;
       }
       setTimeout(tick, 200);
@@ -2295,9 +2407,9 @@ async function restoreCartBulk(savedCart) {
       const chunk = chunks[c];
       const url = buildBulkAddUrl(host, chunk, STYX_ASSOCIATE_TAG);
       const batchLabel = chunks.length > 1
-        ? `batch ${c + 1}/${chunks.length} (${chunk.length} items)`
-        : `${chunk.length} items in one go`;
-      setOpStatus(`Restoring ${cartLabel}`, `Loading bulk add for ${batchLabel}…`);
+        ? t("bg_batchOf", [c + 1, chunks.length, chunk.length])
+        : t("bg_itemsInOneGo", [chunk.length]);
+      setOpStatus(t("bg_restoringCart", [cartLabel]), t("bg_loadingBulkAddFor", [batchLabel]));
 
       if (!helperTab) {
         helperTab = await chrome.tabs.create({ url, active: true });
@@ -2311,8 +2423,8 @@ async function restoreCartBulk(savedCart) {
       // page rendered. This used to be gated on the highlight succeeding,
       // which meant any selector miss = total UI silence.
       const loadingPrompt = chunks.length > 1
-        ? `Loading bulk add — batch ${c + 1} of ${chunks.length} (${chunk.length} items)…`
-        : `Loading bulk add for ${chunk.length} item${chunk.length === 1 ? '' : 's'}…`;
+        ? t("bg_loadingBulkAddBatch", [c + 1, chunks.length, chunk.length])
+        : t("bg_loadingBulkAddForItems", [itemCountTextBg(chunk.length)]);
       await showStatus(helperTab.id, loadingPrompt, "loading");
 
       // Get the floating modal out of the way — it re-opens across
@@ -2331,6 +2443,14 @@ async function restoreCartBulk(savedCart) {
       const hlRes = await chrome.scripting.executeScript({
         target: { tabId: helperTab.id },
         func: pageHighlightBulkConfirm,
+        args: [
+          {
+            noProductsRendered: t("bg_noProductsOnBulkPage"),
+            confirmButtonNotFound: t("bg_confirmButtonNotFound"),
+            addAllToAmazonCart: t("popup_amazonList_addAll_title"),
+            addToCart: t("bg_addToCartFallback"),
+          },
+        ],
       });
       const hr = hlRes && hlRes[0] && hlRes[0].result;
 
@@ -2346,12 +2466,12 @@ async function restoreCartBulk(savedCart) {
         );
         await showStatus(
           helperTab.id,
-          "Amazon couldn't prepare these items in bulk — adding them one at a time…",
+          t("bg_bulkRejectedFallback"),
           "loading"
         );
         return {
           ok: false,
-          error: hr.error || "Amazon rejected the bulk-add items",
+          error: hr.error || t("bg_amazonRejectedBulkAdd"),
           host,
           helperTabId: helperTab && helperTab.id,
           missing: allItems,
@@ -2361,11 +2481,11 @@ async function restoreCartBulk(savedCart) {
 
       if (hr && hr.ok) {
         // Path (a): user-confirm flow.
-        const confirmLabel = hr.confirmLabel || "Add To Cart";
+        const confirmLabel = hr.confirmLabel || t("bg_addToCartFallback");
         const chunkPrompt = chunks.length > 1
-          ? `Click the highlighted "${confirmLabel}" to confirm batch ${c + 1} of ${chunks.length} (${chunk.length} items)`
-          : `Click the highlighted "${confirmLabel}" to add ${chunk.length} item${chunk.length === 1 ? '' : 's'} to your Amazon cart`;
-        setOpStatus(`Restoring ${cartLabel}`, `Waiting for your confirmation…`);
+          ? t("bg_clickHighlightedBatch", [confirmLabel, c + 1, chunks.length, chunk.length])
+          : t("bg_clickHighlightedItems", [confirmLabel, itemCountTextBg(chunk.length)]);
+        setOpStatus(t("bg_restoringCart", [cartLabel]), t("bg_waitingForConfirmation"));
         await showStatus(helperTab.id, chunkPrompt, "loading");
 
         const confirmRes = await waitForUserBulkConfirm(helperTab.id);
@@ -2374,7 +2494,7 @@ async function restoreCartBulk(savedCart) {
           // No fallback prompt: the user explicitly walked away.
           return {
             ok: false,
-            error: `User did not confirm bulk add: ${confirmRes.error}`,
+            error: t("bg_userDidNotConfirmBulkAdd", [confirmRes.error]),
             host,
             helperTabId: helperTab && helperTab.id,
             missing: allItems,
@@ -2392,7 +2512,7 @@ async function restoreCartBulk(savedCart) {
         );
         await showStatus(
           helperTab.id,
-          "Couldn't find the confirm button — checking your cart…",
+          t("bg_couldntFindConfirmButton"),
           "loading"
         );
       }
@@ -2440,19 +2560,19 @@ async function restoreCartBulk(savedCart) {
     // from growing past the confirm buttons.
     const MISSING_LIST_MAX = 8;
     const missingLines = missing.slice(0, MISSING_LIST_MAX).map((it) => {
-      let label = (it.title || it.asin || "item").trim();
+      let label = (it.title || it.asin || t("bg_genericItemLowercase")).trim();
       if (label.length > 70) label = label.slice(0, 69).trimEnd() + "…";
       const qty = Math.max(1, Number(it.quantity) || 1);
       return qty > 1 ? `• ${label} (×${qty})` : `• ${label}`;
     });
     if (missing.length > MISSING_LIST_MAX) {
-      missingLines.push(`• …and ${missing.length - MISSING_LIST_MAX} more`);
+      missingLines.push("• " + t("bg_bulkIncomplete_andNMore", [missing.length - MISSING_LIST_MAX]));
     }
-    const missingList = `\n\nStill missing:\n${missingLines.join("\n")}`;
+    const missingList = "\n\n" + t("bg_bulkIncomplete_stillMissing", [missingLines.join("\n")]);
 
     const summary = (addedCount > 0
-      ? `Bulk add only got ${addedCount} of ${allItems.length} items into your cart.\n\nWould you like to restore the remaining ${missing.length} one at a time? This is slower but more reliable.`
-      : `The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).\n\nWould you like to restore all ${allItems.length} items one at a time instead?`)
+      ? t("bg_bulkIncomplete_summaryPartial", [addedCount, allItems.length, missing.length])
+      : t("bg_bulkIncomplete_summaryNone", [allItems.length]))
       + missingList;
 
     // Detect whether the helper tab is still on the bulk confirm page.
@@ -2468,23 +2588,23 @@ async function restoreCartBulk(savedCart) {
     const choices = [];
     if (stillOnConfirmPage) {
       choices.push({
-        label: "I'll click \"Add To Cart\" myself",
+        label: t("bg_bulkIncomplete_choiceManual"),
         value: "manual",
         style: "primary",
       });
       choices.push({
-        label: "Restore one by one",
+        label: t("bg_bulkIncomplete_choiceFallback"),
         value: "fallback",
         style: "secondary",
       });
     } else {
       choices.push({
-        label: "Restore one by one",
+        label: t("bg_bulkIncomplete_choiceFallback"),
         value: "fallback",
         style: "primary",
       });
     }
-    choices.push({ label: "Skip missed items", value: "cancel", style: "ghost" });
+    choices.push({ label: t("bg_bulkIncomplete_choiceSkip"), value: "cancel", style: "ghost" });
 
     let userChoice = "cancel";
     try {
@@ -2496,7 +2616,7 @@ async function restoreCartBulk(savedCart) {
       const promptRes = await chrome.scripting.executeScript({
         target: { tabId: helperTab.id },
         func: pagePromptChoice,
-        args: ["Bulk add incomplete", summary, choices, promptTheme],
+        args: [t("bg_bulkIncomplete_title"), summary, choices, promptTheme],
       });
       userChoice = (promptRes && promptRes[0] && promptRes[0].result) || "cancel";
     } catch (_e) {
@@ -2536,7 +2656,7 @@ async function restoreCartBulk(savedCart) {
 
       await showStatus(
         helperTab.id,
-        "Click \"Add To Cart\" on the page when you're ready — restore continues automatically",
+        t("bg_clickAddToCartManual"),
         "loading"
       );
 
@@ -2545,7 +2665,7 @@ async function restoreCartBulk(savedCart) {
         // User closed tab / 5-min timeout.
         return {
           ok: false,
-          error: `User did not confirm bulk add: ${manualRes.error}`,
+          error: t("bg_userDidNotConfirmBulkAdd", [manualRes.error]),
           host,
           helperTabId: helperTab && helperTab.id,
           missing: allItems,
@@ -2595,8 +2715,8 @@ async function restoreCartBulk(savedCart) {
     // missing AND the userDeclinedFallback flag so the caller doesn't
     // run per-item AND doesn't paint the success-navigation flow.
     const partialMsg = addedCount > 0
-      ? `Bulk restore added ${addedCount} of ${allItems.length} items — ${missing.length} skipped`
-      : `Bulk restore added 0 items — try again or restore one by one`;
+      ? t("bg_bulkRestorePartial", [addedCount, allItems.length, missing.length])
+      : t("bg_bulkRestoreZero");
     clearOpStatus(partialMsg);
     try {
       await showStatus(helperTab.id, partialMsg, addedCount > 0 ? "done" : "error");
@@ -2620,7 +2740,7 @@ async function restoreCartBulk(savedCart) {
 async function restoreCart(savedCart, onProgress) {
   const items = (savedCart.items || []).filter((it) => it && it.asin);
   if (!items.length) {
-    return { ok: false, error: "This saved cart has no items." };
+    return { ok: false, error: t("bg_savedCartHasNoItems") };
   }
 
   // Suspend the ATC intercept for the duration of the restore.
@@ -2643,8 +2763,8 @@ async function restoreCart(savedCart, onProgress) {
   // navigateTabAndWait / createTabAndWait: those use exact URL matching which
   // breaks when Amazon redirects /dp/ASIN → /Product-Title/dp/ASIN. We only
   // care that the page finished loading, not its exact final URL.
-  const cartLabel = savedCart.name ? `"${savedCart.name}"` : "cart";
-  setOpStatus(`Restoring ${cartLabel}`, `Loading first product…`);
+  const cartLabel = savedCart.name ? `"${savedCart.name}"` : t("popup_genericCart");
+  setOpStatus(t("bg_restoringCart", [cartLabel]), t("bg_loadingFirstProduct"));
 
   // Reuse the user's active Amazon tab if they have one — they were
   // almost certainly on the cart page when they clicked Restore, and
@@ -2685,11 +2805,12 @@ async function restoreCart(savedCart, onProgress) {
       const availabilityResult = await chrome.scripting.executeScript({
         target: { tabId: helperTab.id },
         func: pageClassifyProductAvailability,
+        args: [productAvailabilityI18nStrings()],
       });
       let availability =
         availabilityResult && availabilityResult[0] && availabilityResult[0].result;
       if (availability && availability.available === false) {
-        const reason = availability.reason || "Product is unavailable";
+        const reason = availability.reason || t("bg_productUnavailable");
         failed++;
         failures.push({
           asin: item.asin,
@@ -2697,15 +2818,15 @@ async function restoreCart(savedCart, onProgress) {
           reason,
           unavailable: true,
         });
-        const raw = item.title || item.asin || "item";
+        const raw = item.title || item.asin || t("bg_genericItemLowercase");
         const shortTitle = raw.length > 30 ? raw.slice(0, 28) + "…" : raw;
         setOpStatus(
-          `Restoring ${cartLabel}`,
-          `Skipping unavailable item ${i + 1} of ${items.length}: ${shortTitle}`
+          t("bg_restoringCart", [cartLabel]),
+          t("bg_skippingUnavailableItem", [i + 1, items.length, shortTitle])
         );
         await showStatus(
           helperTab.id,
-          `Unavailable — skipped ${shortTitle}`,
+          t("bg_unavailableSkipped", [shortTitle]),
           "error"
         );
         if (onProgress) onProgress({ done: i + 1, total: items.length });
@@ -2725,7 +2846,7 @@ async function restoreCart(savedCart, onProgress) {
           item
         );
         if (!choice.ok) {
-          const reason = choice.reason || "A purchasable format was not selected";
+          const reason = choice.reason || t("bg_noFormatSelected");
           failed++;
           failures.push({
             asin: item.asin,
@@ -2744,12 +2865,12 @@ async function restoreCart(savedCart, onProgress) {
         const raw = item.title || item.asin || '';
         const shortTitle = raw.length > 30 ? raw.slice(0, 28) + '…' : raw;
         setOpStatus(
-          `Restoring ${cartLabel}`,
-          `Item ${i + 1} of ${items.length}: ${shortTitle}`
+          t("bg_restoringCart", [cartLabel]),
+          t("bg_itemOf", [i + 1, items.length, shortTitle])
         );
         await showStatus(
           helperTab.id,
-          `Restoring cart — adding ${i + 1} of ${items.length}: ${shortTitle}`,
+          t("bg_restoringCartAdding", [i + 1, items.length, shortTitle]),
           'loading'
         );
       }
@@ -2784,7 +2905,10 @@ async function restoreCart(savedCart, onProgress) {
       const result = await chrome.scripting.executeScript({
         target: { tabId: helperTab.id },
         func: pageAddToCart,
-        args: [Math.max(1, item.quantity || 1)],
+        args: [
+          Math.max(1, item.quantity || 1),
+          { buttonNotFound: t("bg_atcButtonNotFoundFull"), buttonStayedDisabled: t("bg_atcButtonStayedDisabled") },
+        ],
       });
       const r = result && result[0] && result[0].result;
 
@@ -2795,7 +2919,7 @@ async function restoreCart(savedCart, onProgress) {
         failures.push({
           asin: item.asin,
           title: item.title || "",
-          reason: (r && r.error) || "ATC button not found",
+          reason: (r && r.error) || t("bg_atcButtonNotFound"),
         });
       } else {
         // Button was clicked. Wait to see whether Amazon navigates (confirmation
@@ -2819,21 +2943,21 @@ async function restoreCart(savedCart, onProgress) {
           if (recorded) {
             const ageMs = Date.now() - (recorded.recordedAt || 0);
             const ageLabel = ageMs < 60 * 60 * 1000
-              ? "earlier today"
+              ? t("bg_ageEarlierToday")
               : ageMs < 24 * 60 * 60 * 1000
-                ? "recently"
-                : "from before";
+                ? t("bg_ageRecently")
+                : t("bg_ageFromBefore");
             const choiceDesc =
               recorded.choice === "declined"
-                ? '"No coverage"'
-                : `"${(recorded.optionLabel || "selected option").slice(0, 60)}"`;
+                ? `"${t("bg_noCoverage")}"`
+                : `"${(recorded.optionLabel || t("bg_selectedOption")).slice(0, 60)}"`;
             setOpStatus(
-              `Restoring ${cartLabel}`,
-              `Applying your choice ${ageLabel}: ${choiceDesc}…`
+              t("bg_restoringCart", [cartLabel]),
+              t("bg_applyingChoiceAge", [ageLabel, choiceDesc])
             );
             await showStatus(
               helperTab.id,
-              `Applying your saved choice: ${choiceDesc}`,
+              t("bg_applyingSavedChoice", [choiceDesc]),
               "loading"
             );
             autoHandled = await applyUpsellChoice(helperTab.id, recorded);
@@ -2881,8 +3005,8 @@ async function restoreCart(savedCart, onProgress) {
     await waitForTabReload(helperTab.id, 15000);
     // Show a summary on the final cart page.
     const restoreDoneMsg = failed > 0
-      ? `Cart restored — ${added} of ${items.length} added (${failed} failed)`
-      : `Cart restored — ${added} item${added === 1 ? '' : 's'} added`;
+      ? t("bg_cartRestoredPartial", [added, items.length, failed])
+      : t("bg_cartRestoredAll", [itemCountTextBg(added)]);
     clearOpStatus(restoreDoneMsg);
     await showStatus(helperTab.id, restoreDoneMsg, added > 0 ? 'done' : 'error');
   } catch (_e) {
@@ -3103,12 +3227,12 @@ async function restoreViaListPage(target) {
     await waitForTabReload(helperTab.id, 25000);
 
     setOpStatus(
-      "Adding wishlist to cart",
-      `Adding ${items.length} item${items.length === 1 ? "" : "s"} from the list page…`
+      t("bg_addingWishlistToCart"),
+      t("bg_addingItemsFromListPage", [itemCountTextBg(items.length)])
     );
     await showStatus(
       helperTab.id,
-      `Adding ${items.length} item${items.length === 1 ? "" : "s"} from the list…`,
+      t("bg_addingItemsFromList", [itemCountTextBg(items.length)]),
       "loading"
     );
 
@@ -3175,7 +3299,7 @@ async function wishlistAddAllToCart(items, host, listId) {
     if (bulk.ok && bulk.missing.length === 0) {
       // Everything landed in one shot — land on the cart and toast.
       const h = bulk.host || target.host || "www.amazon.com";
-      const doneMsg = `Added ${bulk.added} item${bulk.added === 1 ? "" : "s"} to your Amazon cart`;
+      const doneMsg = t("bg_addedItemsToCart", [itemCountTextBg(bulk.added)]);
       clearOpStatus(doneMsg);
       try {
         if (bulk.helperTabId) {
@@ -3219,7 +3343,7 @@ async function wishlistAddAllToCart(items, host, listId) {
 
     if (remainder.length === 0) {
       // Everything landed via the list page → take the user to their cart.
-      const addedMsg = `Added ${cleanItems.length} item${cleanItems.length === 1 ? "" : "s"} to your Amazon cart`;
+      const addedMsg = t("bg_addedItemsToCart", [itemCountTextBg(cleanItems.length)]);
       clearOpStatus(addedMsg);
       try {
         const [active] = await chrome.tabs.query({
@@ -3289,36 +3413,36 @@ async function saveThenClearInBackground(
   }
 
   if (!saved || !saved.ok) {
-    const why = (saved && saved.error) || "Could not save your cart.";
-    clearOpStatus(`Couldn't save — cart left untouched. ${why}`);
+    const why = (saved && saved.error) || t("bg_couldNotSaveCart");
+    clearOpStatus(t("bg_couldntSaveLeftUntouched", [why]));
     // DONE, not PROGRESS: PROGRESS leaves the on-page toast spinning forever.
     notifyTab(progressTabId, {
       type: "MC_LIST_SAVE_DONE",
       ok: false,
-      title: "Couldn't save your cart",
-      detail: `Your Amazon cart was left as-is. ${why}`,
+      title: t("bg_couldntSaveCartTitle"),
+      detail: t("bg_cartLeftAsIs", [why]),
       hideAfter: 7000,
     });
     return;
   }
 
   const savedNote = saved.failed
-    ? `Saved ${saved.added}/${saved.total} items`
-    : `Saved ${saved.added} item${saved.added === 1 ? "" : "s"}`;
+    ? t("bg_savedNOfTotal", [saved.added, saved.total])
+    : t("bg_savedNItems", [itemCountTextBg(saved.added)]);
 
   if (!clearAfter) {
-    clearOpStatus(`${savedNote} to "${cart.name}" — your cart is untouched.`);
+    clearOpStatus(t("bg_savedNoteToCartUntouched", [savedNote, cart.name]));
     notifyTab(progressTabId, {
       type: "MC_LIST_SAVE_DONE",
       ok: true,
-      title: "Cart saved for later",
-      detail: `${savedNote} to "${cart.name}". Your Amazon cart is untouched.`,
+      title: t("bg_cartSavedForLater"),
+      detail: t("bg_savedNoteToCartUntouchedDetail", [savedNote, cart.name]),
       hideAfter: 6000,
     });
     return;
   }
 
-  setOpStatus("Clearing cart", `${savedNote} — now clearing your cart…`);
+  setOpStatus(t("bg_clearingCart"), t("bg_savedNoteNowClearing", [savedNote]));
 
   try {
     await clearAmazonCart(cart.host, { returnToOrigin: true, originUrl });
@@ -3327,8 +3451,8 @@ async function saveThenClearInBackground(
     notifyTab(progressTabId, {
       type: "MC_LIST_SAVE_DONE",
       ok: true,
-      title: "Saved and cleared",
-      detail: `${savedNote} to "${cart.name}". Your Amazon cart is empty.`,
+      title: t("bg_savedAndCleared"),
+      detail: t("bg_savedNoteToCartEmpty", [savedNote, cart.name]),
       hideAfter: 6000,
     });
   } catch (err) {
@@ -3337,8 +3461,8 @@ async function saveThenClearInBackground(
     notifyTab(progressTabId, {
       type: "MC_LIST_SAVE_DONE",
       ok: false,
-      title: "Saved, but couldn't clear",
-      detail: `${savedNote} to "${cart.name}", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.`,
+      title: t("bg_savedButCouldntClear"),
+      detail: t("bg_savedNoteCouldntClear", [savedNote, cart.name]),
       hideAfter: 8000,
     });
   }
@@ -3365,12 +3489,12 @@ async function isUpsellTab(tabId) {
 
 async function waitForUserProductFormatChoice(tabId, item) {
   await chrome.tabs.update(tabId, { active: true });
-  const raw = (item && item.title) || "this item";
+  const raw = (item && item.title) || t("bg_thisItem");
   const shortTitle = raw.length > 60 ? raw.slice(0, 58) + "…" : raw;
 
   setOpStatus(
-    "Amazon needs a format choice",
-    `Choose a cartable format for "${shortTitle}" to continue adding the rest.`
+    t("bg_amazonNeedsFormatChoice"),
+    t("bg_chooseCartableFormat", [shortTitle])
   );
 
   let promptTheme = null;
@@ -3385,11 +3509,11 @@ async function waitForUserProductFormatChoice(tabId, item) {
       target: { tabId },
       func: pagePromptChoice,
       args: [
-        "Choose a format on Amazon",
-        `The saved format of "${shortTitle}" cannot be added to the cart. Choose another format or edition on this page that offers Add to Cart. Styx will resume automatically.`,
+        t("bg_chooseFormatOnAmazon"),
+        t("bg_savedFormatCannotBeAdded", [shortTitle]),
         [
-          { label: "Choose a format", value: "choose", style: "primary" },
-          { label: "Skip this item", value: "skip", style: "ghost" },
+          { label: t("bg_choiceChooseFormat"), value: "choose", style: "primary" },
+          { label: t("bg_choiceSkipThisItem"), value: "skip", style: "ghost" },
         ],
         promptTheme,
       ],
@@ -3397,16 +3521,16 @@ async function waitForUserProductFormatChoice(tabId, item) {
     answer =
       (promptResult && promptResult[0] && promptResult[0].result) || "skip";
   } catch (_e) {
-    return { ok: false, reason: "Could not show the format picker prompt" };
+    return { ok: false, reason: t("bg_couldNotShowFormatPrompt") };
   }
 
   if (answer !== "choose") {
-    return { ok: false, reason: "Skipped because the saved format is unavailable" };
+    return { ok: false, reason: t("bg_skippedFormatUnavailable") };
   }
 
   await showStatus(
     tabId,
-    `Choose a format for "${shortTitle}" that shows Add to Cart — Styx will resume automatically`,
+    t("bg_chooseFormatShowsAtc", [shortTitle]),
     "loading"
   );
 
@@ -3415,18 +3539,19 @@ async function waitForUserProductFormatChoice(tabId, item) {
     await sleep(1000);
     try {
       const tab = await chrome.tabs.get(tabId);
-      if (!tab) return { ok: false, reason: "Amazon tab was closed" };
+      if (!tab) return { ok: false, reason: t("bg_amazonTabWasClosed") };
       if (tab.status === "loading") continue;
 
       const result = await chrome.scripting.executeScript({
         target: { tabId },
         func: pageClassifyProductAvailability,
+        args: [productAvailabilityI18nStrings()],
       });
       const availability = result && result[0] && result[0].result;
       if (availability && availability.available === false) {
         return {
           ok: false,
-          reason: availability.reason || "The selected format is unavailable",
+          reason: availability.reason || t("bg_selectedFormatUnavailable"),
           availability,
         };
       }
@@ -3439,16 +3564,16 @@ async function waitForUserProductFormatChoice(tabId, item) {
     }
   }
 
-  return { ok: false, reason: "No cartable format was selected within 10 minutes" };
+  return { ok: false, reason: t("bg_noFormatSelectedTimeout") };
 }
 
 async function waitForUserUpsellChoice(tabId, item, host) {
   await chrome.tabs.update(tabId, { active: true });
-  const raw = (item && item.title) || "this item";
+  const raw = (item && item.title) || t("bg_thisItem");
   const shortTitle = raw.length > 40 ? raw.slice(0, 38) + "…" : raw;
   setOpStatus(
-    "Waiting on your choice",
-    `Pick a protection option for "${shortTitle}" on the Amazon page — restore resumes automatically.`
+    t("bg_waitingOnYourChoice"),
+    t("bg_pickProtectionOption", [shortTitle])
   );
   await showRestoreUpsellNotice(tabId, item);
 
@@ -3473,12 +3598,12 @@ async function waitForUserUpsellChoice(tabId, item, host) {
 }
 
 async function showRestoreUpsellNotice(tabId, item) {
-  var raw = (item && item.title) || "this item";
+  var raw = (item && item.title) || t("bg_thisItem");
   var shortTitle = raw.length > 50 ? raw.slice(0, 48) + "…" : raw;
   try {
     await showStatus(
       tabId,
-      'Amazon needs your protection-plan choice for "' + shortTitle + '". Pick an option below — Styx will keep restoring the rest of your cart as soon as you choose.',
+      t("bg_amazonNeedsProtectionPlanChoice", [shortTitle]),
       "loading"
     );
     return true;
@@ -3529,7 +3654,12 @@ function sleep(ms) {
 }
 
 /** Identify terminal product pages where an item cannot be added. */
-function pageClassifyProductAvailability() {
+function pageClassifyProductAvailability(i18n) {
+  var i18nStrings = i18n || {
+    pageNotFound: "Product page no longer exists",
+    currentlyUnavailable: "Product is currently unavailable",
+    chooseAnotherFormat: "The saved format is unavailable; choose another format",
+  };
   try {
     const bodyText = (
       (document.body && (document.body.innerText || document.body.textContent)) || ""
@@ -3543,7 +3673,7 @@ function pageClassifyProductAvailability() {
       /sorry[,\s]*we\s+couldn['’]?t\s+find\s+that\s+page/i.test(combined) ||
       combined.includes("the web address you entered is not a functioning page")
     ) {
-      return { available: false, reason: "Product page no longer exists" };
+      return { available: false, reason: i18nStrings.pageNotFound };
     }
 
     const availabilityEl = document.querySelector(
@@ -3562,7 +3692,7 @@ function pageClassifyProductAvailability() {
     ) {
       return {
         available: false,
-        reason: availabilityText || "Product is currently unavailable",
+        reason: availabilityText || i18nStrings.currentlyUnavailable,
       };
     }
 
@@ -3606,7 +3736,7 @@ function pageClassifyProductAvailability() {
         return {
           available: true,
           needsUserChoice: true,
-          reason: "The saved format is unavailable; choose another format",
+          reason: i18nStrings.chooseAnotherFormat,
         };
       }
     }
@@ -3625,7 +3755,11 @@ function pageClassifyProductAvailability() {
  *
  * Returns { ok: bool, error?, needsUserChoice? }.
  */
-function pageAddToCart(qty) {
+function pageAddToCart(qty, i18n) {
+  var i18nStrings = i18n || {
+    buttonNotFound: "Add to Cart button not found or not visible",
+    buttonStayedDisabled: "Add to Cart button stayed disabled",
+  };
   return new Promise((resolve) => {
     const ATC_SELECTORS = [
       "#add-to-cart-button",
@@ -3729,7 +3863,7 @@ function pageAddToCart(qty) {
         } else {
           resolve({
             ok: false,
-            error: "Add to Cart button not found or not visible",
+            error: i18nStrings.buttonNotFound,
             url: location.href,
             title: document.title || "",
           });
@@ -3745,7 +3879,7 @@ function pageAddToCart(qty) {
         }
         resolve({
           ok: false,
-          error: "Add to Cart button stayed disabled",
+          error: i18nStrings.buttonStayedDisabled,
           url: location.href,
           title: document.title || "",
         });
@@ -4266,6 +4400,10 @@ async function pageScrapeCart() {
 const AMAZON_LISTS_PATH = "/hz/wishlist/ls";
 const AMAZON_LIST_READ_CACHE_MS = 5 * 60 * 1000;
 const amazonListReadCache = new Map();
+// Share a read already in progress (including a background prefetch) with an
+// expand/Add All click. This avoids opening a second helper tab for the same
+// list when the user interacts while the warm queue is still running.
+const amazonListReadInFlight = new Map();
 
 /**
  * Open a silent background tab at `url`, wait for it to load, run `fn(tabId)`,
@@ -4275,7 +4413,11 @@ const amazonListReadCache = new Map();
 async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false } = {}) {
   const tab = await chrome.tabs.create({ url, active: false });
   try {
-    await waitForTabReload(tab.id, timeoutMs);
+    // This tab was just created, so waiting for a *reload* can miss the
+    // initial loading event and hold the tab open until the timeout. Waiting
+    // for completion is sufficient and lets the finally block close the
+    // helper as soon as its page is ready.
+    await waitForTabComplete(tab.id, timeoutMs);
     return await fn(tab.id, tab);
   } finally {
     if (!keepOpen) {
@@ -4328,38 +4470,51 @@ async function readAmazonList(listId, preferredHost, forceRefresh = false) {
     rememberListItemCount(listId, (cached.value.items || []).length);
     return cached.value;
   }
-  const url = amazonListUrl(host, listId);
-  const data = await runInAmazonTab(
-    url,
-    async (tabId) => {
-      // Lists lazy-load on scroll; give the first paint a beat before scraping.
-      await sleep(900);
-      const res = await chrome.scripting.executeScript({
-        target: { tabId },
-        func: pageScrapeSingleList,
-      });
-      return (res && res[0] && res[0].result) || { items: [] };
-    },
-    { timeoutMs: 15000 }
-  );
-  if (data.error) throw new Error(data.error);
-  const items = (data.items || [])
-    .filter((it) => it && it.asin)
-    .map((it) => ({
-      asin: String(it.asin).toUpperCase(),
-      title: it.title || "(untitled)",
-      quantity: Math.max(1, Math.min(99, Number(it.quantity) || 1)),
-      price: "",
-      image: it.image || "",
-      url: it.url || `https://${host}/dp/${it.asin}`,
-      variantLabel: "",
-      unavailable: it.unavailable === true,
-      unavailableReason: it.unavailableReason || "",
-    }));
-  const value = { host, name: data.name || "Amazon list", listId, url, items };
-  amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
-  rememberListItemCount(listId, items.length);
-  return value;
+  const existing = amazonListReadInFlight.get(cacheKey);
+  if (existing) return existing;
+
+  const readPromise = (async () => {
+    const url = amazonListUrl(host, listId);
+    const data = await runInAmazonTab(
+      url,
+      async (tabId) => {
+        // Lists lazy-load on scroll; give the first paint a beat before scraping.
+        await sleep(900);
+        const res = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: pageScrapeSingleList,
+        });
+        return (res && res[0] && res[0].result) || { items: [] };
+      },
+      { timeoutMs: 15000 }
+    );
+    if (data.error) throw new Error(data.error);
+    const items = (data.items || [])
+      .filter((it) => it && it.asin)
+      .map((it) => ({
+        asin: String(it.asin).toUpperCase(),
+        title: it.title || "(untitled)",
+        quantity: Math.max(1, Math.min(99, Number(it.quantity) || 1)),
+        price: "",
+        image: it.image || "",
+        url: it.url || `https://${host}/dp/${it.asin}`,
+        variantLabel: "",
+        unavailable: it.unavailable === true,
+        unavailableReason: it.unavailableReason || "",
+      }));
+    const value = { host, name: data.name || "Amazon list", listId, url, items };
+    amazonListReadCache.set(cacheKey, { cachedAt: Date.now(), value });
+    rememberListItemCount(listId, items.length);
+    return value;
+  })();
+  amazonListReadInFlight.set(cacheKey, readPromise);
+  try {
+    return await readPromise;
+  } finally {
+    if (amazonListReadInFlight.get(cacheKey) === readPromise) {
+      amazonListReadInFlight.delete(cacheKey);
+    }
+  }
 }
 
 /**
@@ -4381,9 +4536,18 @@ async function createAmazonListFromPdp(host, name, firstAsin) {
       const r = await chrome.scripting.executeScript({
         target: { tabId },
         func: pageCreateListAndAdd,
-        args: [name],
+        args: [
+          name,
+          {
+            dropdownNotFound: t("bg_addToListDropdownNotFound"),
+            createEntryNotFound: t("bg_createEntryNotFound"),
+            formDidNotAppear: t("bg_createListFormDidNotAppear"),
+            createButtonNotFound: t("bg_createButtonNotFound"),
+            noConfirmation: t("bg_noConfirmationAfterCreate"),
+          },
+        ],
       });
-      return (r && r[0] && r[0].result) || { ok: false, error: "no result from pageCreateListAndAdd" };
+      return (r && r[0] && r[0].result) || { ok: false, error: t("bg_noResultFromCreateList") };
     },
     { keepOpen: false, timeoutMs: 40000 }
   );
@@ -4433,9 +4597,15 @@ async function addItemToList(host, listId, asin) {
       const r = await chrome.scripting.executeScript({
         target: { tabId },
         func: pageAddToList,
-        args: [listId],
+        args: [
+          listId,
+          {
+            dropdownNotFound: t("bg_addToListDropdownNotFound"),
+            listNotFoundInMenu: t("bg_listNotFoundInMenu"),
+          },
+        ],
       });
-      return (r && r[0] && r[0].result) || { ok: false, error: "no result" };
+      return (r && r[0] && r[0].result) || { ok: false, error: t("bg_noResult") };
     },
     { timeoutMs: 15000 }
   );
@@ -4484,14 +4654,14 @@ async function saveCartToAmazonList(cart, opts = {}) {
 async function saveCartToAmazonListImpl(cart, opts = {}) {
   const host = cart.host || "www.amazon.com";
   const items = (cart.items || []).filter((it) => it && it.asin);
-  if (!items.length) return { ok: false, error: "This cart has no items to save." };
+  if (!items.length) return { ok: false, error: t("bg_cartHasNoItemsToSave") };
 
-  const label = cart.name ? `"${cart.name}"` : "cart";
+  const label = cart.name ? `"${cart.name}"` : t("popup_genericCart");
   // Progress updates _opStatus and, when the caller supplies a tab, drives an
   // on-page Styx toast on the initiating tab.
   const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
   const report = (detail, extra = {}) => {
-    setOpStatus(`Saving ${label} to Amazon`, detail);
+    setOpStatus(t("bg_savingLabelToAmazon", [label]), detail);
     notifyTab(progressTabId, { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra });
   };
   report("Preparing your list…");
@@ -4548,7 +4718,7 @@ async function saveCartToAmazonListImpl(cart, opts = {}) {
   const firstFail = failures[0];
   const reason =
     added === 0
-      ? (firstFail ? "First error: " + firstFail.error : "Nothing was added.")
+      ? (firstFail ? t("bg_firstError", [firstFail.error]) : t("bg_nothingWasAdded"))
       : "";
   console.log("[Styx list-sync] saveCart done", {
     listId, added, total: items.length, failed: failures.length, reason,
@@ -4760,7 +4930,14 @@ function pageScrapeSingleList() {
  * elements — test visibility with getBoundingClientRect(), never offsetParent.
  * Returns { ok, listId?, confirmed, error? }.
  */
-function pageCreateListAndAdd(name) {
+function pageCreateListAndAdd(name, i18n) {
+  var i18nStrings = i18n || {
+    dropdownNotFound: "Add-to-List dropdown not found on this page.",
+    createEntryNotFound: "Create-a-List entry not found in the chooser.",
+    formDidNotAppear: "Create-list form did not appear.",
+    createButtonNotFound: "Create button not found in the create-list form.",
+    noConfirmation: "No confirmation after clicking Create.",
+  };
   return (async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const visible = (el) => !!(el && el.getBoundingClientRect().width > 0);
@@ -4778,7 +4955,7 @@ function pageCreateListAndAdd(name) {
           document.getElementById("add-to-wishlist-button") ||
           document.querySelector("#wishlistButtonStack .a-button-splitdropdown input") ||
           document.getElementById("wishListDropDown");
-        if (!caret) return { ok: false, error: "Add-to-List dropdown not found on this page." };
+        if (!caret) return { ok: false, error: i18nStrings.dropdownNotFound };
         caret.click();
         for (let i = 0; i < 20; i++) {
           await sleep(250);
@@ -4786,7 +4963,7 @@ function pageCreateListAndAdd(name) {
           if (visible(createLink)) break;
         }
       }
-      if (!visible(createLink)) return { ok: false, error: "Create-a-List entry not found in the chooser." };
+      if (!visible(createLink)) return { ok: false, error: i18nStrings.createEntryNotFound };
 
       const preIds = idsOnPage();
 
@@ -4798,7 +4975,7 @@ function pageCreateListAndAdd(name) {
         input = document.querySelector('input#list-name, input[name="list-name"]');
         if (visible(input)) break;
       }
-      if (!visible(input)) return { ok: false, error: "Create-list form did not appear." };
+      if (!visible(input)) return { ok: false, error: i18nStrings.formDidNotAppear };
       // Let Amazon's a-declarative bind the modal's handlers before we drive
       // it — clicking Create before binding silently no-ops (seen live).
       await sleep(800);
@@ -4816,7 +4993,7 @@ function pageCreateListAndAdd(name) {
           '.create-list-create-button input[type="submit"], ' +
           '.create-list-create-button [type="submit"]'
       );
-      if (!create) return { ok: false, error: "Create button not found in the create-list form." };
+      if (!create) return { ok: false, error: i18nStrings.createButtonNotFound };
 
       // 4. Confirmation: "1 item added to <name>" plus a View List link whose
       //    href carries the NEW list id (absent from the pre-click set).
@@ -4838,7 +5015,7 @@ function pageCreateListAndAdd(name) {
         }
         if (!listId) await sleep(400);
       }
-      if (!confirmed && !listId) return { ok: false, error: "No confirmation after clicking Create." };
+      if (!confirmed && !listId) return { ok: false, error: i18nStrings.noConfirmation };
       return { ok: true, listId, confirmed };
     } catch (e) {
       return { ok: false, error: String((e && e.message) || e) };
@@ -4879,7 +5056,11 @@ function pageFindListByName(name) {
  * The same POST fired directly via fetch from an extension context returns
  * 403, so DOM-driving Amazon's handler is the only working write path.
  */
-function pageAddToList(listId) {
+function pageAddToList(listId, i18n) {
+  var i18nStrings = i18n || {
+    dropdownNotFound: "Add-to-List dropdown not found on this page.",
+    listNotFoundInMenu: "List __LISTID__ not found in the Add-to-List menu.",
+  };
   return (async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const rowSel = "#atwl-list-name-" + listId;
@@ -4898,7 +5079,7 @@ function pageAddToList(listId) {
           ) ||
           document.getElementById("wishListDropDown");
         if (!caret) {
-          return { ok: false, error: "Add-to-List dropdown not found on this page." };
+          return { ok: false, error: i18nStrings.dropdownNotFound };
         }
         caret.click();
         for (let i = 0; i < 20 && !(row = findRow()); i++) await sleep(250);
@@ -4906,7 +5087,7 @@ function pageAddToList(listId) {
       if (!row) {
         return {
           ok: false,
-          error: "List " + listId + " not found in the Add-to-List menu.",
+          error: i18nStrings.listNotFoundInMenu.replace("__LISTID__", listId),
         };
       }
       row.click();
@@ -5156,12 +5337,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({
               ok: false,
               native: true,
-              error: "Purchases are handled in the Styx Multi-Cart app.",
+              error: t("bg_purchasesHandledInApp"),
             });
             break;
           }
           if (!extpay) {
-            sendResponse({ ok: false, error: "Payment service not available." });
+            sendResponse({ ok: false, error: t("bg_paymentServiceNotAvailable") });
             break;
           }
           const KNOWN_PLANS = ["annual", "lifetime"];
@@ -5175,7 +5356,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             sendResponse({ ok: true });
           } catch (err) {
             console.error("[Styx Multi-Cart] openPaymentPage failed:", err);
-            sendResponse({ ok: false, error: "Couldn't open checkout." });
+            sendResponse({ ok: false, error: t("bg_couldntOpenCheckout") });
           }
           break;
         }
@@ -5242,7 +5423,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (!items.length) {
             sendResponse({
               ok: false,
-              error: "No available items were found on this wishlist.",
+              error: t("bg_noAvailableItemsOnWishlist"),
             });
             break;
           }
@@ -5265,7 +5446,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // Acknowledge immediately — the bulk flow navigates a tab and waits
           // on the user's confirmation, which can outlive the message channel.
           sendResponse({ ok: true, started: true, total: items.length });
-          setOpStatus("Adding wishlist to cart", "Starting…");
+          setOpStatus(t("bg_addingWishlistToCart"), t("bg_starting"));
           setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
           break;
         }
@@ -5281,7 +5462,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // seconds and opening a tab may close the popup, which would drop
           // the response and leave the button spinner stuck forever.
           sendResponse({ ok: true, started: true });
-          setOpStatus("Clearing cart", "Starting…");
+          setOpStatus(t("bg_clearingCart"), t("bg_starting"));
           setTimeout(clearCurrentCartInBackground, 0);
           break;
         }
@@ -5331,7 +5512,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             break;
           }
           if (!scCart.items.length) {
-            sendResponse({ ok: false, error: "Cart appears empty — nothing to save." });
+            sendResponse({ ok: false, error: t("bg_cartAppearsEmpty") });
             break;
           }
 
@@ -5339,12 +5520,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // outlives this message channel (and the popup that sent it).
           const savedCount = scCart.items.length;
           sendResponse({ ok: true, started: true, saving: savedCount });
-          setOpStatus("Saving cart", `Saving ${savedCount} item${savedCount === 1 ? "" : "s"} to a new Amazon list…`);
+          setOpStatus(t("bg_savingCart"), t("bg_savingItemsToNewList", [itemCountTextBg(savedCount)]));
           setTimeout(() => saveThenClearInBackground(
             {
               // No cart.id → saveCartToAmazonList always creates a new list.
               host: scCart.host,
-              name: (msg.name && String(msg.name).trim()) || "Amazon cart",
+              name: (msg.name && String(msg.name).trim()) || t("bg_amazonCartFallbackName"),
               items: scCart.items,
             },
             {
@@ -5433,10 +5614,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             break;
           }
           if (!liveCart.items || !liveCart.items.length) {
-            sendResponse({ ok: false, error: "Your Amazon cart looks empty — nothing to save." });
+            sendResponse({ ok: false, error: t("bg_amazonCartLooksEmpty") });
             break;
           }
-          const liveListName = (msg.name && String(msg.name).trim()) || "Amazon cart";
+          const liveListName = (msg.name && String(msg.name).trim()) || t("bg_amazonCartFallbackName");
           // No cart.id → saveCartToAmazonList creates a new list and skips the
           // saved-cart link persistence, so nothing lands in the Styx panel.
           let liveSaveRes;
@@ -5476,9 +5657,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               }
             }
           } else {
-            setOpStatus("Couldn't save to Amazon", (liveSaveRes && liveSaveRes.error) || "Try again.");
+            setOpStatus(t("popup_err_saveToAmazonFailed"), (liveSaveRes && liveSaveRes.error) || t("observer_tryAgain"));
           }
-          sendResponse(liveSaveRes || { ok: false, error: "No result." });
+          sendResponse(liveSaveRes || { ok: false, error: t("bg_noResultPeriod") });
           break;
         }
 
@@ -5486,7 +5667,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // Read the user's Amazon wish lists for the popup dashboard, then
           // annotate each with tier access (editable/locked) so the popup can
           // gray + paywall locked custom carts.
-          const access = await listAmazonListsWithAccessCached(msg.host);
+          const access = await listAmazonListsWithAccessCached(msg.host, {
+            forceRefresh: msg.forceRefresh === true,
+          });
           sendResponse({
             ok: true,
             lists: access.lists,
@@ -5496,15 +5679,33 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               customCount: access.customCount,
             },
           });
-          // Labels are out; fill any missing counts in the background. The
-          // popup polls MC_GET_LIST_COUNTS to show them as they land.
-          backfillListCounts(msg.host, access.lists);
+          // Labels are out. Do not block this response on per-list item
+          // scrapes: the popup schedules MC_PREFETCH_AMAZON_LISTS after its
+          // cards paint, where the bounded queue can warm contents without
+          // delaying panel startup.
+          break;
+        }
+
+        case "MC_PREFETCH_AMAZON_LISTS": {
+          // The popup sends this after the list cards have painted. Queue the
+          // item reads and return immediately; helper tabs are active:false
+          // and are always closed by runInAmazonTab when each read finishes.
+          const queued = enqueueAmazonListPrefetch(
+            msg.host || "",
+            msg.lists,
+            msg.forceRefresh === true
+          );
+          sendResponse({
+            ok: true,
+            queued,
+            concurrency: AMAZON_LIST_PREFETCH_CONCURRENCY,
+          });
           break;
         }
 
         case "MC_GET_LIST_COUNTS": {
           // Cheap, no Amazon driving: the latest remembered per-list counts.
-          // Polled by the popup while the background backfill fills them in.
+          // Polled by the popup while the background prefetch fills them in.
           sendResponse({ ok: true, counts: await readRememberedListItemCounts() });
           break;
         }
@@ -5528,7 +5729,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               backfillListCounts(msg.host, cache.lists);
               break;
             }
-            const access = await listAmazonListsWithAccessCached(msg.host);
+            const access = await listAmazonListsWithAccessCached(msg.host, {
+              forceRefresh: msg.forceRefresh === true,
+            });
             const fresh = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
             sendResponse({
               ok: true,
@@ -5556,14 +5759,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const listId = String(msg.listId || "").trim();
           const asin = String(msg.asin || "").trim().toUpperCase();
           if (!listId || !/^[A-Z0-9]{10}$/i.test(asin)) {
-            sendResponse({ ok: false, error: "Missing list id or ASIN." });
+            sendResponse({ ok: false, error: t("bg_missingListIdOrAsin") });
             break;
           }
           const host = msg.host || (await inferAmazonHost());
-          const listName = msg.name || "list";
+          const listName = msg.name || t("bg_genericListName");
           await setUiBusy(true);
           try {
-            setOpStatus(`Adding to ${listName}`, "Opening the product page…");
+            setOpStatus(t("bg_addingToList", [listName]), t("bg_openingProductPage"));
             const r = await addItemToList(host, listId, asin);
             if (r && r.ok) {
               const qty = Math.max(1, Math.min(99, Number(msg.quantity) || 1));
@@ -5575,10 +5778,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
               // Keep the shown count right, then refresh the cached snapshot.
               await bumpRememberedListItemCount(listId, 1);
               try { await listAmazonListsWithAccessCached(host); } catch (_e) {}
-              setOpStatus(`Adding to ${listName}`, "Done.");
+              setOpStatus(t("bg_addingToList", [listName]), t("bg_doneCap"));
               sendResponse({ ok: true, listId, asin });
             } else {
-              sendResponse({ ok: false, error: (r && r.error) || "Add to list failed." });
+              sendResponse({ ok: false, error: (r && r.error) || t("bg_addToListFailed") });
             }
           } catch (err) {
             sendResponse({ ok: false, error: (err && err.message) || String(err) });
@@ -5593,9 +5796,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // Amazon list seeded with this item (createAmazonListFromPdp adds the
           // first item as part of creation). Tier-gated like any new cart.
           const asin = String(msg.asin || "").trim().toUpperCase();
-          const name = (msg.name || "").trim() || "Styx cart";
+          const name = (msg.name || "").trim() || t("bg_styxCartFallbackName");
           if (!/^[A-Z0-9]{10}$/i.test(asin)) {
-            sendResponse({ ok: false, error: "Missing ASIN." });
+            sendResponse({ ok: false, error: t("bg_missingAsin") });
             break;
           }
           const host = msg.host || (await inferAmazonHost());
@@ -5606,7 +5809,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!access.isPremium && access.customCount >= access.limit) {
               sendResponse({
                 ok: false,
-                error: "Cart limit reached — upgrade to add more.",
+                error: t("bg_cartLimitReachedUpgrade"),
                 limitReached: true,
               });
               break;
@@ -5614,7 +5817,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           } catch (_e) { /* if the gate check fails, let creation proceed */ }
           await setUiBusy(true);
           try {
-            setOpStatus(`Creating ${name}`, "Setting up your list…");
+            setOpStatus(t("bg_creatingList", [name]), t("bg_settingUpYourList"));
             const created = await createAmazonListFromPdp(host, name, asin);
             // Seeded with exactly this one item — persist so the new cart shows
             // "1 item" and it survives the next full list re-scrape (which reads
@@ -5646,7 +5849,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
                 }
               }
             } catch (_e) {}
-            setOpStatus(`Creating ${name}`, "Done.");
+            setOpStatus(t("bg_creatingList", [name]), t("bg_doneCap"));
             sendResponse({ ok: true, listId: created && created.listId, name });
           } catch (err) {
             sendResponse({ ok: false, error: (err && err.message) || String(err) });
@@ -5664,7 +5867,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // that yields nothing do we fail OPEN ("editable").
           const wantId = String(msg.listId || "").toUpperCase();
           if (!wantId) {
-            sendResponse({ ok: false, error: "Missing list id." });
+            sendResponse({ ok: false, error: t("bg_missingListId") });
             break;
           }
           if (
@@ -5702,7 +5905,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "MC_GET_AMAZON_LIST": {
           if (!msg.listId) {
-            sendResponse({ ok: false, error: "Missing list id." });
+            sendResponse({ ok: false, error: t("bg_missingListId") });
             break;
           }
           const list = await readAmazonList(

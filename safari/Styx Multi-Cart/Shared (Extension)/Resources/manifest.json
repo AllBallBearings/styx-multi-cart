@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
-  "name": "Styx Multi-Cart",
-  "version": "1.0.7",
+  "default_locale": "en",
+  "name": "__MSG_manifest_name__",
+  "version": "1.0.9",
   "author": "Jared Goolsby",
   "homepage_url": "https://allballbearings.github.io/styx-multi-cart/",
-  "description": "One click to clear your Amazon cart \u2014 or save it for a later checkout. Free, unlimited, no tracking.",
+  "description": "__MSG_manifest_description__",
   "permissions": [
     "storage",
     "activeTab",
@@ -42,7 +43,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Styx Multi-Cart",
+    "default_title": "__MSG_manifest_actionTitle__",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",

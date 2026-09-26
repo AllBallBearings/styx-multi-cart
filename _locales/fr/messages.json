@@ -1,0 +1,2181 @@
+{
+  "manifest_name": {
+    "message": "Styx Multi-Cart"
+  },
+  "manifest_description": {
+    "message": "Videz votre panier Amazon, enregistrez-le pour plus tard et gérez plusieurs paniers grâce à des listes Amazon réutilisables."
+  },
+  "manifest_actionTitle": {
+    "message": "Styx Multi-Cart"
+  },
+  "popup_header_premiumBadge": {
+    "message": "Premium"
+  },
+  "popup_header_premiumBadge_title": {
+    "message": "Vous avez Premium"
+  },
+  "popup_header_tagline": {
+    "message": "Du chaos du panier à la sérénité du paiement"
+  },
+  "popup_header_settingsToggle_ariaLabel": {
+    "message": "Ouvrir les paramètres"
+  },
+  "popup_header_settingsToggle_title": {
+    "message": "Paramètres"
+  },
+  "popup_header_themeToggle": {
+    "message": "Basculer entre le mode clair et sombre"
+  },
+  "popup_save_label": {
+    "message": "Enregistrer le panier Amazon actuel sous"
+  },
+  "popup_save_input_placeholder": {
+    "message": "ex. Cadeaux d'anniversaire"
+  },
+  "popup_save_button": {
+    "message": "Enregistrer le panier"
+  },
+  "popup_save_button_title": {
+    "message": "Enregistrer le panier Amazon actuel"
+  },
+  "popup_intercept_toggle_title": {
+    "message": "Quand vous cliquez sur « Ajouter au panier » d'Amazon sur une page produit, choisir un panier enregistré à la place."
+  },
+  "popup_intercept_prefix": {
+    "message": "Intercepter le"
+  },
+  "popup_action_addToCart": {
+    "message": "Ajouter au panier"
+  },
+  "popup_intercept_sub": {
+    "message": "Choisir un panier enregistré plutôt que le panier actif d'Amazon."
+  },
+  "popup_tier_free": {
+    "message": "Gratuit"
+  },
+  "popup_action_upgrade": {
+    "message": "Passer à Premium"
+  },
+  "popup_action_hideThis": {
+    "message": "Masquer"
+  },
+  "popup_tier_hideAriaLabel": {
+    "message": "Masquer l'indicateur de formule"
+  },
+  "popup_lapsed_hideAriaLabel": {
+    "message": "Masquer la bannière d'expiration"
+  },
+  "popup_tier_usage": {
+    "message": "$1 / $2 paniers enregistrés",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_lapsed_suffix_one": {
+    "message": " panier est en lecture seule"
+  },
+  "popup_lapsed_suffix_other": {
+    "message": " paniers sont en lecture seule"
+  },
+  "popup_lapsed_renewNote": {
+    "message": "— Renouvelez Premium pour les modifier à nouveau."
+  },
+  "popup_action_renew": {
+    "message": "Renouveler"
+  },
+  "popup_list_title": {
+    "message": "Vos paniers"
+  },
+  "popup_list_gotoCarts_title": {
+    "message": "Ouvrir vos paniers sur Amazon"
+  },
+  "popup_list_cartsWord": {
+    "message": "paniers"
+  },
+  "popup_list_refresh_title": {
+    "message": "Actualiser vos paniers depuis Amazon"
+  },
+  "popup_clear_button": {
+    "message": "Vider le panier Amazon"
+  },
+  "popup_clear_button_title": {
+    "message": "Retirer tous les articles de votre panier Amazon actif"
+  },
+  "popup_saveForLater_button": {
+    "message": "Enregistrer le panier Amazon pour plus tard"
+  },
+  "popup_saveForLater_button_lines": {
+    "message": "Enregistrer le panier Amazon\npour plus tard"
+  },
+  "popup_saveForLater_button_title": {
+    "message": "Enregistrer tout le contenu de votre panier Amazon dans un nouveau panier, sans le vider"
+  },
+  "popup_lists_loading": {
+    "message": "Chargement de vos listes Amazon…"
+  },
+  "popup_lists_empty": {
+    "message": "Aucune liste Amazon trouvée. Vérifiez que vous êtes connecté(e) à Amazon."
+  },
+  "popup_action_continue": {
+    "message": "Continuer →"
+  },
+  "popup_action_cancel": {
+    "message": "Annuler"
+  },
+  "popup_action_ok": {
+    "message": "OK"
+  },
+  "popup_action_done": {
+    "message": "Terminé"
+  },
+  "popup_action_delete": {
+    "message": "Supprimer"
+  },
+  "popup_action_create": {
+    "message": "Créer"
+  },
+  "popup_action_rename": {
+    "message": "Renommer"
+  },
+  "popup_action_switch": {
+    "message": "Basculer"
+  },
+  "popup_action_update": {
+    "message": "Mettre à jour"
+  },
+  "popup_action_saveToAmazon": {
+    "message": "Enregistrer sur Amazon"
+  },
+  "popup_action_addAll": {
+    "message": "Tout ajouter"
+  },
+  "popup_combine_title": {
+    "message": "Fusionner des paniers"
+  },
+  "popup_combine_sub": {
+    "message": "Choisissez un sens. Les articles sont fusionnés par ASIN ; en cas de doublon, la quantité la plus élevée est conservée."
+  },
+  "popup_combine_movePrefix": {
+    "message": "Déplacer"
+  },
+  "popup_combine_moveInfix": {
+    "message": "vers"
+  },
+  "popup_combine_pickTwo": {
+    "message": "Choisissez 2 paniers à fusionner."
+  },
+  "popup_combine_pickOneMore": {
+    "message": "Choisissez-en 1 de plus."
+  },
+  "popup_combine_readyToMerge": {
+    "message": "Prêt à fusionner ?"
+  },
+  "popup_combine_mergeCarts": {
+    "message": "Fusionner les paniers"
+  },
+  "popup_combine_selectAriaLabel": {
+    "message": "Sélectionner le panier « $1 » à fusionner",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_loadBothCartsFailed": {
+    "message": "Impossible de charger les deux paniers."
+  },
+  "popup_err_crossRegionMerge": {
+    "message": "Fusion impossible : « $1 » est sur $2 mais « $3 » est sur $4.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "popup_err_combineCartsFailed": {
+    "message": "Impossible de fusionner les paniers."
+  },
+  "popup_combine_itemsAdded": {
+    "message": "$1 ajouté(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_combine_qtyBumped": {
+    "message": "quantité augmentée pour $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_combine_merged": {
+    "message": "« $1 » a été fusionné dans « $2 »$3.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "popup_move_title": {
+    "message": "Déplacer l'article"
+  },
+  "popup_move_sub": {
+    "message": "Choisissez le panier dans lequel le déplacer."
+  },
+  "popup_move_createNew": {
+    "message": "Créer un nouveau panier"
+  },
+  "popup_move_noOtherCarts": {
+    "message": "Aucun autre panier disponible pour le moment."
+  },
+  "popup_untitled": {
+    "message": "(sans titre)"
+  },
+  "popup_err_moveItemFailed": {
+    "message": "Impossible de déplacer l'article."
+  },
+  "popup_genericCart": {
+    "message": "panier"
+  },
+  "popup_toast_moved": {
+    "message": "« $1 » déplacé vers « $2 ».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_err_createDestinationFailed": {
+    "message": "Impossible de créer une destination pour cet article."
+  },
+  "popup_prompt_createDestination_title": {
+    "message": "Créer le panier de destination"
+  },
+  "popup_err_createCartFailed": {
+    "message": "Impossible de créer le panier."
+  },
+  "popup_err_createdButNotMoved": {
+    "message": "Panier créé, mais l'article n'a pas pu être déplacé."
+  },
+  "popup_err_updateQtyFailed": {
+    "message": "Impossible de mettre à jour la quantité"
+  },
+  "popup_confirm_removeLast_title": {
+    "message": "Retirer le dernier article ?"
+  },
+  "popup_confirm_removeLast_before": {
+    "message": "Retirer "
+  },
+  "popup_confirm_removeLast_after": {
+    "message": " videra et supprimera ce panier."
+  },
+  "popup_confirm_removeLast_okLabel": {
+    "message": "Retirer et supprimer"
+  },
+  "popup_err_removeItemFailed": {
+    "message": "Impossible de retirer l'article"
+  },
+  "popup_toast_cartEmptiedRemoved": {
+    "message": "Panier vidé — retrait de la liste"
+  },
+  "popup_lockPill_title": {
+    "message": "Renouvelez Premium pour modifier ce panier"
+  },
+  "popup_lockPill_label": {
+    "message": "Lecture seule — Passer à Premium ?"
+  },
+  "popup_locked_renameTitle": {
+    "message": "Verrouillé — renouvelez Premium pour renommer"
+  },
+  "popup_locked_useTitle": {
+    "message": "Verrouillé — renouvelez Premium pour utiliser ce panier"
+  },
+  "popup_item_countQty": {
+    "message": "$1 · quantité $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_item_hostSaved": {
+    "message": "$1 · enregistré $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_sync_synced": {
+    "message": "✓ Synchronisé $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_sync_viewList": {
+    "message": "Voir la liste"
+  },
+  "popup_sync_updateAmazonList": {
+    "message": "Mettre à jour la liste Amazon"
+  },
+  "popup_count_item_one": {
+    "message": "$1 article",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_count_item_other": {
+    "message": "$1 articles",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_unavailable": {
+    "message": "Indisponible"
+  },
+  "popup_genericItem": {
+    "message": "Article"
+  },
+  "popup_thumb_moveAriaLabel": {
+    "message": "$1 — cliquer pour déplacer vers un autre panier",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_removeTitle": {
+    "message": "Retirer l'article"
+  },
+  "popup_thumb_removeAriaLabel": {
+    "message": "Retirer $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_qtyTitle": {
+    "message": "Modifier la quantité"
+  },
+  "popup_thumb_qtyAriaLabel": {
+    "message": "Quantité $1, cliquer pour modifier",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thumb_showLess": {
+    "message": "Afficher moins"
+  },
+  "popup_thumb_showFewerAriaLabel": {
+    "message": "Afficher moins d'articles"
+  },
+  "popup_thumb_showMoreAriaLabel": {
+    "message": "Afficher $1 articles supplémentaires",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_viewOnAmazon_ariaLabel": {
+    "message": "Voir la liste sur Amazon"
+  },
+  "popup_amazonList_viewOnAmazon_title": {
+    "message": "Voir sur Amazon"
+  },
+  "popup_amazonList_addAll_ariaLabel": {
+    "message": "Tout ajouter au panier Amazon"
+  },
+  "popup_amazonList_addAll_title": {
+    "message": "Tout ajouter au panier Amazon"
+  },
+  "popup_amazonList_addAvailable_title": {
+    "message": "Ajouter $1 à votre panier Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_noAvailableItems": {
+    "message": "Cette liste ne contient aucun article disponible"
+  },
+  "popup_amazonList_viewItems": {
+    "message": "Voir les articles"
+  },
+  "popup_amazonList_genericName": {
+    "message": "Liste Amazon"
+  },
+  "popup_amazonList_unavailableSuffix": {
+    "message": " · $1 indisponible(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_premiumUpgradeToUse": {
+    "message": "Panier Premium — passez à Premium pour l'utiliser"
+  },
+  "popup_amazonList_unlockAriaLabel": {
+    "message": "Débloquer $1 avec Premium",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_showItemsAriaLabel": {
+    "message": "Afficher les articles de $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_amazonList_loadingItems": {
+    "message": "Chargement des articles depuis Amazon…"
+  },
+  "popup_err_loadAmazonListFailed": {
+    "message": "Impossible de charger cette liste Amazon."
+  },
+  "popup_err_loadAmazonListsFailed": {
+    "message": "Impossible de charger vos listes Amazon."
+  },
+  "popup_err_noAvailableItemsToAdd": {
+    "message": "Cette liste ne contient aucun article disponible à ajouter."
+  },
+  "popup_confirm_sendToCart_title": {
+    "message": "Envoyer ces articles à votre panier Amazon ?"
+  },
+  "popup_confirm_sendToCart_message": {
+    "message": "Ajouter $1 de « $2 » à votre panier Amazon actif ? Les articles déjà présents seront conservés.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_confirm_sendToCart_unavailableNote": {
+    "message": "$1 seront ignorés.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_addingToCart": {
+    "message": "Ajout de $1 à votre panier Amazon…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_addListToCartFailed": {
+    "message": "Impossible d'ajouter cette liste à votre panier."
+  },
+  "popup_prompt_createNewCart_title": {
+    "message": "Créer un nouveau panier"
+  },
+  "popup_toast_created": {
+    "message": "« $1 » créé.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_thisFallback": {
+    "message": "celui-ci"
+  },
+  "popup_thisCartFallback": {
+    "message": "ce panier"
+  },
+  "popup_confirm_switch_title": {
+    "message": "Basculer vers ce panier ?"
+  },
+  "popup_confirm_switch_message": {
+    "message": "Cela remplacera votre panier Amazon actuel par le contenu de « $1 ».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_switchingCarts": {
+    "message": "Changement de panier — chargement de $1. Si Amazon propose une offre complémentaire, choisissez une option pour continuer.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_switchCartsFailed": {
+    "message": "Impossible de changer de panier"
+  },
+  "popup_confirm_updateList_title": {
+    "message": "Mettre à jour la liste Amazon ?"
+  },
+  "popup_confirm_saveToList_title": {
+    "message": "Enregistrer comme liste Amazon ?"
+  },
+  "popup_confirm_updateList_message": {
+    "message": "Resynchroniser « $1 » avec sa liste Amazon. Styx ouvre des onglets Amazon pour ajouter les articles — laissez-les ouverts jusqu'à la fin.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_confirm_saveToList_message": {
+    "message": "Créer une liste Amazon privée nommée « $1 » et y ajouter ses articles. Styx ouvre des onglets Amazon pour ce faire — laissez-les ouverts jusqu'à la fin. Vous devez être connecté(e) à Amazon.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_savingToAmazonList": {
+    "message": "Enregistrement dans votre liste Amazon — Styx ouvre des onglets Amazon. Cela peut prendre un moment…"
+  },
+  "popup_toast_savedPartial": {
+    "message": "$1/$2 enregistrés. $3 n'ont pas pu être ajoutés.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "popup_toast_savedToAmazonList": {
+    "message": "$1 enregistré(s) dans votre liste Amazon.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveToAmazonFailed": {
+    "message": "Impossible d'enregistrer sur Amazon"
+  },
+  "popup_prompt_renameCart_title": {
+    "message": "Renommer le panier"
+  },
+  "popup_prompt_renameCart_placeholder": {
+    "message": "Nom du panier"
+  },
+  "popup_err_renameFailed": {
+    "message": "Impossible de renommer"
+  },
+  "popup_confirm_deleteCart_title": {
+    "message": "Supprimer le panier enregistré ?"
+  },
+  "popup_confirm_deleteCart_message": {
+    "message": "« $1 » sera définitivement supprimé.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_toast_deleted": {
+    "message": "Supprimé"
+  },
+  "popup_err_deleteFailed": {
+    "message": "Impossible de supprimer"
+  },
+  "popup_item_rename_title": {
+    "message": "Renommer le panier"
+  },
+  "popup_item_switchTo": {
+    "message": "Basculer vers ce panier"
+  },
+  "popup_item_switchTo_title": {
+    "message": "Déplacer tous les articles vers votre panier Amazon"
+  },
+  "popup_item_saveToList": {
+    "message": "Enregistrer comme liste Amazon"
+  },
+  "popup_item_saveToList_title": {
+    "message": "Enregistrer ce panier comme liste Amazon afin qu'il se synchronise entre appareils"
+  },
+  "popup_item_delete_title": {
+    "message": "Supprimer tout le panier"
+  },
+  "popup_qty_ariaLabel": {
+    "message": "Modifier la quantité de l'article"
+  },
+  "popup_qty_decrease": {
+    "message": "Diminuer la quantité"
+  },
+  "popup_qty_increase": {
+    "message": "Augmenter la quantité"
+  },
+  "popup_confirm_defaultTitle": {
+    "message": "Êtes-vous sûr(e) ?"
+  },
+  "popup_prompt_defaultTitle": {
+    "message": "Saisir une valeur"
+  },
+  "popup_paywall_title": {
+    "message": "Passer à Premium"
+  },
+  "popup_paywall_sub": {
+    "message": "Vous utilisez déjà tous vos paniers gratuits. Premium vous offre plus d'espace pour votre façon de faire vos achats."
+  },
+  "popup_paywall_ctaSub": {
+    "message": "Gagnez du temps dans vos achats — listes de cadeaux, réassorts, occasions, comparaisons côte à côte."
+  },
+  "popup_paywall_limitTitle": {
+    "message": "Vous avez utilisé vos $1 paniers gratuits",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_paywall_limitSub": {
+    "message": "Passez à Premium pour en enregistrer davantage — vos paniers existants restent inchangés."
+  },
+  "popup_paywall_renewTitle": {
+    "message": "Content de vous revoir"
+  },
+  "popup_paywall_renewSub": {
+    "message": "Renouvelez Premium pour débloquer vos paniers en lecture seule. Tout ce que vous avez enregistré est toujours là."
+  },
+  "popup_paywall_feature_unlimited": {
+    "message": "Paniers illimités (contre 3 en gratuit)"
+  },
+  "popup_paywall_feature_curated": {
+    "message": "Conservez des listes organisées pour cadeaux, réassorts, occasions"
+  },
+  "popup_paywall_feature_cancelAnytime": {
+    "message": "Annulez à tout moment — tous les paniers restent visibles avec 3 gratuits"
+  },
+  "popup_paywall_haveCode": {
+    "message": "Vous avez un code ?"
+  },
+  "popup_paywall_promoCode": {
+    "message": "Code promo"
+  },
+  "popup_paywall_enterCode": {
+    "message": "Saisir le code"
+  },
+  "popup_paywall_redeem": {
+    "message": "Utiliser"
+  },
+  "popup_paywall_annual": {
+    "message": "Annuel"
+  },
+  "popup_paywall_annualPrice": {
+    "message": "9,99 $ / an"
+  },
+  "popup_paywall_lifetime": {
+    "message": "À vie"
+  },
+  "popup_paywall_lifetimePrice": {
+    "message": "19,99 $ une fois"
+  },
+  "popup_paywall_maybeLater": {
+    "message": "Peut-être plus tard"
+  },
+  "popup_paywall_openingCheckout": {
+    "message": "Ouverture du paiement…"
+  },
+  "popup_err_openCheckoutFailed": {
+    "message": "Impossible d'ouvrir le paiement."
+  },
+  "popup_promo_enterCode": {
+    "message": "Saisissez un code."
+  },
+  "popup_promo_checking": {
+    "message": "Vérification…"
+  },
+  "popup_promo_genericError": {
+    "message": "Un problème est survenu. Réessayez."
+  },
+  "popup_promo_unlocked90": {
+    "message": "Premium débloqué pour 90 jours !"
+  },
+  "popup_promo_unlockedToast": {
+    "message": "Premium débloqué — profitez-en !"
+  },
+  "popup_debug_toggle": {
+    "message": "Débogage"
+  },
+  "popup_debug_diagnostics_title": {
+    "message": "Diagnostic du panier"
+  },
+  "popup_debug_diagnostics_run": {
+    "message": "Lancer le diagnostic du panier"
+  },
+  "popup_debug_backup_title": {
+    "message": "Sauvegarde / restauration (dev)"
+  },
+  "popup_debug_backup_export": {
+    "message": "Exporter la sauvegarde"
+  },
+  "popup_debug_backup_restore": {
+    "message": "Restaurer depuis un fichier…"
+  },
+  "popup_debug_backup_hint": {
+    "message": "L'export lit les articles de chaque liste Amazon (lent — un onglet par liste) et les regroupe avec le stockage local mc.* dans un fichier JSON. La restauration recrée chaque liste personnalisée sur Amazon à partir de ce fichier (également lent — pilote « Ajouter à la liste » pour chaque article). Surveillez la fenêtre de statut pour suivre la progression. La restauration ne touche pas aux droits d'accès ni n'écrase le stockage."
+  },
+  "popup_debug_logs_title": {
+    "message": "Journaux de diagnostic"
+  },
+  "popup_debug_logs_copy": {
+    "message": "Copier les journaux de diagnostic"
+  },
+  "popup_debug_logs_hint": {
+    "message": "Copie la version de l'extension, l'état actuel et les journaux récents de chaque contexte (service worker, scripts de contenu, popup) dans le presse-papiers. Laissez le mode développeur activé, reproduisez le problème, puis copiez et envoyez le résultat au support."
+  },
+  "popup_settings_title": {
+    "message": "Paramètres"
+  },
+  "popup_settings_amazon_heading": {
+    "message": "Amazon"
+  },
+  "popup_settings_relabel_label": {
+    "message": "Renommer les listes Amazon en « paniers »"
+  },
+  "popup_settings_relabel_sub": {
+    "message": "Activé renomme la page Listes d'Amazon en « Vos paniers Styx » et ajoute « Panier » à chacun de vos noms de liste (ex. « Liste de Julie » → « Liste de Julie Panier »). Désactivé laisse Amazon inchangé."
+  },
+  "popup_settings_fab_heading": {
+    "message": "Bouton flottant"
+  },
+  "popup_settings_fabpulse_label": {
+    "message": "Faire pulser le bouton flottant"
+  },
+  "popup_settings_fabpulse_sub": {
+    "message": "Le bouton rond Styx s'illumine en orange sur les pages Amazon pour vous le rappeler. Désactivez pour un bouton statique."
+  },
+  "popup_settings_display_heading": {
+    "message": "Affichage"
+  },
+  "popup_settings_sidepanel_label": {
+    "message": "Ouvrir dans le panneau latéral"
+  },
+  "popup_settings_sidepanel_sub": {
+    "message": "Activé ancre Styx en panneau latéral (par défaut). Désactivé ouvre une popup compacte depuis la barre d'outils."
+  },
+  "popup_settings_dev_heading": {
+    "message": "Développeur"
+  },
+  "popup_settings_devmode_label": {
+    "message": "Mode développeur"
+  },
+  "popup_settings_devmode_sub": {
+    "message": "Affiche le panneau de débogage en bas de la popup et active les journaux détaillés dans la console du service worker. Peut rester désactivé sans risque."
+  },
+  "popup_settings_affiliate_heading": {
+    "message": "Avis d'affiliation"
+  },
+  "popup_settings_affiliate_body": {
+    "message": "Lorsque vous envoyez tout un panier vers Amazon, Styx utilise le point de terminaison d'ajout groupé d'Amazon, qui n'ajoutera vos articles que si le lien porte une balise Amazon Associates (tag=styxmcart-20). Styx fournit cette balise d'espace réservé uniquement pour que la restauration groupée fonctionne — il ne s'agit pas d'un compte Associates enregistré, et Styx ne perçoit aucune commission ni frais de recommandation sur vos achats."
+  },
+  "popup_settings_affiliate_learnMore": {
+    "message": "En savoir plus"
+  },
+  "popup_settings_versionLabel": {
+    "message": "Styx Multi-Cart v$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_settings_version_ariaLabel": {
+    "message": "Version"
+  },
+  "popup_support_options_ariaLabel": {
+    "message": "Options d'assistance"
+  },
+  "popup_support_needHelp": {
+    "message": "Besoin d'aide ?"
+  },
+  "popup_support_reportBug": {
+    "message": "Signaler un bug"
+  },
+  "popup_support_reportBug_sub": {
+    "message": "Ouvrir un nouveau ticket GitHub"
+  },
+  "popup_support_howToReport": {
+    "message": "Comment signaler un problème"
+  },
+  "popup_support_howToReport_sub": {
+    "message": "Conseils pour un bon rapport"
+  },
+  "popup_support_knownIssues": {
+    "message": "Problèmes connus"
+  },
+  "popup_support_knownIssues_sub": {
+    "message": "Parcourir les bugs signalés"
+  },
+  "popup_support_toggle_ariaLabel": {
+    "message": "Assistance et signalement de bug"
+  },
+  "popup_support_toggle_title": {
+    "message": "Assistance · Signaler un bug"
+  },
+  "popup_theme_switchToLight": {
+    "message": "Passer au mode clair"
+  },
+  "popup_theme_switchToDark": {
+    "message": "Passer au mode sombre"
+  },
+  "popup_defaultCartName": {
+    "message": "Panier · $1, $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popup_toast_saved": {
+    "message": "$1 enregistré(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveCartFailed": {
+    "message": "Impossible d'enregistrer le panier"
+  },
+  "popup_thisItem": {
+    "message": "cet article"
+  },
+  "popup_theseNItems": {
+    "message": "ces $1 articles",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_theseItems": {
+    "message": "ces articles"
+  },
+  "popup_confirm_clear_title": {
+    "message": "Vider votre panier Amazon ?"
+  },
+  "popup_confirm_clear_message": {
+    "message": "Enregistrez $1 pour un paiement ultérieur — ils vous attendront dans un panier Styx unique au sein de vos listes Amazon — ou videz-le simplement pour magasiner pour une autre occasion.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_confirm_clear_altLabel": {
+    "message": "Enregistrer et vider"
+  },
+  "popup_confirm_clear_okLabel": {
+    "message": "Vider !"
+  },
+  "popup_toast_savingThenClearing": {
+    "message": "Enregistrement de votre panier dans une nouvelle liste Amazon, puis vidage…"
+  },
+  "popup_toast_cartAlreadyEmpty": {
+    "message": "Votre panier Amazon est déjà vide."
+  },
+  "popup_toast_clearingCart": {
+    "message": "Vidage de votre panier — vérifiez l'onglet Amazon."
+  },
+  "popup_err_clearCartFailed": {
+    "message": "Impossible de vider le panier"
+  },
+  "popup_toast_savingForLater": {
+    "message": "Enregistrement de $1 dans un nouveau panier — votre panier Amazon reste inchangé.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_saveSettingFailed": {
+    "message": "Impossible d'enregistrer le paramètre"
+  },
+  "popup_toast_relabelOn": {
+    "message": "Les listes Amazon s'affichent désormais comme vos paniers Styx."
+  },
+  "popup_toast_relabelOff": {
+    "message": "Les listes Amazon restent inchangées."
+  },
+  "popup_toast_fabPulseOn": {
+    "message": "Le bouton flottant va pulser."
+  },
+  "popup_toast_fabPulseOff": {
+    "message": "Le pulsage du bouton flottant est désactivé."
+  },
+  "popup_toast_surfaceSidepanel": {
+    "message": "S'ouvre en panneau latéral. Cliquez sur l'icône de la barre d'outils pour rouvrir."
+  },
+  "popup_toast_surfacePopup": {
+    "message": "S'ouvre en popup. Cliquez sur l'icône de la barre d'outils pour rouvrir."
+  },
+  "popup_toast_devModeOn": {
+    "message": "Mode développeur activé"
+  },
+  "popup_toast_devModeOff": {
+    "message": "Mode développeur désactivé"
+  },
+  "popup_time_justNow": {
+    "message": "à l'instant"
+  },
+  "popup_time_minAgo": {
+    "message": "il y a $1 min",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_time_hrAgo": {
+    "message": "il y a $1 h",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_time_dayAgo": {
+    "message": "il y a $1 jours",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popup_err_noSwResponse": {
+    "message": "Aucune réponse du service worker de l'extension."
+  },
+  "popup_err_unknownError": {
+    "message": "Erreur inconnue"
+  },
+  "popup_err_premiumLimitReached": {
+    "message": "Vous avez atteint la limite de paniers. Supprimez ou fusionnez des paniers pour libérer de la place."
+  },
+  "popup_err_cartLocked": {
+    "message": "Ce panier est verrouillé — renouvelez Premium ou supprimez-en d'autres pour libérer une place."
+  },
+  "observer_close": {
+    "message": "Fermer"
+  },
+  "observer_closeImage": {
+    "message": "Fermer l'image"
+  },
+  "observer_screenshot": {
+    "message": "Capture d'écran"
+  },
+  "observer_back": {
+    "message": "← Retour"
+  },
+  "observer_backToCarts": {
+    "message": "← Retour aux paniers"
+  },
+  "observer_notNow": {
+    "message": "Pas maintenant"
+  },
+  "observer_tryAgain": {
+    "message": "Réessayer"
+  },
+  "observer_pleaseTryAgain": {
+    "message": "Veuillez réessayer."
+  },
+  "observer_genericCart": {
+    "message": "Panier"
+  },
+  "observer_genericItem": {
+    "message": "(article)"
+  },
+  "observer_cartWord": {
+    "message": "Panier"
+  },
+  "observer_readOnly": {
+    "message": "Lecture seule"
+  },
+  "observer_lockedRenewTitle": {
+    "message": "Verrouillé — cliquez pour renouveler Premium"
+  },
+  "observer_addToWhichCart": {
+    "message": "Ajouter à quel panier ?"
+  },
+  "observer_createNewCartRow": {
+    "message": "+ Créer un nouveau panier"
+  },
+  "observer_addToAmazonCart": {
+    "message": "Ajouter au panier Amazon"
+  },
+  "observer_addToAmazonCartCaps": {
+    "message": "Ajouter au panier Amazon"
+  },
+  "observer_addDirectlyToAmazonCart": {
+    "message": "Ajouter directement au panier Amazon"
+  },
+  "observer_noAmazonListsYet": {
+    "message": "Pas encore de listes Amazon — créez-en une ci-dessous."
+  },
+  "observer_addingToCart": {
+    "message": "Ajout à « $1 » — surveillez la fenêtre de statut…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_err_addItemFailed": {
+    "message": "Impossible d'ajouter l'article."
+  },
+  "observer_addedTo": {
+    "message": "Ajouté à « $1 » ✓",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_qtyBumpedIn": {
+    "message": "Quantité augmentée dans « $1 » ✓",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_qtyLabel": {
+    "message": "Qté"
+  },
+  "observer_create_title": {
+    "message": "Nouveau panier pour cet article"
+  },
+  "observer_create_sub": {
+    "message": "Nommez-le, et nous y ajouterons « $1 ».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_create_submit": {
+    "message": "Créer et ajouter"
+  },
+  "observer_create_needName": {
+    "message": "Donnez-lui d'abord un nom."
+  },
+  "observer_create_creating": {
+    "message": "Création de votre liste — surveillez la fenêtre de statut…"
+  },
+  "observer_err_createListFailed": {
+    "message": "Impossible de créer la liste."
+  },
+  "observer_upgrade_limitTitle": {
+    "message": "Limite de paniers atteinte"
+  },
+  "observer_upgrade_limitSub": {
+    "message": "Vous avez atteint la limite gratuite de 3 paniers. Passez à Premium pour créer des paniers illimités et débloquer l'édition complète !"
+  },
+  "observer_upgrade_renewTitle": {
+    "message": "Renouveler Premium"
+  },
+  "observer_upgrade_renewSub": {
+    "message": "Ce panier est en lecture seule dans la formule gratuite. Passez à Premium pour ajouter des articles à tous vos paniers enregistrés !"
+  },
+  "observer_upgrade_feature_unlimited": {
+    "message": "Paniers illimités"
+  },
+  "observer_upgrade_feature_fullEditing": {
+    "message": "Modifier, restaurer, renommer, fusionner — toutes les fonctionnalités"
+  },
+  "observer_upgrade_feature_cancelAnytime": {
+    "message": "Annulez à tout moment ; les paniers restent lisibles"
+  },
+  "observer_upgrade_premiumCartTitle": {
+    "message": "Panier Premium"
+  },
+  "observer_upgrade_premiumCartSub": {
+    "message": "Ce panier est verrouillé dans la formule gratuite. Passez à Premium pour l'envoyer vers votre panier Amazon et débloquer tous vos paniers."
+  },
+  "observer_upgrade_feature_allCarts": {
+    "message": "Utilisez tous vos paniers issus de listes Amazon"
+  },
+  "observer_upgrade_feature_sendAny": {
+    "message": "Envoyez n'importe quel panier vers votre panier Amazon"
+  },
+  "observer_yourStyxCarts": {
+    "message": "Vos paniers Styx"
+  },
+  "observer_addToStyxCart": {
+    "message": "Ajouter au panier Styx"
+  },
+  "observer_viewYourStyxCart": {
+    "message": "Voir votre panier Styx"
+  },
+  "observer_addToAStyxCart": {
+    "message": "Ajouter à un panier Styx"
+  },
+  "observer_createStyxCartTitle": {
+    "message": "Créer un nouveau panier Styx (liste Amazon)"
+  },
+  "observer_styxCartNamePrefix": {
+    "message": "Nom du panier Styx"
+  },
+  "observer_sendAllToAmazonCart": {
+    "message": "Tout envoyer au panier Amazon"
+  },
+  "observer_noItemsFound": {
+    "message": "Aucun article trouvé"
+  },
+  "observer_addingN": {
+    "message": "Ajout de $1…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_sendingNToCart": {
+    "message": "Envoi de $1 au panier…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_buildingAmazonList": {
+    "message": "Création de votre liste Amazon"
+  },
+  "observer_working": {
+    "message": "Traitement en cours…"
+  },
+  "observer_cartSaved": {
+    "message": "Panier enregistré"
+  },
+  "observer_nameYourNewList": {
+    "message": "Nommez votre nouvelle liste Amazon (nouveau panier Styx) :"
+  },
+  "observer_saveCartHelp": {
+    "message": "Après avoir enregistré ce panier, vous pouvez y accéder via vos listes Amazon ou l'extension Styx Multi-Cart."
+  },
+  "observer_clearCartConfirmBody": {
+    "message": "Enregistrez ces articles dans un nouveau panier Styx pour plus tard, ou videz le panier maintenant pour magasiner pour une autre occasion."
+  },
+  "observer_savingAndClearing": {
+    "message": "Enregistrement et vidage…"
+  },
+  "observer_clearingCart": {
+    "message": "Vidage du panier…"
+  },
+  "observer_savingThenClearing": {
+    "message": "Enregistrement de votre panier, puis vidage…"
+  },
+  "observer_clearingAmazonCart": {
+    "message": "Vidage de votre panier Amazon…"
+  },
+  "observer_savingYourCart": {
+    "message": "Enregistrement de votre panier"
+  },
+  "observer_clearingYourCart": {
+    "message": "Vidage de votre panier"
+  },
+  "observer_cartSavedAndCleared": {
+    "message": "Panier enregistré et vidé"
+  },
+  "observer_cartClearingStarted": {
+    "message": "Vidage du panier lancé"
+  },
+  "observer_checkAmazonTab": {
+    "message": "Vérifiez l'onglet Amazon pour suivre la progression."
+  },
+  "observer_couldntClearCart": {
+    "message": "Impossible de vider le panier"
+  },
+  "observer_saveEverythingTitle": {
+    "message": "Enregistrer tout le contenu de ce panier dans une nouvelle liste Amazon"
+  },
+  "observer_savingToAmazon": {
+    "message": "Enregistrement sur Amazon…"
+  },
+  "observer_openingAmazonTabs": {
+    "message": "Ouverture d'onglets Amazon pour ajouter chaque article — veuillez garder cet onglet ouvert."
+  },
+  "observer_listSaved": {
+    "message": "Liste enregistrée"
+  },
+  "observer_savedPartialOpeningList": {
+    "message": "$1/$2 enregistrés dans « $3 ». $4 nécessitent un ajout manuel. Ouverture de votre liste…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "observer_savedOpeningList": {
+    "message": "$1 enregistré(s) dans « $2 ». Ouverture de votre liste…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_extensionContextInvalid": {
+    "message": "Contexte de l'extension invalide"
+  },
+  "observer_openStyxMultiCart": {
+    "message": "Ouvrir Styx Multi-Cart"
+  },
+  "observer_proceedToCheckout": {
+    "message": "Passer la commande"
+  },
+  "observer_guide_ariaLabel": {
+    "message": "Prise en main de Styx Multi-Cart"
+  },
+  "observer_guide_kicker": {
+    "message": "Prise en main"
+  },
+  "observer_guide_fabButtonAlt": {
+    "message": "Le bouton rond Styx"
+  },
+  "observer_guide_introText": {
+    "message": "Cliquez sur le bouton Styx en bas à droite de n'importe quelle page Amazon pour ouvrir le panneau."
+  },
+  "observer_guide_stepOf": {
+    "message": "Étape $1 sur $2",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_guideFinish": {
+    "message": "Terminer"
+  },
+  "observer_startHere": {
+    "message": "Commencez ici..."
+  },
+  "observer_guideNext": {
+    "message": "Suivant"
+  },
+  "observer_guide1_title": {
+    "message": "Vider votre panier Amazon"
+  },
+  "observer_guide1_option1": {
+    "message": "Option 1 — dans le panneau Styx"
+  },
+  "observer_guide1_bullet1_text": {
+    "message": "Cliquez sur $1 pour vider le panier actif, ou sur $2 pour d'abord en garder une copie dans un nouveau panier Styx.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "observer_guide1_shot1_alt": {
+    "message": "Boutons « Vider le panier Amazon » et « Enregistrer le panier Amazon pour plus tard » en haut du panneau Styx"
+  },
+  "observer_guide1_sublist1": {
+    "message": "Les paniers Styx sont simplement des listes Amazon avec plus de fonctionnalités."
+  },
+  "observer_guide1_option2": {
+    "message": "Option 2 — sur votre page de panier Amazon"
+  },
+  "observer_guide1_bullet2_text": {
+    "message": "Les deux mêmes boutons se trouvent juste sous $1.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide1_shot2_alt": {
+    "message": "Boutons « Vider le panier Amazon » et « Enregistrer le panier Amazon pour plus tard » sous « Passer la commande » sur la page du panier Amazon"
+  },
+  "observer_guide2_title": {
+    "message": "Répartissez vos articles dans différents paniers pour des achats séparés"
+  },
+  "observer_guide2_copy1": {
+    "message": "Envie d'organiser vos achats au fil de vos courses ?…"
+  },
+  "observer_guide2_copy2": {
+    "message": "Choisissez $1 sur la page d'un article ou via son bouton d'ajout",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide2_copy3": {
+    "message": "Puis choisissez un panier existant ou $1.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "observer_guide2_shot1_alt": {
+    "message": "Bouton « Ajouter à un panier Styx » sur une page produit Amazon"
+  },
+  "observer_guide2_shot2_alt": {
+    "message": "Le sélecteur de panier Styx listant vos paniers, avec une option « Créer un nouveau panier »"
+  },
+  "observer_guide2_bullet1": {
+    "message": "Utilisez des paniers séparés pour vos voyages, projets ou proches."
+  },
+  "observer_guide2_bullet2": {
+    "message": "Ajouter un article directement à votre panier Amazon ou « Acheter maintenant » restent des options disponibles."
+  },
+  "observer_guide3_title": {
+    "message": "Envoyer tout un panier vers Amazon"
+  },
+  "observer_guide3_copy": {
+    "message": "Prêt(e) à passer commande avec un panier spécifique ? Vous pouvez l'envoyer vers votre panier Amazon de plusieurs façons…"
+  },
+  "observer_guide3_option1": {
+    "message": "Option 1 — en haut d'un panier"
+  },
+  "observer_guide3_bullet1_text": {
+    "message": "Sur n'importe quelle page de panier Styx (liste Amazon)."
+  },
+  "observer_guide3_shot1_alt": {
+    "message": "Bouton « Tout envoyer au panier Amazon » en haut d'une page de liste"
+  },
+  "observer_guide3_option2": {
+    "message": "Option 2 — ancré pendant le défilement"
+  },
+  "observer_guide3_bullet2_text": {
+    "message": "Une fois que vous avez défilé au-delà de ce bouton, il s'ancre en bas à droite, toujours accessible sur les listes longues."
+  },
+  "observer_guide3_shot2_alt": {
+    "message": "Bouton « Tout envoyer au panier Amazon » ancré à côté du bouton flottant Styx"
+  },
+  "observer_guide3_option3": {
+    "message": "Option 3 — dans le panneau Styx"
+  },
+  "observer_guide3_bullet3_text": {
+    "message": "Cliquez sur le bouton panier sur la ligne d'un panier dans le panneau de l'extension"
+  },
+  "observer_guide3_shot3_alt": {
+    "message": "Bouton « Tout ajouter au panier Amazon » sur une ligne de panier dans le panneau Styx"
+  },
+  "observer_guide3_bullet4": {
+    "message": "Styx ajoute tous les articles à ce qui se trouve déjà dans votre panier Amazon, puis indique le résultat une fois terminé."
+  },
+  "observer_guide3_bullet5": {
+    "message": "<strong>Nous avons déjà chargé vos listes Amazon</strong>, vous pouvez donc utiliser les paniers Styx dès maintenant. Cliquez sur $1 pour découvrir une toute nouvelle façon de faire vos achats sur Amazon !",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_done": {
+    "message": "Terminé"
+  },
+  "bg_doneCap": {
+    "message": "Terminé."
+  },
+  "bg_starting": {
+    "message": "Démarrage…"
+  },
+  "bg_thisItem": {
+    "message": "cet article"
+  },
+  "bg_genericItemLowercase": {
+    "message": "article"
+  },
+  "bg_genericListName": {
+    "message": "liste"
+  },
+  "bg_amazonCartFallbackName": {
+    "message": "Panier Amazon"
+  },
+  "bg_styxCartFallbackName": {
+    "message": "Panier Styx"
+  },
+  "bg_clearingCart": {
+    "message": "Vidage du panier"
+  },
+  "bg_clearingCartEllipsis": {
+    "message": "Vidage du panier…"
+  },
+  "bg_removedOfTotal": {
+    "message": "$1 sur $2 retirés…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_removedSoFar": {
+    "message": "$1 retirés jusqu'à présent…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_clearingCartRemovedOfTotal": {
+    "message": "Vidage du panier — $1 sur $2 retirés…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_clearingCartRemovedSoFar": {
+    "message": "Vidage du panier — $1 retirés jusqu'à présent…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldNotClearCartRemaining": {
+    "message": "Impossible de vider le panier — $1 encore présent(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_cartClearedRemoved": {
+    "message": "Panier vidé — $1 retiré(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_restoringCart": {
+    "message": "Restauration de $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingFirstProduct": {
+    "message": "Chargement du premier produit…"
+  },
+  "bg_batchOf": {
+    "message": "lot $1/$2 ($3 articles)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_itemsInOneGo": {
+    "message": "$1 articles en une seule fois",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingBulkAddFor": {
+    "message": "Chargement de l'ajout groupé pour $1…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_loadingBulkAddBatch": {
+    "message": "Chargement de l'ajout groupé — lot $1 sur $2 ($3 articles)…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_loadingBulkAddForItems": {
+    "message": "Chargement de l'ajout groupé pour $1…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkRejectedFallback": {
+    "message": "Amazon n'a pas pu préparer ces articles en une fois — ajout un par un…"
+  },
+  "bg_amazonRejectedBulkAdd": {
+    "message": "Amazon a rejeté les articles de l'ajout groupé"
+  },
+  "bg_addToCartFallback": {
+    "message": "Ajouter au panier"
+  },
+  "bg_clickHighlightedBatch": {
+    "message": "Cliquez sur « $1 » en surbrillance pour confirmer le lot $2 sur $3 ($4 articles)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      },
+      "4": {
+        "content": "$4"
+      }
+    }
+  },
+  "bg_clickHighlightedItems": {
+    "message": "Cliquez sur « $1 » en surbrillance pour ajouter $2 à votre panier Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_waitingForConfirmation": {
+    "message": "En attente de votre confirmation…"
+  },
+  "bg_userDidNotConfirmBulkAdd": {
+    "message": "L'utilisateur n'a pas confirmé l'ajout groupé : $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldntFindConfirmButton": {
+    "message": "Bouton de confirmation introuvable — vérification de votre panier…"
+  },
+  "bg_clickAddToCartManual": {
+    "message": "Cliquez sur « Ajouter au panier » sur la page quand vous êtes prêt(e) — la restauration reprendra automatiquement"
+  },
+  "bg_bulkRestorePartial": {
+    "message": "La restauration groupée a ajouté $1 articles sur $2 — $3 ignorés",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_bulkRestoreZero": {
+    "message": "La restauration groupée n'a ajouté aucun article — réessayez ou restaurez un par un"
+  },
+  "bg_noProductsOnBulkPage": {
+    "message": "Amazon n'a affiché aucun produit sur la page d'ajout groupé"
+  },
+  "bg_confirmButtonNotFound": {
+    "message": "Bouton de confirmation introuvable en 10 s"
+  },
+  "bg_savedCartHasNoItems": {
+    "message": "Ce panier enregistré ne contient aucun article."
+  },
+  "bg_productUnavailable": {
+    "message": "Produit indisponible"
+  },
+  "bg_skippingUnavailableItem": {
+    "message": "Article indisponible ignoré $1 sur $2 : $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_unavailableSkipped": {
+    "message": "Indisponible — ignoré : $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_noFormatSelected": {
+    "message": "Aucun format achetable n'a été sélectionné"
+  },
+  "bg_itemOf": {
+    "message": "Article $1 sur $2 : $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_restoringCartAdding": {
+    "message": "Restauration du panier — ajout de $1 sur $2 : $3",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_atcButtonNotFound": {
+    "message": "Bouton « Ajouter au panier » introuvable"
+  },
+  "bg_ageEarlierToday": {
+    "message": "plus tôt aujourd'hui"
+  },
+  "bg_ageRecently": {
+    "message": "récemment"
+  },
+  "bg_ageFromBefore": {
+    "message": "auparavant"
+  },
+  "bg_noCoverage": {
+    "message": "Aucune couverture"
+  },
+  "bg_selectedOption": {
+    "message": "option sélectionnée"
+  },
+  "bg_applyingChoiceAge": {
+    "message": "Application de votre choix ($1) : $2…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_applyingSavedChoice": {
+    "message": "Application de votre choix enregistré : $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_cartRestoredPartial": {
+    "message": "Panier restauré — $1 sur $2 ajoutés ($3 échoués)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_cartRestoredAll": {
+    "message": "Panier restauré — $1 ajouté(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingWishlistToCart": {
+    "message": "Ajout de la liste d'envies au panier"
+  },
+  "bg_addingItemsFromListPage": {
+    "message": "Ajout de $1 depuis la page de liste…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingItemsFromList": {
+    "message": "Ajout de $1 depuis la liste…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addedItemsToCart": {
+    "message": "$1 ajouté(s) à votre panier Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldNotSaveCart": {
+    "message": "Impossible d'enregistrer votre panier."
+  },
+  "bg_couldntSaveLeftUntouched": {
+    "message": "Échec de l'enregistrement — panier inchangé. $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_couldntSaveCartTitle": {
+    "message": "Impossible d'enregistrer votre panier"
+  },
+  "bg_cartLeftAsIs": {
+    "message": "Votre panier Amazon a été laissé tel quel. $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedNOfTotal": {
+    "message": "$1/$2 articles enregistrés",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedNItems": {
+    "message": "$1 enregistré(s)",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedNoteToCartUntouched": {
+    "message": "$1 dans « $2 » — votre panier reste inchangé.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_cartSavedForLater": {
+    "message": "Panier enregistré pour plus tard"
+  },
+  "bg_savedNoteToCartUntouchedDetail": {
+    "message": "$1 dans « $2 ». Votre panier Amazon reste inchangé.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedNoteNowClearing": {
+    "message": "$1 — vidage de votre panier en cours…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_savedAndCleared": {
+    "message": "Enregistré et vidé"
+  },
+  "bg_savedNoteToCartEmpty": {
+    "message": "$1 dans « $2 ». Votre panier Amazon est vide.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_savedButCouldntClear": {
+    "message": "Enregistré, mais échec du vidage"
+  },
+  "bg_savedNoteCouldntClear": {
+    "message": "$1 dans « $2 », mais votre panier Amazon n'a pas pu être vidé. Réessayez « Vider le panier Amazon ».",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bg_amazonNeedsFormatChoice": {
+    "message": "Amazon a besoin d'un choix de format"
+  },
+  "bg_chooseCartableFormat": {
+    "message": "Choisissez un format achetable pour « $1 » afin de continuer l'ajout des autres articles.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_chooseFormatOnAmazon": {
+    "message": "Choisir un format sur Amazon"
+  },
+  "bg_savedFormatCannotBeAdded": {
+    "message": "Le format enregistré de « $1 » ne peut pas être ajouté au panier. Choisissez un autre format ou une autre édition sur cette page proposant « Ajouter au panier ». Styx reprendra automatiquement.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_choiceChooseFormat": {
+    "message": "Choisir un format"
+  },
+  "bg_choiceSkipThisItem": {
+    "message": "Ignorer cet article"
+  },
+  "bg_couldNotShowFormatPrompt": {
+    "message": "Impossible d'afficher le sélecteur de format"
+  },
+  "bg_skippedFormatUnavailable": {
+    "message": "Ignoré car le format enregistré est indisponible"
+  },
+  "bg_chooseFormatShowsAtc": {
+    "message": "Choisissez pour « $1 » un format proposant « Ajouter au panier » — Styx reprendra automatiquement",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_amazonTabWasClosed": {
+    "message": "L'onglet Amazon a été fermé"
+  },
+  "bg_selectedFormatUnavailable": {
+    "message": "Le format sélectionné est indisponible"
+  },
+  "bg_noFormatSelectedTimeout": {
+    "message": "Aucun format achetable n'a été sélectionné dans les 10 minutes"
+  },
+  "bg_savedFormatUnavailableChooseAnother": {
+    "message": "Le format enregistré est indisponible ; choisissez-en un autre"
+  },
+  "bg_pageNoLongerExists": {
+    "message": "La page produit n'existe plus"
+  },
+  "bg_productCurrentlyUnavailable": {
+    "message": "Produit actuellement indisponible"
+  },
+  "bg_waitingOnYourChoice": {
+    "message": "En attente de votre choix"
+  },
+  "bg_pickProtectionOption": {
+    "message": "Choisissez une option de protection pour « $1 » sur la page Amazon — la restauration reprendra automatiquement.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_amazonNeedsProtectionPlanChoice": {
+    "message": "Amazon a besoin de votre choix concernant le plan de protection pour « $1 ». Choisissez une option ci-dessous — Styx continuera la restauration du reste de votre panier dès que vous aurez choisi.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addToListDropdownNotFound": {
+    "message": "Menu déroulant « Ajouter à une liste » introuvable sur cette page."
+  },
+  "bg_createEntryNotFound": {
+    "message": "Entrée « Créer une liste » introuvable dans le sélecteur."
+  },
+  "bg_createListFormDidNotAppear": {
+    "message": "Le formulaire de création de liste n'est pas apparu."
+  },
+  "bg_createButtonNotFound": {
+    "message": "Bouton « Créer » introuvable dans le formulaire de création de liste."
+  },
+  "bg_noConfirmationAfterCreate": {
+    "message": "Aucune confirmation après avoir cliqué sur « Créer »."
+  },
+  "bg_noResultFromCreateList": {
+    "message": "aucun résultat de pageCreateListAndAdd"
+  },
+  "bg_listNotFoundInMenu": {
+    "message": "Liste __LISTID__ introuvable dans le menu « Ajouter à une liste ».",
+    "placeholders": {}
+  },
+  "bg_noResult": {
+    "message": "aucun résultat"
+  },
+  "bg_bulkIncomplete_title": {
+    "message": "Ajout groupé incomplet"
+  },
+  "bg_bulkIncomplete_stillMissing": {
+    "message": "Toujours manquants :\n$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_andNMore": {
+    "message": "… et $1 de plus",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_summaryPartial": {
+    "message": "L'ajout groupé n'a placé que $1 articles sur $2 dans votre panier.\n\nSouhaitez-vous restaurer les $3 restants un par un ? C'est plus lent mais plus fiable.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      },
+      "3": {
+        "content": "$3"
+      }
+    }
+  },
+  "bg_bulkIncomplete_summaryNone": {
+    "message": "L'ajout groupé n'a placé aucun article dans votre panier — le système d'ajout groupé d'Amazon les a peut-être silencieusement rejetés (souvent parce que la balise d'affilié n'est pas reconnue).\n\nSouhaitez-vous plutôt restaurer les $1 articles un par un ?",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_bulkIncomplete_choiceManual": {
+    "message": "Je clique moi-même sur « Ajouter au panier »"
+  },
+  "bg_bulkIncomplete_choiceFallback": {
+    "message": "Restaurer un par un"
+  },
+  "bg_bulkIncomplete_choiceSkip": {
+    "message": "Ignorer les articles manquants"
+  },
+  "bg_savingCart": {
+    "message": "Enregistrement du panier"
+  },
+  "bg_savingItemsToNewList": {
+    "message": "Enregistrement de $1 dans une nouvelle liste Amazon…",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_addingToList": {
+    "message": "Ajout à $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_openingProductPage": {
+    "message": "Ouverture de la page produit…"
+  },
+  "bg_addToListFailed": {
+    "message": "Échec de l'ajout à la liste."
+  },
+  "bg_creatingList": {
+    "message": "Création de $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_settingUpYourList": {
+    "message": "Configuration de votre liste…"
+  },
+  "bg_cartAppearsEmpty": {
+    "message": "Le panier semble vide — rien à enregistrer."
+  },
+  "bg_amazonCartLooksEmpty": {
+    "message": "Votre panier Amazon semble vide — rien à enregistrer."
+  },
+  "bg_missingListIdOrAsin": {
+    "message": "ID de liste ou ASIN manquant."
+  },
+  "bg_missingAsin": {
+    "message": "ASIN manquant."
+  },
+  "bg_missingListId": {
+    "message": "ID de liste manquant."
+  },
+  "bg_paymentServiceNotAvailable": {
+    "message": "Service de paiement non disponible."
+  },
+  "bg_couldntOpenCheckout": {
+    "message": "Impossible d'ouvrir le paiement."
+  },
+  "bg_purchasesHandledInApp": {
+    "message": "Les achats sont gérés dans l'application Styx Multi-Cart."
+  },
+  "bg_noAvailableItemsOnWishlist": {
+    "message": "Aucun article disponible n'a été trouvé sur cette liste d'envies."
+  },
+  "bg_cartLimitReachedUpgrade": {
+    "message": "Limite de paniers atteinte — passez à Premium pour en ajouter davantage."
+  },
+  "bg_noResultPeriod": {
+    "message": "Aucun résultat."
+  },
+  "bg_promoCodeInvalid": {
+    "message": "Ce code n'est pas valide."
+  },
+  "bg_promoCodeAlreadyUsed": {
+    "message": "Ce code a déjà été utilisé sur cet appareil."
+  },
+  "bg_firstError": {
+    "message": "Première erreur : $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_nothingWasAdded": {
+    "message": "Rien n'a été ajouté."
+  },
+  "bg_cartHasNoItemsToSave": {
+    "message": "Ce panier ne contient aucun article à enregistrer."
+  },
+  "bg_savingLabelToAmazon": {
+    "message": "Enregistrement de $1 sur Amazon",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bg_atcButtonNotFoundFull": {
+    "message": "Bouton « Ajouter au panier » introuvable ou non visible"
+  },
+  "bg_atcButtonStayedDisabled": {
+    "message": "Le bouton « Ajouter au panier » est resté désactivé"
+  },
+  "promo_tagline1": {
+    "message": "Videz votre panier Amazon."
+  },
+  "promo_tagline2": {
+    "message": "Ou enregistrez-le pour plus tard."
+  },
+  "promo_subtext": {
+    "message": "Gratuit & illimité · Sans pistage"
+  }
+}

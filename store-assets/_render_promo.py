@@ -6,24 +6,77 @@ Style brief:
   - Styx icon (rendered fresh at 4x supersample) as the visual anchor.
   - Short brand/value copy in white and orange.
 
-Re-run after edits with: python3 store-assets/_render_promo.py
+Tagline copy is pulled from _locales/<locale>/messages.json (promo_tagline1,
+promo_tagline2, promo_subtext) so there is one source of truth shared with the
+extension's own translation catalog.
+
+Re-run after edits with:
+  python3 store-assets/_render_promo.py                  # English (default)
+  python3 store-assets/_render_promo.py de fr it ja pt_BR # one or more locales
+  python3 store-assets/_render_promo.py --all             # every _locales/ folder
 """
 
 import os
 import sys
+import json
 import math
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "icons"))
+LOCALES_DIR = os.path.join(HERE, "..", "_locales")
 
 # Reuse the icon renderer so brand stays consistent.
 from _render import draw_icon, hex_rgba  # noqa: E402
 
 SMALL_W, SMALL_H = 440, 280
 MARQUEE_W, MARQUEE_H = 1400, 560
-SMALL_OUT_PATH = os.path.join(HERE, "promo-440x280.png")
-MARQUEE_OUT_PATH = os.path.join(HERE, "promo-1400x560.png")
+
+
+def promo_copy(locale):
+    """Load promo_tagline1/2 + promo_subtext for a locale, falling back to en."""
+    path = os.path.join(LOCALES_DIR, locale, "messages.json")
+    with open(path, "r", encoding="utf-8") as f:
+        messages = json.load(f)
+    return {
+        "tagline1": messages["promo_tagline1"]["message"],
+        "tagline2": messages["promo_tagline2"]["message"],
+        "subtext": messages["promo_subtext"]["message"],
+    }
+
+
+def out_path(name, locale):
+    suffix = "" if locale == "en" else f".{locale}"
+    return os.path.join(HERE, f"{name}{suffix}.png")
+
+
+def fit_font(draw, text, candidates, max_size, min_size, max_width):
+    """Largest font size (from max_size down to min_size) whose rendered
+    width of `text` fits within max_width. Translated taglines run
+    considerably longer than the English source in German/French/Italian/
+    Portuguese, so a fixed size overflows the promo tile — shrink instead of
+    clipping."""
+    size = max_size
+    font = pick_font(candidates, size)
+    while size > min_size:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        if bbox[2] - bbox[0] <= max_width:
+            break
+        size -= 1
+        font = pick_font(candidates, size)
+    return font
+
+
+# CJK-capable fallback so non-Latin scripts (e.g. Japanese) don't render as
+# tofu boxes when Arial/Helvetica lack the glyphs. Checked first for any
+# locale whose copy needs it; Latin-script locales never reach this path
+# since pick_font() already succeeds on the first (Latin) candidate.
+CJK_FALLBACKS = [
+    "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/Library/Fonts/Arial Unicode.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+]
 
 # Brand palette (mirrors the toolbar icon).
 BG = hex_rgba("#131a22")
@@ -43,22 +96,24 @@ def pick_font(candidates, size):
     return ImageFont.load_default()
 
 
-def font_candidates_bold():
-    return [
+def font_candidates_bold(cjk=False):
+    latin = [
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
         "/Library/Fonts/Arial Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ]
+    return (CJK_FALLBACKS + latin) if cjk else latin
 
 
-def font_candidates_regular():
-    return [
+def font_candidates_regular(cjk=False):
+    latin = [
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
         "/Library/Fonts/Arial.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
+    return (CJK_FALLBACKS + latin) if cjk else latin
 
 
 def add_radial_highlight(img, origin, radius, color, max_alpha):
@@ -76,7 +131,9 @@ def add_radial_highlight(img, origin, radius, color, max_alpha):
     return Image.alpha_composite(img, overlay)
 
 
-def draw_small():
+def draw_small(locale="en"):
+    copy = promo_copy(locale)
+    cjk = locale.startswith("ja")
     w, h = SMALL_W, SMALL_H
     img = Image.new("RGBA", (w, h), BG)
     draw = ImageDraw.Draw(img, "RGBA")
@@ -99,39 +156,45 @@ def draw_small():
     img.alpha_composite(icon, (24, (h - 140) // 2))
 
     # Right column — product name + tagline + sub-tagline.
-    title_font = pick_font(font_candidates_bold(), 32)
-    sub_title_font = pick_font(font_candidates_bold(), 18)
-    tagline_font = pick_font(font_candidates_bold(), 19)
-    sub_font = pick_font(font_candidates_regular(), 13)
+    title_font = pick_font(font_candidates_bold(cjk), 32)
+    sub_title_font = pick_font(font_candidates_bold(cjk), 18)
+    sub_font = pick_font(font_candidates_regular(cjk), 13)
 
     text_x = 180
+    max_text_width = w - text_x - 16
+    tagline1_font = fit_font(draw, copy["tagline1"], font_candidates_bold(cjk), 19, 12, max_text_width)
+    tagline2_font = fit_font(draw, copy["tagline2"], font_candidates_bold(cjk), 19, 12, max_text_width)
+
     draw.text((text_x, 60), "Styx", font=title_font, fill=WHITE_PRIMARY)
     draw.text((text_x, 100), "Multi-Cart", font=sub_title_font, fill=ORANGE)
     draw.text(
         (text_x, 140),
-        "Clear your Amazon cart.",
-        font=tagline_font,
+        copy["tagline1"],
+        font=tagline1_font,
         fill=WHITE_PRIMARY,
     )
     draw.text(
         (text_x, 165),
-        "Or save it for later.",
-        font=tagline_font,
+        copy["tagline2"],
+        font=tagline2_font,
         fill=WHITE_PRIMARY,
     )
     draw.text(
         (text_x, 215),
-        "Free & unlimited · No tracking",
+        copy["subtext"],
         font=sub_font,
         fill=WHITE_SECONDARY,
     )
 
     # Chrome Web Store rejects promos with transparency.
-    img.convert("RGB").save(SMALL_OUT_PATH, optimize=True)
-    print(f"wrote {SMALL_OUT_PATH}")
+    path = out_path("promo-440x280", locale)
+    img.convert("RGB").save(path, optimize=True)
+    print(f"wrote {path}")
 
 
-def draw_marquee():
+def draw_marquee(locale="en"):
+    copy = promo_copy(locale)
+    cjk = locale.startswith("ja")
     w, h = MARQUEE_W, MARQUEE_H
     img = Image.new("RGBA", (w, h), BG)
     img = add_radial_highlight(img, (260, 90), 520, BLUE, 30)
@@ -151,26 +214,42 @@ def draw_marquee():
     icon = draw_icon(276)
     img.alpha_composite(icon, (108, 132))
 
-    title_font = pick_font(font_candidates_bold(), 76)
-    product_font = pick_font(font_candidates_bold(), 44)
-    tagline_font = pick_font(font_candidates_bold(), 54)
+    title_font = pick_font(font_candidates_bold(cjk), 76)
+    product_font = pick_font(font_candidates_bold(cjk), 44)
 
     text_x = 460
+    max_text_width = w - text_x - 40
+    tagline1_font = fit_font(draw, copy["tagline1"], font_candidates_bold(cjk), 54, 30, max_text_width)
+    tagline2_font = fit_font(draw, copy["tagline2"], font_candidates_bold(cjk), 54, 30, max_text_width)
+
     draw.text((text_x, 126), "Styx", font=title_font, fill=WHITE_PRIMARY)
     draw.text((text_x, 210), "Multi-Cart", font=product_font, fill=ORANGE)
-    draw.text((text_x, 296), "Clear your Amazon cart.", font=tagline_font, fill=WHITE_PRIMARY)
-    draw.text((text_x, 360), "Or save it for later.", font=tagline_font, fill=WHITE_PRIMARY)
+    draw.text((text_x, 296), copy["tagline1"], font=tagline1_font, fill=WHITE_PRIMARY)
+    draw.text((text_x, 360), copy["tagline2"], font=tagline2_font, fill=WHITE_PRIMARY)
 
     # Keep edges defined on light gray Chrome Web Store backgrounds.
     draw.rectangle([0, 0, w - 1, h - 1], outline=(255, 255, 255, 18), width=2)
 
-    img.convert("RGB").save(MARQUEE_OUT_PATH, optimize=True)
-    print(f"wrote {MARQUEE_OUT_PATH}")
+    path = out_path("promo-1400x560", locale)
+    img.convert("RGB").save(path, optimize=True)
+    print(f"wrote {path}")
 
 
 def main():
-    draw_small()
-    draw_marquee()
+    args = sys.argv[1:]
+    if not args:
+        locales = ["en"]
+    elif args == ["--all"]:
+        locales = sorted(
+            d for d in os.listdir(LOCALES_DIR)
+            if os.path.isdir(os.path.join(LOCALES_DIR, d))
+        )
+    else:
+        locales = args
+
+    for locale in locales:
+        draw_small(locale)
+        draw_marquee(locale)
 
 
 if __name__ == "__main__":

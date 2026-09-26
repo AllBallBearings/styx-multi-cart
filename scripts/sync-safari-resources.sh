@@ -58,6 +58,13 @@ cp icons/icon128.png "$DEST/icons/icon128.png"
 mkdir -p "$DEST/guide-assets"
 rsync -a --delete guide-assets/ "$DEST/guide-assets/"
 
+# manifest.json uses __MSG_*__ placeholders, so _locales must ship too.
+mkdir -p "$DEST/_locales"
+rsync -a --delete _locales/ "$DEST/_locales/"
+# Safari's chrome.i18n mangles `$N` placeholders that follow a non-space char
+# (`"$1"`, `v$1`); swap them for {{N}} tokens that t() substitutes itself.
+python3 scripts/safari-i18n-tokens.py "$DEST/_locales"
+
 if [[ "$STRIP_DEBUG_ENT" == "1" ]]; then
   if ! command -v python3 >/dev/null 2>&1; then
     echo "error: python3 is required to strip developer controls for a --prod build" >&2

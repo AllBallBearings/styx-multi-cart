@@ -88,6 +88,9 @@ function loadObserver(
             "mc.amazonlists.v1": listsSnapshot,
             "mc.entitlement.v1": { tier: "free", premiumUntil: null },
           };
+          // Real chrome.storage returns a promise when no callback is given
+          // (observer's guide/hint flags use that form).
+          if (!callback) return Promise.resolve(payload);
           if (storageDelayMs > 0) {
             setTimeout(() => callback(payload), storageDelayMs);
           } else {

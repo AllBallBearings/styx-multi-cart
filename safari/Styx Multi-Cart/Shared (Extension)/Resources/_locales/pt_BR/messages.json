@@ -1,0 +1,1514 @@
+{
+  "manifest_name": {
+    "message": "Styx Multi-Cart"
+  },
+  "manifest_description": {
+    "message": "Esvazie seu carrinho da Amazon, salve-o para depois e gerencie vários carrinhos com Listas da Amazon reutilizáveis."
+  },
+  "manifest_actionTitle": {
+    "message": "Styx Multi-Cart"
+  },
+  "popup_header_premiumBadge": {
+    "message": "Premium"
+  },
+  "popup_header_premiumBadge_title": {
+    "message": "Você tem Premium"
+  },
+  "popup_header_tagline": {
+    "message": "Do caos do carrinho à tranquilidade no checkout"
+  },
+  "popup_header_settingsToggle_ariaLabel": {
+    "message": "Abrir configurações"
+  },
+  "popup_header_settingsToggle_title": {
+    "message": "Configurações"
+  },
+  "popup_header_themeToggle": {
+    "message": "Alternar modo claro/escuro"
+  },
+  "popup_save_label": {
+    "message": "Salvar o carrinho da Amazon atual como"
+  },
+  "popup_save_input_placeholder": {
+    "message": "ex. Presentes de aniversário"
+  },
+  "popup_save_button": {
+    "message": "Salvar carrinho"
+  },
+  "popup_save_button_title": {
+    "message": "Salvar o carrinho da Amazon atual"
+  },
+  "popup_intercept_toggle_title": {
+    "message": "Ao clicar em «Adicionar ao carrinho» da Amazon em uma página de produto, escolher um carrinho salvo em vez disso."
+  },
+  "popup_intercept_prefix": {
+    "message": "Interceptar o"
+  },
+  "popup_action_addToCart": {
+    "message": "Adicionar ao carrinho"
+  },
+  "popup_intercept_sub": {
+    "message": "Escolher um carrinho salvo em vez do carrinho ativo da Amazon."
+  },
+  "popup_tier_free": {
+    "message": "Gratuito"
+  },
+  "popup_action_upgrade": {
+    "message": "Fazer upgrade"
+  },
+  "popup_action_hideThis": {
+    "message": "Ocultar"
+  },
+  "popup_tier_hideAriaLabel": {
+    "message": "Ocultar indicador de plano"
+  },
+  "popup_lapsed_hideAriaLabel": {
+    "message": "Ocultar banner de expiração"
+  },
+  "popup_tier_usage": {
+    "message": "{{1}} / {{2}} carrinhos salvos"
+  },
+  "popup_lapsed_suffix_one": {
+    "message": " carrinho está somente leitura"
+  },
+  "popup_lapsed_suffix_other": {
+    "message": " carrinhos estão somente leitura"
+  },
+  "popup_lapsed_renewNote": {
+    "message": "— Renove o Premium para editá-los novamente."
+  },
+  "popup_action_renew": {
+    "message": "Renovar"
+  },
+  "popup_list_title": {
+    "message": "Seus carrinhos"
+  },
+  "popup_list_gotoCarts_title": {
+    "message": "Abrir seus carrinhos na Amazon"
+  },
+  "popup_list_cartsWord": {
+    "message": "carrinhos"
+  },
+  "popup_list_refresh_title": {
+    "message": "Atualizar seus carrinhos a partir da Amazon"
+  },
+  "popup_clear_button": {
+    "message": "Esvaziar carrinho da Amazon"
+  },
+  "popup_clear_button_title": {
+    "message": "Remover todos os itens do seu carrinho ativo da Amazon"
+  },
+  "popup_saveForLater_button": {
+    "message": "Salvar carrinho da Amazon para depois"
+  },
+  "popup_saveForLater_button_lines": {
+    "message": "Salvar carrinho da Amazon\npara depois"
+  },
+  "popup_saveForLater_button_title": {
+    "message": "Salvar tudo no seu carrinho da Amazon como um novo carrinho, sem esvaziá-lo"
+  },
+  "popup_lists_loading": {
+    "message": "Carregando suas listas da Amazon…"
+  },
+  "popup_lists_empty": {
+    "message": "Nenhuma lista da Amazon encontrada. Verifique se você está conectado(a) à Amazon."
+  },
+  "popup_action_continue": {
+    "message": "Continuar →"
+  },
+  "popup_action_cancel": {
+    "message": "Cancelar"
+  },
+  "popup_action_ok": {
+    "message": "OK"
+  },
+  "popup_action_done": {
+    "message": "Concluído"
+  },
+  "popup_action_delete": {
+    "message": "Excluir"
+  },
+  "popup_action_create": {
+    "message": "Criar"
+  },
+  "popup_action_rename": {
+    "message": "Renomear"
+  },
+  "popup_action_switch": {
+    "message": "Trocar"
+  },
+  "popup_action_update": {
+    "message": "Atualizar"
+  },
+  "popup_action_saveToAmazon": {
+    "message": "Salvar na Amazon"
+  },
+  "popup_action_addAll": {
+    "message": "Adicionar tudo"
+  },
+  "popup_combine_title": {
+    "message": "Combinar carrinhos"
+  },
+  "popup_combine_sub": {
+    "message": "Escolha uma direção. Os itens são combinados pelo ASIN; em duplicatas, a quantidade maior é mantida."
+  },
+  "popup_combine_movePrefix": {
+    "message": "Mover"
+  },
+  "popup_combine_moveInfix": {
+    "message": "para"
+  },
+  "popup_combine_pickTwo": {
+    "message": "Escolha 2 carrinhos para combinar."
+  },
+  "popup_combine_pickOneMore": {
+    "message": "Escolha mais 1."
+  },
+  "popup_combine_readyToMerge": {
+    "message": "Pronto para combinar?"
+  },
+  "popup_combine_mergeCarts": {
+    "message": "Combinar carrinhos"
+  },
+  "popup_combine_selectAriaLabel": {
+    "message": "Selecionar o carrinho «{{1}}» para combinar"
+  },
+  "popup_err_loadBothCartsFailed": {
+    "message": "Não foi possível carregar os dois carrinhos."
+  },
+  "popup_err_crossRegionMerge": {
+    "message": "Não é possível combinar: «{{1}}» está em {{2}}, mas «{{3}}» está em {{4}}."
+  },
+  "popup_err_combineCartsFailed": {
+    "message": "Não foi possível combinar os carrinhos."
+  },
+  "popup_combine_itemsAdded": {
+    "message": "{{1}} adicionados"
+  },
+  "popup_combine_qtyBumped": {
+    "message": "quantidade aumentada em {{1}}"
+  },
+  "popup_combine_merged": {
+    "message": "«{{1}}» foi combinado em «{{2}}»{{3}}."
+  },
+  "popup_move_title": {
+    "message": "Mover item"
+  },
+  "popup_move_sub": {
+    "message": "Escolha o carrinho para o qual movê-lo."
+  },
+  "popup_move_createNew": {
+    "message": "Criar novo carrinho"
+  },
+  "popup_move_noOtherCarts": {
+    "message": "Ainda não há outros carrinhos para mover."
+  },
+  "popup_untitled": {
+    "message": "(sem título)"
+  },
+  "popup_err_moveItemFailed": {
+    "message": "Não foi possível mover o item."
+  },
+  "popup_genericCart": {
+    "message": "carrinho"
+  },
+  "popup_toast_moved": {
+    "message": "«{{1}}» movido para «{{2}}»."
+  },
+  "popup_err_createDestinationFailed": {
+    "message": "Não foi possível criar um destino para este item."
+  },
+  "popup_prompt_createDestination_title": {
+    "message": "Criar carrinho de destino"
+  },
+  "popup_err_createCartFailed": {
+    "message": "Não foi possível criar o carrinho."
+  },
+  "popup_err_createdButNotMoved": {
+    "message": "O carrinho foi criado, mas não foi possível mover o item."
+  },
+  "popup_err_updateQtyFailed": {
+    "message": "Não foi possível atualizar a quantidade"
+  },
+  "popup_confirm_removeLast_title": {
+    "message": "Remover o último item?"
+  },
+  "popup_confirm_removeLast_before": {
+    "message": "Ao remover "
+  },
+  "popup_confirm_removeLast_after": {
+    "message": ", este carrinho será esvaziado e excluído."
+  },
+  "popup_confirm_removeLast_okLabel": {
+    "message": "Remover e excluir"
+  },
+  "popup_err_removeItemFailed": {
+    "message": "Não foi possível remover o item"
+  },
+  "popup_toast_cartEmptiedRemoved": {
+    "message": "Carrinho esvaziado — removendo da lista"
+  },
+  "popup_lockPill_title": {
+    "message": "Renove o Premium para editar este carrinho"
+  },
+  "popup_lockPill_label": {
+    "message": "Somente leitura — Obter Premium?"
+  },
+  "popup_locked_renameTitle": {
+    "message": "Bloqueado — renove o Premium para renomear"
+  },
+  "popup_locked_useTitle": {
+    "message": "Bloqueado — renove o Premium para usar este carrinho"
+  },
+  "popup_item_countQty": {
+    "message": "{{1}} · quantidade {{2}}"
+  },
+  "popup_item_hostSaved": {
+    "message": "{{1}} · salvo {{2}}"
+  },
+  "popup_sync_synced": {
+    "message": "✓ Sincronizado {{1}}"
+  },
+  "popup_sync_viewList": {
+    "message": "Ver lista"
+  },
+  "popup_sync_updateAmazonList": {
+    "message": "Atualizar lista da Amazon"
+  },
+  "popup_count_item_one": {
+    "message": "{{1}} item"
+  },
+  "popup_count_item_other": {
+    "message": "{{1}} itens"
+  },
+  "popup_unavailable": {
+    "message": "Indisponível"
+  },
+  "popup_genericItem": {
+    "message": "Item"
+  },
+  "popup_thumb_moveAriaLabel": {
+    "message": "{{1}} — clique para mover para outro carrinho"
+  },
+  "popup_thumb_removeTitle": {
+    "message": "Remover item"
+  },
+  "popup_thumb_removeAriaLabel": {
+    "message": "Remover {{1}}"
+  },
+  "popup_thumb_qtyTitle": {
+    "message": "Alterar quantidade"
+  },
+  "popup_thumb_qtyAriaLabel": {
+    "message": "Quantidade {{1}}, clique para alterar"
+  },
+  "popup_thumb_showLess": {
+    "message": "Mostrar menos"
+  },
+  "popup_thumb_showFewerAriaLabel": {
+    "message": "Mostrar menos itens"
+  },
+  "popup_thumb_showMoreAriaLabel": {
+    "message": "Mostrar mais {{1}} itens"
+  },
+  "popup_amazonList_viewOnAmazon_ariaLabel": {
+    "message": "Ver lista na Amazon"
+  },
+  "popup_amazonList_viewOnAmazon_title": {
+    "message": "Ver na Amazon"
+  },
+  "popup_amazonList_addAll_ariaLabel": {
+    "message": "Adicionar tudo ao carrinho da Amazon"
+  },
+  "popup_amazonList_addAll_title": {
+    "message": "Adicionar tudo ao carrinho da Amazon"
+  },
+  "popup_amazonList_addAvailable_title": {
+    "message": "Adicionar {{1}} ao seu carrinho da Amazon"
+  },
+  "popup_amazonList_noAvailableItems": {
+    "message": "Esta lista não tem itens disponíveis"
+  },
+  "popup_amazonList_viewItems": {
+    "message": "Ver itens"
+  },
+  "popup_amazonList_genericName": {
+    "message": "Lista da Amazon"
+  },
+  "popup_amazonList_unavailableSuffix": {
+    "message": " · {{1}} indisponível(is)"
+  },
+  "popup_amazonList_premiumUpgradeToUse": {
+    "message": "Carrinho Premium — faça upgrade para usar"
+  },
+  "popup_amazonList_unlockAriaLabel": {
+    "message": "Desbloquear {{1}} com Premium"
+  },
+  "popup_amazonList_showItemsAriaLabel": {
+    "message": "Mostrar itens em {{1}}"
+  },
+  "popup_amazonList_loadingItems": {
+    "message": "Carregando itens da Amazon…"
+  },
+  "popup_err_loadAmazonListFailed": {
+    "message": "Não foi possível carregar esta lista da Amazon."
+  },
+  "popup_err_loadAmazonListsFailed": {
+    "message": "Não foi possível carregar suas listas da Amazon."
+  },
+  "popup_err_noAvailableItemsToAdd": {
+    "message": "Esta lista não tem itens disponíveis para adicionar."
+  },
+  "popup_confirm_sendToCart_title": {
+    "message": "Enviar estes itens para o seu carrinho da Amazon?"
+  },
+  "popup_confirm_sendToCart_message": {
+    "message": "Adicionar {{1}} de «{{2}}» ao seu carrinho ativo da Amazon? Os itens já existentes serão mantidos."
+  },
+  "popup_confirm_sendToCart_unavailableNote": {
+    "message": "{{1}} serão ignorados."
+  },
+  "popup_toast_addingToCart": {
+    "message": "Adicionando {{1}} ao seu carrinho da Amazon…"
+  },
+  "popup_err_addListToCartFailed": {
+    "message": "Não foi possível adicionar esta lista ao seu carrinho."
+  },
+  "popup_prompt_createNewCart_title": {
+    "message": "Criar um novo carrinho"
+  },
+  "popup_toast_created": {
+    "message": "«{{1}}» criado."
+  },
+  "popup_thisFallback": {
+    "message": "este"
+  },
+  "popup_thisCartFallback": {
+    "message": "este carrinho"
+  },
+  "popup_confirm_switch_title": {
+    "message": "Trocar para este carrinho?"
+  },
+  "popup_confirm_switch_message": {
+    "message": "Isso substituirá seu carrinho atual da Amazon pelo conteúdo de «{{1}}»."
+  },
+  "popup_toast_switchingCarts": {
+    "message": "Trocando de carrinho — carregando {{1}}. Se a Amazon mostrar uma oferta adicional, escolha uma opção para continuar."
+  },
+  "popup_err_switchCartsFailed": {
+    "message": "Não foi possível trocar de carrinho"
+  },
+  "popup_confirm_updateList_title": {
+    "message": "Atualizar lista da Amazon?"
+  },
+  "popup_confirm_saveToList_title": {
+    "message": "Salvar como lista da Amazon?"
+  },
+  "popup_confirm_updateList_message": {
+    "message": "Ressincronizar «{{1}}» com sua lista da Amazon. O Styx abre abas da Amazon para adicionar os itens — mantenha-as abertas até terminar."
+  },
+  "popup_confirm_saveToList_message": {
+    "message": "Criar uma lista privada da Amazon chamada «{{1}}» e adicionar seus itens. O Styx abre abas da Amazon para fazer isso — mantenha-as abertas até terminar. Você precisa estar conectado(a) à Amazon."
+  },
+  "popup_toast_savingToAmazonList": {
+    "message": "Salvando na sua lista da Amazon — o Styx está abrindo abas da Amazon. Isso pode levar um momento…"
+  },
+  "popup_toast_savedPartial": {
+    "message": "{{1}}/{{2}} salvos. {{3}} não puderam ser adicionados."
+  },
+  "popup_toast_savedToAmazonList": {
+    "message": "{{1}} salvos na sua lista da Amazon."
+  },
+  "popup_err_saveToAmazonFailed": {
+    "message": "Não foi possível salvar na Amazon"
+  },
+  "popup_prompt_renameCart_title": {
+    "message": "Renomear carrinho"
+  },
+  "popup_prompt_renameCart_placeholder": {
+    "message": "Nome do carrinho"
+  },
+  "popup_err_renameFailed": {
+    "message": "Não foi possível renomear"
+  },
+  "popup_confirm_deleteCart_title": {
+    "message": "Excluir carrinho salvo?"
+  },
+  "popup_confirm_deleteCart_message": {
+    "message": "«{{1}}» será removido permanentemente."
+  },
+  "popup_toast_deleted": {
+    "message": "Excluído"
+  },
+  "popup_err_deleteFailed": {
+    "message": "Não foi possível excluir"
+  },
+  "popup_item_rename_title": {
+    "message": "Renomear carrinho"
+  },
+  "popup_item_switchTo": {
+    "message": "Trocar para este carrinho"
+  },
+  "popup_item_switchTo_title": {
+    "message": "Mover todos os itens para o seu carrinho da Amazon"
+  },
+  "popup_item_saveToList": {
+    "message": "Salvar como lista da Amazon"
+  },
+  "popup_item_saveToList_title": {
+    "message": "Salvar este carrinho como uma lista da Amazon para sincronizar entre dispositivos"
+  },
+  "popup_item_delete_title": {
+    "message": "Excluir todo o carrinho"
+  },
+  "popup_qty_ariaLabel": {
+    "message": "Alterar quantidade do item"
+  },
+  "popup_qty_decrease": {
+    "message": "Diminuir quantidade"
+  },
+  "popup_qty_increase": {
+    "message": "Aumentar quantidade"
+  },
+  "popup_confirm_defaultTitle": {
+    "message": "Tem certeza?"
+  },
+  "popup_prompt_defaultTitle": {
+    "message": "Digite um valor"
+  },
+  "popup_paywall_title": {
+    "message": "Fazer upgrade para Premium"
+  },
+  "popup_paywall_sub": {
+    "message": "Você está usando todos os seus carrinhos gratuitos salvos. O Premium libera mais espaço para o seu jeito de comprar."
+  },
+  "popup_paywall_ctaSub": {
+    "message": "Economize mais tempo do seu jeito de comprar — listas de presentes, reposições, ocasiões, comparações lado a lado."
+  },
+  "popup_paywall_limitTitle": {
+    "message": "Você usou todos os seus {{1}} carrinhos gratuitos"
+  },
+  "popup_paywall_limitSub": {
+    "message": "Faça upgrade para Premium para salvar mais — seus carrinhos existentes permanecem exatamente como estão."
+  },
+  "popup_paywall_renewTitle": {
+    "message": "Bem-vindo(a) de volta"
+  },
+  "popup_paywall_renewSub": {
+    "message": "Renove o Premium para desbloquear seus carrinhos somente leitura. Tudo o que você salvou ainda está aqui, esperando."
+  },
+  "popup_paywall_feature_unlimited": {
+    "message": "Carrinhos ilimitados (contra 3 gratuitos)"
+  },
+  "popup_paywall_feature_curated": {
+    "message": "Mantenha listas organizadas para presentes, reposições e ocasiões"
+  },
+  "popup_paywall_feature_cancelAnytime": {
+    "message": "Cancele quando quiser — todos os carrinhos continuam visíveis com 3 gratuitos"
+  },
+  "popup_paywall_haveCode": {
+    "message": "Tem um código?"
+  },
+  "popup_paywall_promoCode": {
+    "message": "Código promocional"
+  },
+  "popup_paywall_enterCode": {
+    "message": "Digite o código"
+  },
+  "popup_paywall_redeem": {
+    "message": "Resgatar"
+  },
+  "popup_paywall_annual": {
+    "message": "Anual"
+  },
+  "popup_paywall_annualPrice": {
+    "message": "US{{D}} 9,99 / ano"
+  },
+  "popup_paywall_lifetime": {
+    "message": "Vitalício"
+  },
+  "popup_paywall_lifetimePrice": {
+    "message": "US{{D}} 19,99 pagamento único"
+  },
+  "popup_paywall_maybeLater": {
+    "message": "Talvez mais tarde"
+  },
+  "popup_paywall_openingCheckout": {
+    "message": "Abrindo o checkout…"
+  },
+  "popup_err_openCheckoutFailed": {
+    "message": "Não foi possível abrir o checkout."
+  },
+  "popup_promo_enterCode": {
+    "message": "Digite um código."
+  },
+  "popup_promo_checking": {
+    "message": "Verificando…"
+  },
+  "popup_promo_genericError": {
+    "message": "Algo deu errado. Tente novamente."
+  },
+  "popup_promo_unlocked90": {
+    "message": "Premium desbloqueado por 90 dias!"
+  },
+  "popup_promo_unlockedToast": {
+    "message": "Premium desbloqueado — aproveite!"
+  },
+  "popup_debug_toggle": {
+    "message": "Depuração"
+  },
+  "popup_debug_diagnostics_title": {
+    "message": "Diagnóstico do carrinho"
+  },
+  "popup_debug_diagnostics_run": {
+    "message": "Executar diagnóstico do carrinho"
+  },
+  "popup_debug_backup_title": {
+    "message": "Backup / restauração (dev)"
+  },
+  "popup_debug_backup_export": {
+    "message": "Exportar backup"
+  },
+  "popup_debug_backup_restore": {
+    "message": "Restaurar de arquivo…"
+  },
+  "popup_debug_backup_hint": {
+    "message": "A exportação lê os itens de cada lista da Amazon (lento — uma aba por lista) e os agrupa com o armazenamento local mc.* em um arquivo JSON. A restauração recria cada lista personalizada na Amazon a partir desse arquivo (também lento — executa «Adicionar à lista» por item). Acompanhe a janela de status para ver o progresso. A restauração não afeta os direitos de uso nem sobrescreve o armazenamento."
+  },
+  "popup_debug_logs_title": {
+    "message": "Registros de diagnóstico"
+  },
+  "popup_debug_logs_copy": {
+    "message": "Copiar registros de diagnóstico"
+  },
+  "popup_debug_logs_hint": {
+    "message": "Copia a versão da extensão, o estado atual e os registros recentes de cada contexto (service worker, scripts de conteúdo, popup) para a área de transferência. Mantenha o modo desenvolvedor ativado, reproduza o problema e depois copie e envie o resultado ao suporte."
+  },
+  "popup_settings_title": {
+    "message": "Configurações"
+  },
+  "popup_settings_amazon_heading": {
+    "message": "Amazon"
+  },
+  "popup_settings_relabel_label": {
+    "message": "Renomear listas da Amazon para «carrinhos»"
+  },
+  "popup_settings_relabel_sub": {
+    "message": "Ativado renomeia a página de Listas da Amazon para «Seus carrinhos Styx» e adiciona «Carrinho» a cada um dos nomes das suas listas (ex.: «Lista da Júlia» → «Lista da Júlia Carrinho»). Desativado deixa a Amazon inalterada."
+  },
+  "popup_settings_fab_heading": {
+    "message": "Botão flutuante"
+  },
+  "popup_settings_fabpulse_label": {
+    "message": "Fazer o botão flutuante pulsar"
+  },
+  "popup_settings_fabpulse_sub": {
+    "message": "O botão redondo do Styx brilha em laranja nas páginas da Amazon como lembrete para usá-lo. Desative para um botão estático."
+  },
+  "popup_settings_display_heading": {
+    "message": "Exibição"
+  },
+  "popup_settings_sidepanel_label": {
+    "message": "Abrir no painel lateral"
+  },
+  "popup_settings_sidepanel_sub": {
+    "message": "Ativado ancora o Styx como painel lateral (padrão). Desativado abre um popup compacto pela barra de ferramentas."
+  },
+  "popup_settings_dev_heading": {
+    "message": "Desenvolvedor"
+  },
+  "popup_settings_devmode_label": {
+    "message": "Modo desenvolvedor"
+  },
+  "popup_settings_devmode_sub": {
+    "message": "Mostra o painel de depuração na parte inferior do popup e ativa registros detalhados no console do service worker. Pode deixar desativado sem problemas."
+  },
+  "popup_settings_affiliate_heading": {
+    "message": "Aviso de afiliados"
+  },
+  "popup_settings_affiliate_body": {
+    "message": "Ao enviar um carrinho inteiro para a Amazon, o Styx usa o endpoint de adição em massa da Amazon, que só adicionará seus itens se o link tiver uma tag da Amazon Associates (tag=styxmcart-20). O Styx fornece essa tag de espaço reservado apenas para que a restauração em massa do carrinho funcione — não se trata de uma conta Associates registrada, e o Styx não recebe comissão ou taxa de indicação sobre suas compras."
+  },
+  "popup_settings_affiliate_learnMore": {
+    "message": "Saiba mais"
+  },
+  "popup_settings_versionLabel": {
+    "message": "Styx Multi-Cart v{{1}}"
+  },
+  "popup_settings_version_ariaLabel": {
+    "message": "Versão"
+  },
+  "popup_support_options_ariaLabel": {
+    "message": "Opções de suporte"
+  },
+  "popup_support_needHelp": {
+    "message": "Precisa de ajuda?"
+  },
+  "popup_support_reportBug": {
+    "message": "Relatar um bug"
+  },
+  "popup_support_reportBug_sub": {
+    "message": "Abrir um novo issue no GitHub"
+  },
+  "popup_support_howToReport": {
+    "message": "Como relatar"
+  },
+  "popup_support_howToReport_sub": {
+    "message": "Dicas para um bom relato"
+  },
+  "popup_support_knownIssues": {
+    "message": "Problemas conhecidos"
+  },
+  "popup_support_knownIssues_sub": {
+    "message": "Ver bugs relatados"
+  },
+  "popup_support_toggle_ariaLabel": {
+    "message": "Suporte e relato de bugs"
+  },
+  "popup_support_toggle_title": {
+    "message": "Suporte · Relatar um bug"
+  },
+  "popup_theme_switchToLight": {
+    "message": "Mudar para o modo claro"
+  },
+  "popup_theme_switchToDark": {
+    "message": "Mudar para o modo escuro"
+  },
+  "popup_defaultCartName": {
+    "message": "Carrinho · {{1}}, {{2}}"
+  },
+  "popup_toast_saved": {
+    "message": "{{1}} salvos"
+  },
+  "popup_err_saveCartFailed": {
+    "message": "Não foi possível salvar o carrinho"
+  },
+  "popup_thisItem": {
+    "message": "este item"
+  },
+  "popup_theseNItems": {
+    "message": "estes {{1}} itens"
+  },
+  "popup_theseItems": {
+    "message": "estes itens"
+  },
+  "popup_confirm_clear_title": {
+    "message": "Esvaziar seu carrinho da Amazon?"
+  },
+  "popup_confirm_clear_message": {
+    "message": "Salve {{1}} para um checkout posterior e eles estarão esperando em um carrinho Styx exclusivo nas suas listas da Amazon — ou simplesmente esvazie para comprar para outra ocasião."
+  },
+  "popup_confirm_clear_altLabel": {
+    "message": "Salvar e esvaziar"
+  },
+  "popup_confirm_clear_okLabel": {
+    "message": "Esvaziar!"
+  },
+  "popup_toast_savingThenClearing": {
+    "message": "Salvando seu carrinho em uma nova lista da Amazon e depois esvaziando…"
+  },
+  "popup_toast_cartAlreadyEmpty": {
+    "message": "Seu carrinho da Amazon já está vazio."
+  },
+  "popup_toast_clearingCart": {
+    "message": "Esvaziando seu carrinho — verifique a aba da Amazon."
+  },
+  "popup_err_clearCartFailed": {
+    "message": "Não foi possível esvaziar o carrinho"
+  },
+  "popup_toast_savingForLater": {
+    "message": "Salvando {{1}} em um novo carrinho — seu carrinho da Amazon permanece como está."
+  },
+  "popup_err_saveSettingFailed": {
+    "message": "Não foi possível salvar a configuração"
+  },
+  "popup_toast_relabelOn": {
+    "message": "As listas da Amazon agora aparecem como seus carrinhos Styx."
+  },
+  "popup_toast_relabelOff": {
+    "message": "As listas da Amazon permanecem como estão."
+  },
+  "popup_toast_fabPulseOn": {
+    "message": "O botão flutuante vai pulsar."
+  },
+  "popup_toast_fabPulseOff": {
+    "message": "Pulsação do botão flutuante desativada."
+  },
+  "popup_toast_surfaceSidepanel": {
+    "message": "Abre como painel lateral. Clique no ícone da barra de ferramentas para reabrir."
+  },
+  "popup_toast_surfacePopup": {
+    "message": "Abre como popup. Clique no ícone da barra de ferramentas para reabrir."
+  },
+  "popup_toast_devModeOn": {
+    "message": "Modo desenvolvedor ativado"
+  },
+  "popup_toast_devModeOff": {
+    "message": "Modo desenvolvedor desativado"
+  },
+  "popup_time_justNow": {
+    "message": "agora mesmo"
+  },
+  "popup_time_minAgo": {
+    "message": "há {{1}} min"
+  },
+  "popup_time_hrAgo": {
+    "message": "há {{1}} h"
+  },
+  "popup_time_dayAgo": {
+    "message": "há {{1}} dias"
+  },
+  "popup_err_noSwResponse": {
+    "message": "Nenhuma resposta do service worker da extensão."
+  },
+  "popup_err_unknownError": {
+    "message": "Erro desconhecido"
+  },
+  "popup_err_premiumLimitReached": {
+    "message": "Você atingiu o limite de carrinhos. Exclua ou combine carrinhos para liberar espaço."
+  },
+  "popup_err_cartLocked": {
+    "message": "Este carrinho está bloqueado — renove o Premium ou exclua outros para liberar uma vaga."
+  },
+  "observer_close": {
+    "message": "Fechar"
+  },
+  "observer_closeImage": {
+    "message": "Fechar imagem"
+  },
+  "observer_screenshot": {
+    "message": "Captura de tela"
+  },
+  "observer_back": {
+    "message": "← Voltar"
+  },
+  "observer_backToCarts": {
+    "message": "← Voltar aos carrinhos"
+  },
+  "observer_notNow": {
+    "message": "Agora não"
+  },
+  "observer_tryAgain": {
+    "message": "Tentar novamente"
+  },
+  "observer_pleaseTryAgain": {
+    "message": "Tente novamente."
+  },
+  "observer_genericCart": {
+    "message": "Carrinho"
+  },
+  "observer_genericItem": {
+    "message": "(item)"
+  },
+  "observer_cartWord": {
+    "message": "Carrinho"
+  },
+  "observer_readOnly": {
+    "message": "Somente leitura"
+  },
+  "observer_lockedRenewTitle": {
+    "message": "Bloqueado — clique para renovar o Premium"
+  },
+  "observer_addToWhichCart": {
+    "message": "Adicionar a qual carrinho?"
+  },
+  "observer_createNewCartRow": {
+    "message": "+ Criar novo carrinho"
+  },
+  "observer_addToAmazonCart": {
+    "message": "Adicionar ao carrinho da Amazon"
+  },
+  "observer_addToAmazonCartCaps": {
+    "message": "Adicionar ao carrinho da Amazon"
+  },
+  "observer_addDirectlyToAmazonCart": {
+    "message": "Adicionar diretamente ao carrinho da Amazon"
+  },
+  "observer_noAmazonListsYet": {
+    "message": "Ainda não há listas da Amazon — crie uma abaixo."
+  },
+  "observer_addingToCart": {
+    "message": "Adicionando a «{{1}}» — acompanhe a janela de status…"
+  },
+  "observer_err_addItemFailed": {
+    "message": "Não foi possível adicionar o item."
+  },
+  "observer_addedTo": {
+    "message": "Adicionado a «{{1}}» ✓"
+  },
+  "observer_qtyBumpedIn": {
+    "message": "Quantidade aumentada em «{{1}}» ✓"
+  },
+  "observer_qtyLabel": {
+    "message": "Qtd."
+  },
+  "observer_create_title": {
+    "message": "Novo carrinho para este item"
+  },
+  "observer_create_sub": {
+    "message": "Dê um nome a ele, e vamos adicionar «{{1}}» agora mesmo."
+  },
+  "observer_create_submit": {
+    "message": "Criar e adicionar"
+  },
+  "observer_create_needName": {
+    "message": "Dê um nome primeiro."
+  },
+  "observer_create_creating": {
+    "message": "Criando sua lista — acompanhe a janela de status…"
+  },
+  "observer_err_createListFailed": {
+    "message": "Não foi possível criar a lista."
+  },
+  "observer_upgrade_limitTitle": {
+    "message": "Limite de carrinhos atingido"
+  },
+  "observer_upgrade_limitSub": {
+    "message": "Você atingiu o limite gratuito de 3 carrinhos. Faça upgrade para Premium para criar carrinhos ilimitados e desbloquear a edição completa!"
+  },
+  "observer_upgrade_renewTitle": {
+    "message": "Renovar Premium"
+  },
+  "observer_upgrade_renewSub": {
+    "message": "Este carrinho está somente leitura no plano gratuito. Faça upgrade para Premium para adicionar itens a todos os seus carrinhos salvos!"
+  },
+  "observer_upgrade_feature_unlimited": {
+    "message": "Carrinhos ilimitados"
+  },
+  "observer_upgrade_feature_fullEditing": {
+    "message": "Editar, restaurar, renomear, combinar — funcionalidade completa"
+  },
+  "observer_upgrade_feature_cancelAnytime": {
+    "message": "Cancele quando quiser; os carrinhos continuam legíveis"
+  },
+  "observer_upgrade_premiumCartTitle": {
+    "message": "Carrinho Premium"
+  },
+  "observer_upgrade_premiumCartSub": {
+    "message": "Este carrinho está bloqueado no plano gratuito. Faça upgrade para enviá-lo ao seu carrinho da Amazon e desbloquear todos os seus carrinhos."
+  },
+  "observer_upgrade_feature_allCarts": {
+    "message": "Use todos os seus carrinhos de listas da Amazon"
+  },
+  "observer_upgrade_feature_sendAny": {
+    "message": "Envie qualquer carrinho para o seu carrinho da Amazon"
+  },
+  "observer_yourStyxCarts": {
+    "message": "Seus carrinhos Styx"
+  },
+  "observer_addToStyxCart": {
+    "message": "Adicionar ao carrinho Styx"
+  },
+  "observer_viewYourStyxCart": {
+    "message": "Ver seu carrinho Styx"
+  },
+  "observer_addToAStyxCart": {
+    "message": "Adicionar a um carrinho Styx"
+  },
+  "observer_createStyxCartTitle": {
+    "message": "Criar um novo carrinho Styx (lista da Amazon)"
+  },
+  "observer_styxCartNamePrefix": {
+    "message": "Nome do carrinho Styx"
+  },
+  "observer_sendAllToAmazonCart": {
+    "message": "Enviar tudo para o carrinho da Amazon"
+  },
+  "observer_noItemsFound": {
+    "message": "Nenhum item encontrado"
+  },
+  "observer_addingN": {
+    "message": "Adicionando {{1}}…"
+  },
+  "observer_sendingNToCart": {
+    "message": "Enviando {{1}} para o carrinho…"
+  },
+  "observer_buildingAmazonList": {
+    "message": "Criando sua lista da Amazon"
+  },
+  "observer_working": {
+    "message": "Processando…"
+  },
+  "observer_cartSaved": {
+    "message": "Carrinho salvo"
+  },
+  "observer_nameYourNewList": {
+    "message": "Dê um nome à sua nova lista da Amazon (novo carrinho Styx):"
+  },
+  "observer_saveCartHelp": {
+    "message": "Depois de salvar este carrinho, você pode acessá-lo pelas suas listas da Amazon ou pela extensão Styx Multi-Cart."
+  },
+  "observer_clearCartConfirmBody": {
+    "message": "Salve estes itens em um novo carrinho Styx para depois, ou esvazie o carrinho agora para comprar para outra ocasião."
+  },
+  "observer_savingAndClearing": {
+    "message": "Salvando e esvaziando…"
+  },
+  "observer_clearingCart": {
+    "message": "Esvaziando o carrinho…"
+  },
+  "observer_savingThenClearing": {
+    "message": "Salvando seu carrinho e depois esvaziando…"
+  },
+  "observer_clearingAmazonCart": {
+    "message": "Esvaziando seu carrinho da Amazon…"
+  },
+  "observer_savingYourCart": {
+    "message": "Salvando seu carrinho"
+  },
+  "observer_clearingYourCart": {
+    "message": "Esvaziando seu carrinho"
+  },
+  "observer_cartSavedAndCleared": {
+    "message": "Carrinho salvo e esvaziado"
+  },
+  "observer_cartClearingStarted": {
+    "message": "Esvaziamento do carrinho iniciado"
+  },
+  "observer_checkAmazonTab": {
+    "message": "Verifique a aba da Amazon para ver o progresso."
+  },
+  "observer_couldntClearCart": {
+    "message": "Não foi possível esvaziar o carrinho"
+  },
+  "observer_saveEverythingTitle": {
+    "message": "Salvar tudo neste carrinho como uma nova lista da Amazon"
+  },
+  "observer_savingToAmazon": {
+    "message": "Salvando na Amazon…"
+  },
+  "observer_openingAmazonTabs": {
+    "message": "Abrindo abas da Amazon para adicionar cada item — mantenha esta aba aberta."
+  },
+  "observer_listSaved": {
+    "message": "Lista salva"
+  },
+  "observer_savedPartialOpeningList": {
+    "message": "{{1}}/{{2}} salvos em «{{3}}». {{4}} precisam ser adicionados manualmente. Abrindo sua lista…"
+  },
+  "observer_savedOpeningList": {
+    "message": "{{1}} salvos em «{{2}}». Abrindo sua lista…"
+  },
+  "observer_extensionContextInvalid": {
+    "message": "Contexto da extensão inválido"
+  },
+  "observer_openStyxMultiCart": {
+    "message": "Abrir Styx Multi-Cart"
+  },
+  "observer_proceedToCheckout": {
+    "message": "Prosseguir para o checkout"
+  },
+  "observer_guide_ariaLabel": {
+    "message": "Guia rápido do Styx Multi-Cart"
+  },
+  "observer_guide_kicker": {
+    "message": "Guia rápido"
+  },
+  "observer_guide_fabButtonAlt": {
+    "message": "O botão redondo do Styx"
+  },
+  "observer_guide_introText": {
+    "message": "Clique no botão Styx no canto inferior direito de qualquer página da Amazon para abrir o painel."
+  },
+  "observer_guide_stepOf": {
+    "message": "Etapa {{1}} de {{2}}"
+  },
+  "observer_guideFinish": {
+    "message": "Concluir"
+  },
+  "observer_startHere": {
+    "message": "Comece aqui..."
+  },
+  "observer_guideNext": {
+    "message": "Avançar"
+  },
+  "observer_guide1_title": {
+    "message": "Esvazie seu carrinho da Amazon"
+  },
+  "observer_guide1_option1": {
+    "message": "Opção 1 — no painel Styx"
+  },
+  "observer_guide1_bullet1_text": {
+    "message": "Clique em {{1}} para esvaziar o carrinho ativo, ou em {{2}} para antes manter uma cópia em um novo carrinho Styx."
+  },
+  "observer_guide1_shot1_alt": {
+    "message": "Botões «Esvaziar carrinho da Amazon» e «Salvar carrinho da Amazon para depois» no topo do painel Styx"
+  },
+  "observer_guide1_sublist1": {
+    "message": "Os carrinhos Styx são simplesmente listas da Amazon com funcionalidades extras."
+  },
+  "observer_guide1_option2": {
+    "message": "Opção 2 — na sua página do carrinho da Amazon"
+  },
+  "observer_guide1_bullet2_text": {
+    "message": "Os mesmos dois botões ficam logo abaixo de {{1}}."
+  },
+  "observer_guide1_shot2_alt": {
+    "message": "Botões «Esvaziar carrinho da Amazon» e «Salvar carrinho da Amazon para depois» abaixo de «Prosseguir para o checkout» na página do carrinho da Amazon"
+  },
+  "observer_guide2_title": {
+    "message": "Coloque itens em carrinhos diferentes para compras separadas"
+  },
+  "observer_guide2_copy1": {
+    "message": "Quer organizar suas compras enquanto compra?…"
+  },
+  "observer_guide2_copy2": {
+    "message": "Escolha {{1}} na página de um item ou no seu botão de adicionar"
+  },
+  "observer_guide2_copy3": {
+    "message": "Depois escolha um carrinho existente ou {{1}}."
+  },
+  "observer_guide2_shot1_alt": {
+    "message": "Botão «Adicionar a um carrinho Styx» em uma página de produto da Amazon"
+  },
+  "observer_guide2_shot2_alt": {
+    "message": "O seletor de carrinho Styx listando seus carrinhos, com a opção «Criar novo carrinho»"
+  },
+  "observer_guide2_bullet1": {
+    "message": "Use carrinhos separados para viagens, projetos ou pessoas."
+  },
+  "observer_guide2_bullet2": {
+    "message": "Adicionar um item diretamente ao seu carrinho da Amazon ou «Comprar agora» continuam sendo opções disponíveis."
+  },
+  "observer_guide3_title": {
+    "message": "Envie um carrinho inteiro para a Amazon"
+  },
+  "observer_guide3_copy": {
+    "message": "Pronto(a) para fechar o pedido com um carrinho específico? Você pode enviá-lo ao seu carrinho da Amazon de várias formas…"
+  },
+  "observer_guide3_option1": {
+    "message": "Opção 1 — no topo de um carrinho"
+  },
+  "observer_guide3_bullet1_text": {
+    "message": "Em qualquer página de carrinho Styx (lista da Amazon)."
+  },
+  "observer_guide3_shot1_alt": {
+    "message": "Botão «Enviar tudo para o carrinho da Amazon» no topo de uma página de lista"
+  },
+  "observer_guide3_option2": {
+    "message": "Opção 2 — fixado durante a rolagem"
+  },
+  "observer_guide3_bullet2_text": {
+    "message": "Assim que você rolar além desse botão, ele se fixa no canto inferior direito, sempre acessível em listas longas."
+  },
+  "observer_guide3_shot2_alt": {
+    "message": "Botão «Enviar tudo para o carrinho da Amazon» fixado ao lado do botão flutuante Styx"
+  },
+  "observer_guide3_option3": {
+    "message": "Opção 3 — no painel Styx"
+  },
+  "observer_guide3_bullet3_text": {
+    "message": "Clique no botão de carrinho na linha de qualquer carrinho no painel da extensão"
+  },
+  "observer_guide3_shot3_alt": {
+    "message": "Botão «Adicionar tudo ao carrinho da Amazon» em uma linha de carrinho no painel Styx"
+  },
+  "observer_guide3_bullet4": {
+    "message": "O Styx adiciona todos os itens ao que já está no seu carrinho da Amazon e informa o resultado quando terminar."
+  },
+  "observer_guide3_bullet5": {
+    "message": "<strong>Já carregamos suas listas da Amazon</strong>, então você pode começar a usar os carrinhos Styx agora mesmo. Clique em {{1}} para começar um jeito totalmente novo de comprar na Amazon!"
+  },
+  "bg_done": {
+    "message": "Concluído"
+  },
+  "bg_doneCap": {
+    "message": "Concluído."
+  },
+  "bg_starting": {
+    "message": "Iniciando…"
+  },
+  "bg_thisItem": {
+    "message": "este item"
+  },
+  "bg_genericItemLowercase": {
+    "message": "item"
+  },
+  "bg_genericListName": {
+    "message": "lista"
+  },
+  "bg_amazonCartFallbackName": {
+    "message": "Carrinho da Amazon"
+  },
+  "bg_styxCartFallbackName": {
+    "message": "Carrinho Styx"
+  },
+  "bg_clearingCart": {
+    "message": "Esvaziando o carrinho"
+  },
+  "bg_clearingCartEllipsis": {
+    "message": "Esvaziando o carrinho…"
+  },
+  "bg_removedOfTotal": {
+    "message": "{{1}} de {{2}} removidos…"
+  },
+  "bg_removedSoFar": {
+    "message": "{{1}} removidos até agora…"
+  },
+  "bg_clearingCartRemovedOfTotal": {
+    "message": "Esvaziando o carrinho — {{1}} de {{2}} removidos…"
+  },
+  "bg_clearingCartRemovedSoFar": {
+    "message": "Esvaziando o carrinho — {{1}} removidos até agora…"
+  },
+  "bg_couldNotClearCartRemaining": {
+    "message": "Não foi possível esvaziar o carrinho — {{1}} ainda no carrinho"
+  },
+  "bg_cartClearedRemoved": {
+    "message": "Carrinho esvaziado — {{1}} removidos"
+  },
+  "bg_restoringCart": {
+    "message": "Restaurando {{1}}"
+  },
+  "bg_loadingFirstProduct": {
+    "message": "Carregando o primeiro produto…"
+  },
+  "bg_batchOf": {
+    "message": "lote {{1}}/{{2}} ({{3}} itens)"
+  },
+  "bg_itemsInOneGo": {
+    "message": "{{1}} itens de uma só vez"
+  },
+  "bg_loadingBulkAddFor": {
+    "message": "Carregando a adição em massa para {{1}}…"
+  },
+  "bg_loadingBulkAddBatch": {
+    "message": "Carregando a adição em massa — lote {{1}} de {{2}} ({{3}} itens)…"
+  },
+  "bg_loadingBulkAddForItems": {
+    "message": "Carregando a adição em massa para {{1}}…"
+  },
+  "bg_bulkRejectedFallback": {
+    "message": "A Amazon não conseguiu preparar esses itens em massa — adicionando um por um…"
+  },
+  "bg_amazonRejectedBulkAdd": {
+    "message": "A Amazon rejeitou os itens da adição em massa"
+  },
+  "bg_addToCartFallback": {
+    "message": "Adicionar ao carrinho"
+  },
+  "bg_clickHighlightedBatch": {
+    "message": "Clique em «{{1}}» destacado para confirmar o lote {{2}} de {{3}} ({{4}} itens)"
+  },
+  "bg_clickHighlightedItems": {
+    "message": "Clique em «{{1}}» destacado para adicionar {{2}} ao seu carrinho da Amazon"
+  },
+  "bg_waitingForConfirmation": {
+    "message": "Aguardando sua confirmação…"
+  },
+  "bg_userDidNotConfirmBulkAdd": {
+    "message": "O usuário não confirmou a adição em massa: {{1}}"
+  },
+  "bg_couldntFindConfirmButton": {
+    "message": "Botão de confirmação não encontrado — verificando seu carrinho…"
+  },
+  "bg_clickAddToCartManual": {
+    "message": "Clique em «Adicionar ao carrinho» na página quando estiver pronto(a) — a restauração continuará automaticamente"
+  },
+  "bg_bulkRestorePartial": {
+    "message": "A restauração em massa adicionou {{1}} de {{2}} itens — {{3}} ignorados"
+  },
+  "bg_bulkRestoreZero": {
+    "message": "A restauração em massa não adicionou nenhum item — tente novamente ou restaure um por um"
+  },
+  "bg_noProductsOnBulkPage": {
+    "message": "A Amazon não exibiu nenhum produto na página de adição em massa"
+  },
+  "bg_confirmButtonNotFound": {
+    "message": "Botão de confirmação não encontrado em 10 s"
+  },
+  "bg_savedCartHasNoItems": {
+    "message": "Este carrinho salvo não tem itens."
+  },
+  "bg_productUnavailable": {
+    "message": "Produto indisponível"
+  },
+  "bg_skippingUnavailableItem": {
+    "message": "Ignorando item indisponível {{1}} de {{2}}: {{3}}"
+  },
+  "bg_unavailableSkipped": {
+    "message": "Indisponível — ignorado: {{1}}"
+  },
+  "bg_noFormatSelected": {
+    "message": "Nenhum formato disponível para compra foi selecionado"
+  },
+  "bg_itemOf": {
+    "message": "Item {{1}} de {{2}}: {{3}}"
+  },
+  "bg_restoringCartAdding": {
+    "message": "Restaurando o carrinho — adicionando {{1}} de {{2}}: {{3}}"
+  },
+  "bg_atcButtonNotFound": {
+    "message": "Botão «Adicionar ao carrinho» não encontrado"
+  },
+  "bg_ageEarlierToday": {
+    "message": "mais cedo hoje"
+  },
+  "bg_ageRecently": {
+    "message": "recentemente"
+  },
+  "bg_ageFromBefore": {
+    "message": "de antes"
+  },
+  "bg_noCoverage": {
+    "message": "Sem cobertura"
+  },
+  "bg_selectedOption": {
+    "message": "opção selecionada"
+  },
+  "bg_applyingChoiceAge": {
+    "message": "Aplicando sua escolha {{1}}: {{2}}…"
+  },
+  "bg_applyingSavedChoice": {
+    "message": "Aplicando sua escolha salva: {{1}}"
+  },
+  "bg_cartRestoredPartial": {
+    "message": "Carrinho restaurado — {{1}} de {{2}} adicionados ({{3}} falharam)"
+  },
+  "bg_cartRestoredAll": {
+    "message": "Carrinho restaurado — {{1}} adicionados"
+  },
+  "bg_addingWishlistToCart": {
+    "message": "Adicionando lista de desejos ao carrinho"
+  },
+  "bg_addingItemsFromListPage": {
+    "message": "Adicionando {{1}} a partir da página da lista…"
+  },
+  "bg_addingItemsFromList": {
+    "message": "Adicionando {{1}} a partir da lista…"
+  },
+  "bg_addedItemsToCart": {
+    "message": "{{1}} adicionados ao seu carrinho da Amazon"
+  },
+  "bg_couldNotSaveCart": {
+    "message": "Não foi possível salvar seu carrinho."
+  },
+  "bg_couldntSaveLeftUntouched": {
+    "message": "Falha ao salvar — carrinho mantido como estava. {{1}}"
+  },
+  "bg_couldntSaveCartTitle": {
+    "message": "Não foi possível salvar seu carrinho"
+  },
+  "bg_cartLeftAsIs": {
+    "message": "Seu carrinho da Amazon foi mantido como estava. {{1}}"
+  },
+  "bg_savedNOfTotal": {
+    "message": "{{1}}/{{2}} itens salvos"
+  },
+  "bg_savedNItems": {
+    "message": "{{1}} salvos"
+  },
+  "bg_savedNoteToCartUntouched": {
+    "message": "{{1}} em «{{2}}» — seu carrinho permanece inalterado."
+  },
+  "bg_cartSavedForLater": {
+    "message": "Carrinho salvo para depois"
+  },
+  "bg_savedNoteToCartUntouchedDetail": {
+    "message": "{{1}} em «{{2}}». Seu carrinho da Amazon permanece inalterado."
+  },
+  "bg_savedNoteNowClearing": {
+    "message": "{{1}} — esvaziando seu carrinho agora…"
+  },
+  "bg_savedAndCleared": {
+    "message": "Salvo e esvaziado"
+  },
+  "bg_savedNoteToCartEmpty": {
+    "message": "{{1}} em «{{2}}». Seu carrinho da Amazon está vazio."
+  },
+  "bg_savedButCouldntClear": {
+    "message": "Salvo, mas não foi possível esvaziar"
+  },
+  "bg_savedNoteCouldntClear": {
+    "message": "{{1}} em «{{2}}», mas não foi possível esvaziar seu carrinho da Amazon. Tente «Esvaziar carrinho da Amazon» novamente."
+  },
+  "bg_amazonNeedsFormatChoice": {
+    "message": "A Amazon precisa de uma escolha de formato"
+  },
+  "bg_chooseCartableFormat": {
+    "message": "Escolha um formato disponível para compra de «{{1}}» para continuar adicionando o restante."
+  },
+  "bg_chooseFormatOnAmazon": {
+    "message": "Escolher um formato na Amazon"
+  },
+  "bg_savedFormatCannotBeAdded": {
+    "message": "O formato salvo de «{{1}}» não pode ser adicionado ao carrinho. Escolha outro formato ou edição nesta página que ofereça «Adicionar ao carrinho». O Styx retomará automaticamente."
+  },
+  "bg_choiceChooseFormat": {
+    "message": "Escolher um formato"
+  },
+  "bg_choiceSkipThisItem": {
+    "message": "Ignorar este item"
+  },
+  "bg_couldNotShowFormatPrompt": {
+    "message": "Não foi possível exibir o seletor de formato"
+  },
+  "bg_skippedFormatUnavailable": {
+    "message": "Ignorado porque o formato salvo está indisponível"
+  },
+  "bg_chooseFormatShowsAtc": {
+    "message": "Escolha para «{{1}}» um formato que mostre «Adicionar ao carrinho» — o Styx retomará automaticamente"
+  },
+  "bg_amazonTabWasClosed": {
+    "message": "A aba da Amazon foi fechada"
+  },
+  "bg_selectedFormatUnavailable": {
+    "message": "O formato selecionado está indisponível"
+  },
+  "bg_noFormatSelectedTimeout": {
+    "message": "Nenhum formato disponível para compra foi selecionado em 10 minutos"
+  },
+  "bg_savedFormatUnavailableChooseAnother": {
+    "message": "O formato salvo está indisponível; escolha outro formato"
+  },
+  "bg_pageNoLongerExists": {
+    "message": "A página do produto não existe mais"
+  },
+  "bg_productCurrentlyUnavailable": {
+    "message": "Produto atualmente indisponível"
+  },
+  "bg_waitingOnYourChoice": {
+    "message": "Aguardando sua escolha"
+  },
+  "bg_pickProtectionOption": {
+    "message": "Escolha uma opção de proteção para «{{1}}» na página da Amazon — a restauração continuará automaticamente."
+  },
+  "bg_amazonNeedsProtectionPlanChoice": {
+    "message": "A Amazon precisa da sua escolha de plano de proteção para «{{1}}». Escolha uma opção abaixo — o Styx continuará restaurando o resto do seu carrinho assim que você escolher."
+  },
+  "bg_addToListDropdownNotFound": {
+    "message": "Menu suspenso «Adicionar a uma lista» não encontrado nesta página."
+  },
+  "bg_createEntryNotFound": {
+    "message": "Opção «Criar uma lista» não encontrada no seletor."
+  },
+  "bg_createListFormDidNotAppear": {
+    "message": "O formulário de criação de lista não apareceu."
+  },
+  "bg_createButtonNotFound": {
+    "message": "Botão «Criar» não encontrado no formulário de criação de lista."
+  },
+  "bg_noConfirmationAfterCreate": {
+    "message": "Nenhuma confirmação após clicar em «Criar»."
+  },
+  "bg_noResultFromCreateList": {
+    "message": "nenhum resultado de pageCreateListAndAdd"
+  },
+  "bg_listNotFoundInMenu": {
+    "message": "Lista __LISTID__ não encontrada no menu «Adicionar a uma lista»."
+  },
+  "bg_noResult": {
+    "message": "nenhum resultado"
+  },
+  "bg_bulkIncomplete_title": {
+    "message": "Adição em massa incompleta"
+  },
+  "bg_bulkIncomplete_stillMissing": {
+    "message": "Ainda faltando:\n{{1}}"
+  },
+  "bg_bulkIncomplete_andNMore": {
+    "message": "… e mais {{1}}"
+  },
+  "bg_bulkIncomplete_summaryPartial": {
+    "message": "A adição em massa só colocou {{1}} de {{2}} itens no seu carrinho.\n\nDeseja restaurar os {{3}} restantes um por um? É mais lento, mas mais confiável."
+  },
+  "bg_bulkIncomplete_summaryNone": {
+    "message": "A adição em massa não colocou nenhum item no seu carrinho — o endpoint em massa da Amazon pode tê-los descartado silenciosamente (geralmente porque a tag de afiliado não é reconhecida).\n\nDeseja restaurar todos os {{1}} itens um por um?"
+  },
+  "bg_bulkIncomplete_choiceManual": {
+    "message": "Eu mesmo(a) clico em «Adicionar ao carrinho»"
+  },
+  "bg_bulkIncomplete_choiceFallback": {
+    "message": "Restaurar um por um"
+  },
+  "bg_bulkIncomplete_choiceSkip": {
+    "message": "Ignorar itens ausentes"
+  },
+  "bg_savingCart": {
+    "message": "Salvando o carrinho"
+  },
+  "bg_savingItemsToNewList": {
+    "message": "Salvando {{1}} em uma nova lista da Amazon…"
+  },
+  "bg_addingToList": {
+    "message": "Adicionando a {{1}}"
+  },
+  "bg_openingProductPage": {
+    "message": "Abrindo a página do produto…"
+  },
+  "bg_addToListFailed": {
+    "message": "Falha ao adicionar à lista."
+  },
+  "bg_creatingList": {
+    "message": "Criando {{1}}"
+  },
+  "bg_settingUpYourList": {
+    "message": "Configurando sua lista…"
+  },
+  "bg_cartAppearsEmpty": {
+    "message": "O carrinho parece estar vazio — nada para salvar."
+  },
+  "bg_amazonCartLooksEmpty": {
+    "message": "Seu carrinho da Amazon parece estar vazio — nada para salvar."
+  },
+  "bg_missingListIdOrAsin": {
+    "message": "ID da lista ou ASIN ausente."
+  },
+  "bg_missingAsin": {
+    "message": "ASIN ausente."
+  },
+  "bg_missingListId": {
+    "message": "ID da lista ausente."
+  },
+  "bg_paymentServiceNotAvailable": {
+    "message": "Serviço de pagamento indisponível."
+  },
+  "bg_couldntOpenCheckout": {
+    "message": "Não foi possível abrir o checkout."
+  },
+  "bg_purchasesHandledInApp": {
+    "message": "As compras são processadas no aplicativo Styx Multi-Cart."
+  },
+  "bg_noAvailableItemsOnWishlist": {
+    "message": "Nenhum item disponível foi encontrado nesta lista de desejos."
+  },
+  "bg_cartLimitReachedUpgrade": {
+    "message": "Limite de carrinhos atingido — faça upgrade para adicionar mais."
+  },
+  "bg_noResultPeriod": {
+    "message": "Nenhum resultado."
+  },
+  "bg_promoCodeInvalid": {
+    "message": "Esse código não é válido."
+  },
+  "bg_promoCodeAlreadyUsed": {
+    "message": "Esse código já foi usado neste dispositivo."
+  },
+  "bg_firstError": {
+    "message": "Primeiro erro: {{1}}"
+  },
+  "bg_nothingWasAdded": {
+    "message": "Nada foi adicionado."
+  },
+  "bg_cartHasNoItemsToSave": {
+    "message": "Este carrinho não tem itens para salvar."
+  },
+  "bg_savingLabelToAmazon": {
+    "message": "Salvando {{1}} na Amazon"
+  },
+  "bg_atcButtonNotFoundFull": {
+    "message": "Botão «Adicionar ao carrinho» não encontrado ou não visível"
+  },
+  "bg_atcButtonStayedDisabled": {
+    "message": "O botão «Adicionar ao carrinho» permaneceu desativado"
+  },
+  "promo_tagline1": {
+    "message": "Esvazie seu carrinho da Amazon."
+  },
+  "promo_tagline2": {
+    "message": "Ou salve para depois."
+  },
+  "promo_subtext": {
+    "message": "Gratuito e ilimitado · Sem rastreamento"
+  }
+}
