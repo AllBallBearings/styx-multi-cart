@@ -5147,7 +5147,7 @@ function pageSetListQuantities(map) {
 // not "service worker").
 console.log("[Styx] background loaded", new Date().toISOString());
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return false;
 
   (async () => {
@@ -5382,7 +5382,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             // it came from. Prefer that over guessing via an active-tab query.
             // The toolbar popup and side panel aren't tabs, so sender.tab is
             // undefined there and we fall back to the active tab.
-            let tabId = sender && sender.tab && sender.tab.id;
+            let tabId = _sender && _sender.tab && _sender.tab.id;
             if (tabId == null) {
               const [tab] = await chrome.tabs.query({
                 active: true,

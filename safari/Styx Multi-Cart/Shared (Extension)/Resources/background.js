@@ -3587,7 +3587,7 @@ importScripts("ExtPay.js");
     }
   }
   console.log("[Styx] background loaded", (/* @__PURE__ */ new Date()).toISOString());
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg || typeof msg !== "object") return false;
     (async () => {
       try {
@@ -3750,7 +3750,7 @@ importScripts("ExtPay.js");
               break;
             }
             try {
-              let tabId = sender && sender.tab && sender.tab.id;
+              let tabId = _sender && _sender.tab && _sender.tab.id;
               if (tabId == null) {
                 const [tab] = await chrome.tabs.query({
                   active: true,
