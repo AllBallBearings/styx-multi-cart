@@ -235,7 +235,7 @@ pick up coherently.
 
 #### https://developer.chrome.com/docs/webstore/images?csw=1
 
-- [ ] Icon already done (128×128 from `icons/_render.py`).
+- [x] Icon done (rendered from `store-assets/product-logo.svg`; see `store-assets/_render_logo_assets.mjs`).
 - [ ] Small promo tile 440×280 (Chrome Web Store).
 - [ ] Large promo tile 920×680 (optional, helps featured placement).
 - [ ] Marquee 1400×560 (optional).
