@@ -181,6 +181,17 @@
     </section>
 
     <section class="mc-list-block">
+      <!-- Live progress for long operations (save / clear / restore / add-to-list).
+           Driven by polling MC_GET_STATUS; while it is shown the rest of the panel
+           is inert so a second operation can't be started on top of it. -->
+      <div id="mc-op-status" class="mc-op-status" role="status" aria-live="polite" hidden>
+        <span class="mc-op-spinner" aria-hidden="true"></span>
+        <div class="mc-op-text">
+          <div id="mc-op-title" class="mc-op-title"></div>
+          <div id="mc-op-detail" class="mc-op-detail" hidden></div>
+          <div class="mc-op-wait" data-i18n="popup_op_wait"></div>
+        </div>
+      </div>
       <div id="mc-tier-strip" class="mc-tier-strip" hidden>
         <span id="mc-tier-badge" class="mc-tier-badge" data-tier="free"
           data-i18n="popup_tier_free"></span

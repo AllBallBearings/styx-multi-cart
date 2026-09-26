@@ -835,8 +835,44 @@ importScripts("ExtPay.js");
     });
   }
   var _opStatus = null;
-  function setOpStatus(title, detail = "") {
-    _opStatus = { active: true, title, detail };
+  var OP_LOCK_STALE_MS = 10 * 60 * 1e3;
+  var OP_LOCK_KIND_BY_MESSAGE = {
+    MC_SAVE_FOR_LATER: "save",
+    MC_SAVE_AND_CLEAR: "clear",
+    MC_CLEAR_CURRENT: "clear",
+    MC_SAVE_LIVE_CART_TO_LIST: "save",
+    MC_WISHLIST_ADD_ALL: "restore",
+    MC_ADD_ITEM_TO_AMAZON_LIST: "list",
+    MC_CREATE_AMAZON_LIST_WITH_ITEM: "list"
+  };
+  var _opLock = null;
+  function isOpLocked() {
+    if (_opLock && Date.now() - _opLock.since > OP_LOCK_STALE_MS) _opLock = null;
+    return !!_opLock;
+  }
+  function acquireOpLock(kind) {
+    if (isOpLocked()) return false;
+    _opLock = { kind, since: Date.now() };
+    return true;
+  }
+  function releaseOpLock() {
+    _opLock = null;
+  }
+  async function runLocked(fn) {
+    try {
+      return await fn();
+    } finally {
+      releaseOpLock();
+    }
+  }
+  function setOpStatus(title, detail = "", kind) {
+    const prev = _opStatus && _opStatus.active ? _opStatus : null;
+    _opStatus = {
+      active: true,
+      title,
+      detail,
+      kind: kind || _opLock && _opLock.kind || prev && prev.kind || "other"
+    };
   }
   function clearOpStatus(doneTitle = t("bg_done")) {
     _opStatus = { active: false, title: doneTitle, detail: "" };
@@ -3590,10 +3626,30 @@ importScripts("ExtPay.js");
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg || typeof msg !== "object") return false;
     (async () => {
+      let lockHeld = false;
+      let lockHandedOff = false;
       try {
+        const lockKind = OP_LOCK_KIND_BY_MESSAGE[msg.type];
+        if (lockKind) {
+          if (!acquireOpLock(lockKind)) {
+            sendResponse({ ok: false, busy: true, error: t("bg_alreadyRunning") });
+            return;
+          }
+          lockHeld = true;
+        }
         switch (msg.type) {
           case "MC_GET_STATUS": {
-            sendResponse(_opStatus || { active: false, title: "", detail: "" });
+            const base = _opStatus || { active: false, title: "", detail: "", kind: "other" };
+            const locked = isOpLocked();
+            sendResponse({
+              // Busy is defined by the lock alone: it is guaranteed to release,
+              // whereas a status left "active" by an error path would otherwise
+              // strand the popup in a permanent working state.
+              busy: locked,
+              kind: locked ? base.active ? base.kind : _opLock.kind : "other",
+              title: locked && base.active ? base.title : "",
+              detail: locked && base.active ? base.detail : ""
+            });
             break;
           }
           case "MC_LOG_PUSH": {
@@ -3799,7 +3855,8 @@ importScripts("ExtPay.js");
             }
             sendResponse({ ok: true, started: true, total: items.length });
             setOpStatus(t("bg_addingWishlistToCart"), t("bg_starting"));
-            setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
+            lockHandedOff = true;
+            setTimeout(() => runLocked(() => wishlistAddAllToCart(items, msg.host, msg.listId)), 0);
             break;
           }
           case "MC_CLEAR_CURRENT": {
@@ -3810,7 +3867,8 @@ importScripts("ExtPay.js");
             }
             sendResponse({ ok: true, started: true });
             setOpStatus(t("bg_clearingCart"), t("bg_starting"));
-            setTimeout(clearCurrentCartInBackground, 0);
+            lockHandedOff = true;
+            setTimeout(() => runLocked(clearCurrentCartInBackground), 0);
             break;
           }
           case "MC_GET_CART_COUNT": {
@@ -3841,7 +3899,8 @@ importScripts("ExtPay.js");
             const savedCount = scCart.items.length;
             sendResponse({ ok: true, started: true, saving: savedCount });
             setOpStatus(t("bg_savingCart"), t("bg_savingItemsToNewList", [itemCountTextBg(savedCount)]));
-            setTimeout(() => saveThenClearInBackground(
+            lockHandedOff = true;
+            setTimeout(() => runLocked(() => saveThenClearInBackground(
               {
                 // No cart.id → saveCartToAmazonList always creates a new list.
                 host: scCart.host,
@@ -3853,7 +3912,7 @@ importScripts("ExtPay.js");
                 originUrl: scOriginUrl,
                 clearAfter: scClearAfter
               }
-            ), 0);
+            )), 0);
             break;
           }
           case "MC_GET_INTERCEPT": {
@@ -3960,7 +4019,7 @@ importScripts("ExtPay.js");
                 }
               }
             } else {
-              setOpStatus(t("popup_err_saveToAmazonFailed"), liveSaveRes && liveSaveRes.error || t("observer_tryAgain"));
+              clearOpStatus(t("popup_err_saveToAmazonFailed"));
             }
             sendResponse(liveSaveRes || { ok: false, error: t("bg_noResultPeriod") });
             break;
@@ -4275,6 +4334,8 @@ importScripts("ExtPay.js");
       } catch (err) {
         console.error("[Styx Multi-Cart] background error", err);
         sendResponse({ ok: false, error: err && err.message || String(err) });
+      } finally {
+        if (lockHeld && !lockHandedOff) releaseOpLock();
       }
     })();
     return true;

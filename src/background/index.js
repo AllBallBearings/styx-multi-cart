@@ -1098,11 +1098,69 @@ function pageApplyUpsellChoice(recorded) {
 // _opStatus is still the single source of truth for operation state and is
 // surfaced through MC_GET_STATUS.
 
-let _opStatus = null;        // { active, title, detail } | null
+let _opStatus = null;        // { active, title, detail, kind } | null
 
-/** Set the current in-progress status, queryable via MC_GET_STATUS. */
-function setOpStatus(title, detail = "") {
-  _opStatus = { active: true, title, detail };
+// ---- Exclusive operation lock ---------------------------------------------
+//
+// Save / clear / restore / add-to-list all drive Amazon tabs on the user's
+// behalf, so two running at once would fight over the same tabs and could
+// corrupt each other (a second "Save" mid-save creates a duplicate list, a
+// "Clear" mid-save wipes the cart before it is captured). The popup greys its
+// controls while an operation runs, but that can't cover a popup that was
+// closed and reopened, a second tab, or the on-page picker, so the service
+// worker enforces it too.
+//
+// The lock is taken when a long operation is accepted and is ALWAYS released:
+// by runLocked() when fire-and-forget background work ends, or by the
+// listener's finally when the handler never handed the work off (early
+// error, thrown exception). A stale-lock timeout is a last-resort backstop.
+const OP_LOCK_STALE_MS = 10 * 60 * 1000;
+const OP_LOCK_KIND_BY_MESSAGE = {
+  MC_SAVE_FOR_LATER: "save",
+  MC_SAVE_AND_CLEAR: "clear",
+  MC_CLEAR_CURRENT: "clear",
+  MC_SAVE_LIVE_CART_TO_LIST: "save",
+  MC_WISHLIST_ADD_ALL: "restore",
+  MC_ADD_ITEM_TO_AMAZON_LIST: "list",
+  MC_CREATE_AMAZON_LIST_WITH_ITEM: "list",
+};
+let _opLock = null;          // { kind, since } | null
+
+function isOpLocked() {
+  if (_opLock && Date.now() - _opLock.since > OP_LOCK_STALE_MS) _opLock = null;
+  return !!_opLock;
+}
+function acquireOpLock(kind) {
+  if (isOpLocked()) return false;
+  _opLock = { kind, since: Date.now() };
+  return true;
+}
+function releaseOpLock() {
+  _opLock = null;
+}
+/** Run fire-and-forget background work, releasing the lock however it ends. */
+async function runLocked(fn) {
+  try {
+    return await fn();
+  } finally {
+    releaseOpLock();
+  }
+}
+
+/**
+ * Set the current in-progress status, queryable via MC_GET_STATUS. `kind`
+ * ("save" | "clear" | "restore" | "list" | "other") tells the popup which
+ * control to animate; it defaults to the kind of the operation that holds the
+ * lock, so the many status call sites don't each need to pass it.
+ */
+function setOpStatus(title, detail = "", kind) {
+  const prev = _opStatus && _opStatus.active ? _opStatus : null;
+  _opStatus = {
+    active: true,
+    title,
+    detail,
+    kind: kind || (_opLock && _opLock.kind) || (prev && prev.kind) || "other",
+  };
 }
 
 /**
@@ -5151,10 +5209,30 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return false;
 
   (async () => {
+    let lockHeld = false;
+    let lockHandedOff = false;
     try {
+      const lockKind = OP_LOCK_KIND_BY_MESSAGE[msg.type];
+      if (lockKind) {
+        if (!acquireOpLock(lockKind)) {
+          sendResponse({ ok: false, busy: true, error: t("bg_alreadyRunning") });
+          return;
+        }
+        lockHeld = true;
+      }
       switch (msg.type) {
         case "MC_GET_STATUS": {
-          sendResponse(_opStatus || { active: false, title: "", detail: "" });
+          const base = _opStatus || { active: false, title: "", detail: "", kind: "other" };
+          const locked = isOpLocked();
+          sendResponse({
+            // Busy is defined by the lock alone: it is guaranteed to release,
+            // whereas a status left "active" by an error path would otherwise
+            // strand the popup in a permanent working state.
+            busy: locked,
+            kind: locked ? (base.active ? base.kind : _opLock.kind) : "other",
+            title: locked && base.active ? base.title : "",
+            detail: locked && base.active ? base.detail : "",
+          });
           break;
         }
 
@@ -5447,7 +5525,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // on the user's confirmation, which can outlive the message channel.
           sendResponse({ ok: true, started: true, total: items.length });
           setOpStatus(t("bg_addingWishlistToCart"), t("bg_starting"));
-          setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
+          lockHandedOff = true;
+          setTimeout(() => runLocked(() => wishlistAddAllToCart(items, msg.host, msg.listId)), 0);
           break;
         }
 
@@ -5463,7 +5542,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // the response and leave the button spinner stuck forever.
           sendResponse({ ok: true, started: true });
           setOpStatus(t("bg_clearingCart"), t("bg_starting"));
-          setTimeout(clearCurrentCartInBackground, 0);
+          lockHandedOff = true;
+          setTimeout(() => runLocked(clearCurrentCartInBackground), 0);
           break;
         }
 
@@ -5521,7 +5601,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const savedCount = scCart.items.length;
           sendResponse({ ok: true, started: true, saving: savedCount });
           setOpStatus(t("bg_savingCart"), t("bg_savingItemsToNewList", [itemCountTextBg(savedCount)]));
-          setTimeout(() => saveThenClearInBackground(
+          lockHandedOff = true;
+          setTimeout(() => runLocked(() => saveThenClearInBackground(
             {
               // No cart.id → saveCartToAmazonList always creates a new list.
               host: scCart.host,
@@ -5533,7 +5614,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               originUrl: scOriginUrl,
               clearAfter: scClearAfter,
             }
-          ), 0);
+          )), 0);
           break;
         }
 
@@ -5657,7 +5738,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               }
             }
           } else {
-            setOpStatus(t("popup_err_saveToAmazonFailed"), (liveSaveRes && liveSaveRes.error) || t("observer_tryAgain"));
+            clearOpStatus(t("popup_err_saveToAmazonFailed"));
           }
           sendResponse(liveSaveRes || { ok: false, error: t("bg_noResultPeriod") });
           break;
@@ -6034,6 +6115,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } catch (err) {
       console.error("[Styx Multi-Cart] background error", err);
       sendResponse({ ok: false, error: (err && err.message) || String(err) });
+    } finally {
+      // Handlers that run inline (add-to-list, create-list, save-to-list)
+      // finish here; ones that hand off to background work release via
+      // runLocked() instead.
+      if (lockHeld && !lockHandedOff) releaseOpLock();
     }
   })();
 

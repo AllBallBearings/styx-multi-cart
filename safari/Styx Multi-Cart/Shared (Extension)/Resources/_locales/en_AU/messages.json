@@ -1510,5 +1510,25 @@
   },
   "promo_subtext": {
     "message": "Free & unlimited · No tracking"
+  },
+  "popup_op_saving": {
+    "message": "Saving cart…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "Clearing cart…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "Working…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "Please wait for this to finish before starting another action.",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "Another Styx action is still running. Please wait for it to finish.",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
   }
 }

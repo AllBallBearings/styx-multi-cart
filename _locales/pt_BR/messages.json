@@ -2177,5 +2177,25 @@
   },
   "promo_subtext": {
     "message": "Gratuito e ilimitado · Sem rastreamento"
+  },
+  "popup_op_saving": {
+    "message": "Salvando…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "Esvaziando…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "Em andamento…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "Aguarde a conclusão antes de iniciar outra ação.",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "Outra ação do Styx ainda está em andamento. Aguarde a conclusão.",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
   }
 }

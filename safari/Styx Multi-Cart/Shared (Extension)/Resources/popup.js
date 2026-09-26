@@ -523,6 +523,123 @@
     }
   }
 
+  // ---- Live operation status ---------------------------------------------
+  //
+  // Save / clear / restore / add-to-list run for many seconds in the service
+  // worker, which acknowledges the request immediately and keeps working. So a
+  // button's own await ends almost at once and, without this, the panel shows
+  // nothing while the on-page toast counts items. We poll MC_GET_STATUS, show
+  // what is happening (spinner + progressive label on the button that started
+  // it, plus a banner with the live step), and make the rest of the list block
+  // inert so a second operation can't be started on top of it. The service
+  // worker enforces the same rule with its own lock — this is the visible half.
+
+  const $listBlock = document.querySelector(".mc-list-block");
+  const $opStatus = document.getElementById("mc-op-status");
+  const $opTitle = document.getElementById("mc-op-title");
+  const $opDetail = document.getElementById("mc-op-detail");
+  const OP_BUTTONS = [
+    { kind: "save", el: $saveForLater, key: "popup_op_saving" },
+    { kind: "clear", el: $clear, key: "popup_op_clearing" },
+  ];
+  let opBusy = false;
+  let opKind = "other";
+  let opOptimisticUntil = 0;
+  let opPollInFlight = false;
+  let opPollTimer = null;
+
+  function setOpButtonBusy(btn, busy, text) {
+    if (!btn) return;
+    const label =
+      btn.querySelector(".mc-cart-action-label") || btn.querySelector("[data-i18n]");
+    if (busy) {
+      if (label && label.dataset.idleText == null) label.dataset.idleText = label.textContent;
+      if (label) label.textContent = text;
+      btn.classList.add("mc-op-busy");
+      btn.setAttribute("aria-busy", "true");
+    } else {
+      if (label && label.dataset.idleText != null) {
+        label.textContent = label.dataset.idleText;
+        delete label.dataset.idleText;
+      }
+      btn.classList.remove("mc-op-busy");
+      btn.removeAttribute("aria-busy");
+    }
+  }
+
+  function applyOpStatus(status) {
+    const busy = !!(status && status.busy);
+    const kind = (status && status.kind) || "other";
+    const wasBusy = opBusy;
+    const prevKind = opKind;
+    opBusy = busy;
+    opKind = busy ? kind : "other";
+
+    document.documentElement.toggleAttribute("data-op-busy", busy);
+    if ($listBlock) $listBlock.inert = busy;
+    for (const b of OP_BUTTONS) setOpButtonBusy(b.el, busy && b.kind === kind, t(b.key));
+
+    if ($opStatus) {
+      $opStatus.hidden = !busy;
+      if (busy) {
+        $opTitle.textContent = (status && status.title) || t("popup_op_working");
+        const detail = (status && status.detail) || "";
+        $opDetail.textContent = detail;
+        $opDetail.hidden = !detail;
+      }
+    }
+
+    // An operation just finished: pick up whatever it changed (new list,
+    // refreshed counts). Clearing the cart doesn't change our lists.
+    if (wasBusy && !busy && prevKind !== "clear") refresh();
+  }
+
+  async function pollOpStatus() {
+    if (opPollInFlight) return;
+    opPollInFlight = true;
+    try {
+      const status = await send({ type: "MC_GET_STATUS" }, 3000);
+      // A transport failure comes back as {ok:false} with no `busy` — leave the
+      // UI as it is rather than flipping it on a dropped message.
+      if (!status || typeof status.busy !== "boolean") return;
+      // We just started something: the service worker may not have taken its
+      // lock yet, so don't let an "idle" answer cancel the optimistic state.
+      if (!status.busy && Date.now() < opOptimisticUntil) return;
+      applyOpStatus(status);
+    } finally {
+      opPollInFlight = false;
+    }
+  }
+
+  function scheduleOpPoll() {
+    clearTimeout(opPollTimer);
+    if (document.visibilityState === "hidden") return;
+    // Fast while something is running; slow when idle, just to notice work
+    // started from elsewhere (the on-page buttons, another tab).
+    opPollTimer = setTimeout(async () => {
+      await pollOpStatus();
+      scheduleOpPoll();
+    }, opBusy ? 500 : 2500);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pollOpStatus();
+    scheduleOpPoll();
+  });
+
+  /** Run a long operation's start request with the busy UI up immediately. */
+  async function runOp(kind, fn) {
+    opOptimisticUntil = Date.now() + 2500;
+    applyOpStatus({ busy: true, kind });
+    try {
+      return await fn();
+    } finally {
+      opOptimisticUntil = 0;
+      pollOpStatus();
+      scheduleOpPoll();
+    }
+  }
+
   // ---- Rendering ---------------------------------------------------------
 
   function formatRelative(iso) {
@@ -1134,7 +1251,7 @@
     if (!choice) return;
 
     if (choice === "alt") {
-      withLoading($clear, async () => {
+      runOp("clear", async () => {
         const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
         if (res.ok) {
           toast(t("popup_toast_savingThenClearing"));
@@ -1146,7 +1263,7 @@
       return;
     }
 
-    withLoading($clear, async () => {
+    runOp("clear", async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
         toast(
@@ -1168,7 +1285,7 @@
   // same driver as "Save & Clear", minus the clear step.
   if ($saveForLater) {
     $saveForLater.addEventListener("click", () => {
-      withLoading($saveForLater, async () => {
+      runOp("save", async () => {
         const res = await send({
           type: "MC_SAVE_FOR_LATER",
           name: defaultName(),
@@ -3057,6 +3174,8 @@
     // Start the cart load first so a slow/hung storage read (seen in embedded
     // Safari contexts) can never keep the list from loading.
     refresh();
+    pollOpStatus();
+    scheduleOpPoll();
     loadThemeSetting();
     await Promise.race([
       loadDismissed(),

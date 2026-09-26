@@ -2594,3 +2594,90 @@ html[data-theme="dark"] .mc-item-lock-pill:focus-visible {
 .mc-amazon-list-open svg {
   display: block;
 }
+
+
+/* ---- Live operation progress ------------------------------------------ */
+/* While a save / clear / restore runs, the panel shows what it is doing and
+   everything else goes inert (popup.js sets html[data-op-busy]). */
+
+.mc-op-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--mc-accent);
+  border-radius: 10px;
+  background: rgba(255, 153, 0, 0.1);
+}
+
+.mc-op-status[hidden] {
+  display: none;
+}
+
+.mc-op-spinner {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--mc-accent);
+  border-top-color: transparent;
+  animation: mc-spin 800ms linear infinite;
+}
+
+.mc-op-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mc-fg);
+}
+
+.mc-op-detail {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--mc-fg-soft);
+}
+
+.mc-op-wait {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--mc-fg-soft);
+}
+
+/* The button that started the operation: spinner + progressive label. */
+.mc-btn.mc-cart-action.mc-op-busy {
+  pointer-events: none;
+}
+
+.mc-btn.mc-cart-action.mc-op-busy .mc-cart-action-icon {
+  display: none;
+}
+
+.mc-btn.mc-cart-action.mc-op-busy::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--mc-accent);
+  border-top-color: transparent;
+  animation: mc-spin 800ms linear infinite;
+}
+
+/* Everything else in the list block is unavailable until the operation ends. */
+html[data-op-busy] .mc-list-block > :not(.mc-op-status):not(.mc-list-header) {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+html[data-op-busy] .mc-cart-action:not(.mc-op-busy) {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-op-spinner,
+  .mc-btn.mc-cart-action.mc-op-busy::before {
+    animation-duration: 2.4s;
+  }
+}
