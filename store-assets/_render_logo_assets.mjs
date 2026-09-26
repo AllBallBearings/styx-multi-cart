@@ -86,18 +86,34 @@ async function launch() {
   }
 }
 
+// Draw each SVG straight onto a canvas of the exact target size and read the
+// PNG back. There is no page layout, viewport resize or screenshot involved, so
+// there is nothing to race: an earlier version reused one page and screenshotted
+// it after every resize, and one 256px icon came out as the top of the logo with
+// a second copy of the top underneath it (visible in the Dock).
 const browser = await launch();
 try {
-  const page = await browser.newPage({ deviceScaleFactor: 1 });
+  const page = await browser.newPage();
+  await page.setContent("<!doctype html><canvas id='c'></canvas>");
   for (const { file, size, svg } of jobs) {
-    await page.setViewportSize({ width: size, height: size });
-    const b64 = Buffer.from(svg).toString("base64");
-    await page.setContent(
-      `<body style="margin:0;background:transparent"><img id="i" style="display:block;width:${size}px;height:${size}px" src="data:image/svg+xml;base64,${b64}"></body>`
+    const pngBase64 = await page.evaluate(
+      async ({ svg, size }) => {
+        const url = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const canvas = document.getElementById("c");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(img, 0, 0, size, size);
+        return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+      },
+      { svg, size }
     );
-    await page.waitForFunction(() => document.getElementById("i").complete);
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    await page.screenshot({ path: file, omitBackground: true });
+    fs.writeFileSync(file, Buffer.from(pngBase64, "base64"));
     console.log(`wrote ${path.relative(root, file)} (${size}px)`);
   }
 } finally {
