@@ -20,10 +20,15 @@
   // chrome.i18n is available in content-script contexts, so on-page injected
   // UI (buttons, modals, toasts) resolves _locales/<locale>/messages.json the
   // same way the popup does. `t()` mirrors popup.js's helper.
+  // Safari bundle stores placeholders as {{N}} (see scripts/safari-i18n-tokens.py);
+  // substitute here. Chrome's files still use $N, so this is a no-op there.
   function t(key, subs) {
     try {
       const msg = chrome.i18n.getMessage(key, subs);
-      return msg || key;
+      if (!msg) return key;
+      const list = subs == null ? [] : Array.isArray(subs) ? subs : [subs];
+      return msg.replace(/\{\{(D|\d)\}\}/g, (m, n) =>
+        n === "D" ? "$" : list[n - 1] == null ? m : String(list[n - 1]));
     } catch (_e) {
       return key;
     }
@@ -4056,7 +4061,9 @@
         z-index: 2147483640;
         width: 56px; height: 56px; padding: 0;
         border: none; border-radius: 50%;
-        background: #131a22; cursor: pointer;
+        /* The logo fills the whole disk (clipped to the circle), so there is no
+           separate background to mismatch it; #0a1f4f is the logo's own base. */
+        background: #0a1f4f; overflow: hidden; cursor: pointer;
         box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
         display: flex; align-items: center; justify-content: center;
         transition: transform .12s ease, box-shadow .12s ease;
@@ -4064,7 +4071,7 @@
       #${FAB_ID}:hover { transform: translateY(-2px);
         box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,153,0,0.5); }
       #${FAB_ID}:active { transform: translateY(0); }
-      #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
+      #${FAB_ID} img { width: 100%; height: 100%; pointer-events: none; display: block; }
       #${FAB_ID}[hidden] { display: none; }
 
       /* "Start here..." speech bubble shown after the guide's Finish, tail
@@ -4427,6 +4434,26 @@
           "Helvetica Neue", Arial, sans-serif;
       }
       #${FAB_MODAL_ID}[hidden] { display: none; }
+      /* Follow the same light/dark resolution as the popup (saved theme, else
+         system) so the panel chrome never disagrees with what's inside it. */
+      #${FAB_MODAL_ID}[data-theme="light"] { background: #ffffff;
+        box-shadow: 0 18px 50px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.1); }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar { background: #f7f3ec;
+        border-bottom-color: rgba(0,0,0,0.08); }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar-title { color: #131a22; }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar-close { color: #4a5360; }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar-close:hover { background: rgba(0,0,0,0.07); color: #000; }
+      #${FAB_MODAL_ID} .styx-fab-fail {
+        flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 12px; padding: 24px; text-align: center;
+        font-size: 13px; line-height: 1.45; color: #f3efe6;
+      }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-fail { color: #131a22; }
+      #${FAB_MODAL_ID} .styx-fab-fail[hidden] { display: none; }
+      #${FAB_MODAL_ID} .styx-fab-fail button {
+        border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px;
+        font-weight: 600; background: #ff9900; color: #1a1209; cursor: pointer;
+      }
       #${FAB_MODAL_ID} .styx-fab-bar {
         display: flex; align-items: center; gap: 8px;
         height: 36px; flex: 0 0 36px; padding: 0 6px 0 12px;
@@ -4445,7 +4472,7 @@
       }
       #${FAB_MODAL_ID} .styx-fab-bar-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
       #${FAB_MODAL_ID} .styx-fab-frame {
-        flex: 1 1 auto; width: 100%; border: none; background: #131a22;
+        flex: 1 1 auto; width: 100%; border: none; background: transparent;
       }
       #${FAB_MODAL_ID}.styx-fab-dragging { user-select: none; }
       #${FAB_MODAL_ID}.styx-fab-dragging .styx-fab-frame { pointer-events: none; }
@@ -4563,7 +4590,7 @@
     fab.type = "button";
     fab.setAttribute("aria-label", t("observer_openStyxMultiCart"));
     const icon = document.createElement("img");
-    try { icon.src = chrome.runtime.getURL("icons/icon48.png"); } catch (_e) { /* ignore */ }
+    try { icon.src = chrome.runtime.getURL("icons/icon128.png"); } catch (_e) { /* ignore */ }
     icon.alt = "";
     fab.appendChild(icon);
 
@@ -4711,8 +4738,23 @@
       catch (_e) { return ""; }
     })();
 
+    // Shown instead of a silent blank panel when popup.html never reports in
+    // (e.g. Safari refusing to load the extension page into the Amazon tab).
+    const fail = document.createElement("div");
+    fail.className = "styx-fab-fail";
+    fail.hidden = true;
+    const failMsg = document.createElement("div");
+    failMsg.textContent =
+      "Styx Multi-Cart couldn't load here. In Safari, check Settings › Extensions › Styx Multi-Cart › Edit Websites and set amazon.com to Allow, then try again.";
+    const failRetry = document.createElement("button");
+    failRetry.type = "button";
+    failRetry.textContent = "Try again";
+    fail.appendChild(failMsg);
+    fail.appendChild(failRetry);
+
     modal.appendChild(bar);
     modal.appendChild(frame);
+    modal.appendChild(fail);
     const hint = document.createElement("div");
     hint.id = FAB_HINT_ID;
     hint.hidden = true;
@@ -4806,10 +4848,38 @@
       hint.hidden = true;
       writeStartHintPending(false);
     }
+    // popup.js posts {styxPopupReady} once it boots. No ping within the window
+    // means the extension page never loaded, so say so instead of showing a
+    // blank panel.
+    let frameReady = false;
+    let frameWatchdog = null;
+    function loadFrame() {
+      frameReady = false;
+      fail.hidden = true;
+      frame.hidden = false;
+      frame.src = frame.dataset.src;
+      clearTimeout(frameWatchdog);
+      frameWatchdog = setTimeout(() => {
+        if (frameReady) return;
+        frame.hidden = true;
+        fail.hidden = false;
+      }, 4000);
+    }
+    window.addEventListener("message", (e) => {
+      if (!e.data || e.data.styxPopupReady !== true) return;
+      if (e.source !== frame.contentWindow) return;
+      frameReady = true;
+      clearTimeout(frameWatchdog);
+    });
+    failRetry.addEventListener("click", () => {
+      frame.removeAttribute("src");
+      loadFrame();
+    });
     function openModal() {
       hideGuide();
       clearStartHint();
-      if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
+      modal.dataset.theme = resolvePickerTheme();
+      if (!frame.src && frame.dataset.src) loadFrame();
       modal.hidden = false;
       fab.hidden = true;
       notifyFabVis();

@@ -2177,5 +2177,37 @@
   },
   "promo_subtext": {
     "message": "無料・無制限 · トラッキングなし"
+  },
+  "popup_op_saving": {
+    "message": "保存中…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "空にしています…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "処理中…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "完了するまで、別の操作は開始しないでください。",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "別のStyxの操作がまだ実行中です。完了するまでお待ちください。",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "保存",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "カートに名前を付ける",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Amazonカートの中身を新しいカートとして保存します。Amazonカートはそのまま残ります。",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
   }
 }

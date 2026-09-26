@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9874517D320AF958E9065488 /* guide-assets in Resources */ = {isa = PBXBuildFile; fileRef = C1C4605E304BC4CF00D7B38E /* guide-assets */; };
+		9874517D320AF958E9065499 /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = C1C4605E304BC4CF00D7B39A /* _locales */; };
 		C1B0B1852FBBB5B5006F37EF /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B0B1842FBBB5B5006F37EF /* AppDelegate.swift */; };
 		C1B0B1872FBBB5B5006F37EF /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B0B1862FBBB5B5006F37EF /* SceneDelegate.swift */; };
 		C1B0B18A2FBBB5B5006F37EF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1882FBBB5B5006F37EF /* LaunchScreen.storyboard */; };
@@ -29,32 +31,29 @@
 		C1B0B1BA2FBBB5B5006F37EF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B17A2FBBB5B5006F37EF /* Assets.xcassets */; };
 		C1B0B1BB2FBBB5B5006F37EF /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B0B17C2FBBB5B5006F37EF /* SafariWebExtensionHandler.swift */; };
 		C1B0B1BC2FBBB5B5006F37EF /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B0B17C2FBBB5B5006F37EF /* SafariWebExtensionHandler.swift */; };
-		C1B0B1DA2FBBB5B6006F37EF /* status.html in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1CE2FBBB5B6006F37EF /* status.html */; };
 		C1B0B1DB2FBBB5B6006F37EF /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1CF2FBBB5B6006F37EF /* popup.js */; };
 		C1B0B1DC2FBBB5B6006F37EF /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D02FBBB5B6006F37EF /* LICENSE */; };
 		C1B0B1DD2FBBB5B6006F37EF /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D12FBBB5B6006F37EF /* background.js */; };
 		C1B0B1DE2FBBB5B6006F37EF /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D22FBBB5B6006F37EF /* popup.html */; };
 		C1B0B1DF2FBBB5B6006F37EF /* observer.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D32FBBB5B6006F37EF /* observer.js */; };
 		C1B0B1E02FBBB5B6006F37EF /* icons in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D42FBBB5B6006F37EF /* icons */; };
-		C1B0B1E12FBBB5B6006F37EF /* status.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D52FBBB5B6006F37EF /* status.js */; };
 		C1B0B1E22FBBB5B6006F37EF /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D62FBBB5B6006F37EF /* manifest.json */; };
 		C1B0B1E32FBBB5B6006F37EF /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D72FBBB5B6006F37EF /* popup.css */; };
 		C1B0B1E42FBBB5B6006F37EF /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D82FBBB5B6006F37EF /* content.js */; };
-		C1B0B1E52FBBB5B6006F37EF /* status.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D92FBBB5B6006F37EF /* status.css */; };
-		C1B0B1E62FBBB5B6006F37EF /* status.html in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1CE2FBBB5B6006F37EF /* status.html */; };
 		C1B0B1E72FBBB5B6006F37EF /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1CF2FBBB5B6006F37EF /* popup.js */; };
 		C1B0B1E82FBBB5B6006F37EF /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D02FBBB5B6006F37EF /* LICENSE */; };
 		C1B0B1E92FBBB5B6006F37EF /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D12FBBB5B6006F37EF /* background.js */; };
 		C1B0B1EA2FBBB5B6006F37EF /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D22FBBB5B6006F37EF /* popup.html */; };
 		C1B0B1EB2FBBB5B6006F37EF /* observer.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D32FBBB5B6006F37EF /* observer.js */; };
 		C1B0B1EC2FBBB5B6006F37EF /* icons in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D42FBBB5B6006F37EF /* icons */; };
-		C1B0B1ED2FBBB5B6006F37EF /* status.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D52FBBB5B6006F37EF /* status.js */; };
 		C1B0B1EE2FBBB5B6006F37EF /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D62FBBB5B6006F37EF /* manifest.json */; };
 		C1B0B1EF2FBBB5B6006F37EF /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D72FBBB5B6006F37EF /* popup.css */; };
 		C1B0B1F02FBBB5B6006F37EF /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D82FBBB5B6006F37EF /* content.js */; };
-		C1B0B1F12FBBB5B6006F37EF /* status.css in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1D92FBBB5B6006F37EF /* status.css */; };
 		C1B0B1F22FBBB5B6006F37EF /* ExtPay.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */; };
 		C1B0B1F32FBBB5B6006F37EF /* ExtPay.js in Resources */ = {isa = PBXBuildFile; fileRef = C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */; };
+		C1C00BAD303A089200E11D0D /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C00BAC303A089200E11D0D /* StoreManager.swift */; };
+		C1C00BB2303A122C00E11D0D /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C1C00BB1303A122B00E11D0D /* StoreKit.framework */; };
+		C1C00BB4303A141D00E11D0D /* StyxMultiCart.storekit in Resources */ = {isa = PBXBuildFile; fileRef = C1C00BB3303A141D00E11D0D /* StyxMultiCart.storekit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,19 +120,23 @@
 		C1B0B1A42FBBB5B5006F37EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C1B0B1A92FBBB5B5006F37EF /* Styx Multi-Cart Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Styx Multi-Cart Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1B0B1AE2FBBB5B5006F37EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		C1B0B1CE2FBBB5B6006F37EF /* status.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = status.html; path = Resources/status.html; sourceTree = "<group>"; };
 		C1B0B1CF2FBBB5B6006F37EF /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
 		C1B0B1D02FBBB5B6006F37EF /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = Resources/LICENSE; sourceTree = "<group>"; };
 		C1B0B1D12FBBB5B6006F37EF /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
 		C1B0B1D22FBBB5B6006F37EF /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
 		C1B0B1D32FBBB5B6006F37EF /* observer.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = observer.js; path = Resources/observer.js; sourceTree = "<group>"; };
 		C1B0B1D42FBBB5B6006F37EF /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
-		C1B0B1D52FBBB5B6006F37EF /* status.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = status.js; path = Resources/status.js; sourceTree = "<group>"; };
 		C1B0B1D62FBBB5B6006F37EF /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
 		C1B0B1D72FBBB5B6006F37EF /* popup.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = popup.css; path = Resources/popup.css; sourceTree = "<group>"; };
 		C1B0B1D82FBBB5B6006F37EF /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = Resources/content.js; sourceTree = "<group>"; };
-		C1B0B1D92FBBB5B6006F37EF /* status.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; name = status.css; path = Resources/status.css; sourceTree = "<group>"; };
 		C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = ExtPay.js; path = Resources/ExtPay.js; sourceTree = "<group>"; };
+		C1C00BAC303A089200E11D0D /* StoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreManager.swift; sourceTree = "<group>"; };
+		C1C00BAE303A08FF00E11D0D /* Styx Multi-Cart (macOS).entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Styx Multi-Cart (macOS).entitlements"; sourceTree = "<group>"; };
+		C1C00BAF303A11B400E11D0D /* Styx Multi-Cart Extension (macOS).entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Styx Multi-Cart Extension (macOS).entitlements"; sourceTree = "<group>"; };
+		C1C00BB1303A122B00E11D0D /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		C1C00BB3303A141D00E11D0D /* StyxMultiCart.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = StyxMultiCart.storekit; sourceTree = "<group>"; };
+		C1C4605E304BC4CF00D7B38E /* guide-assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "guide-assets"; path = "Resources/guide-assets"; sourceTree = "<group>"; };
+		C1C4605E304BC4CF00D7B39A /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; name = _locales; path = Resources/_locales; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +151,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1C00BB2303A122C00E11D0D /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,12 +175,16 @@
 		C1B0B16D2FBBB5B3006F37EF = {
 			isa = PBXGroup;
 			children = (
+				C1C00BB3303A141D00E11D0D /* StyxMultiCart.storekit */,
+				C1C00BAF303A11B400E11D0D /* Styx Multi-Cart Extension (macOS).entitlements */,
+				C1C00BAE303A08FF00E11D0D /* Styx Multi-Cart (macOS).entitlements */,
 				C1B0B1722FBBB5B3006F37EF /* Shared (App) */,
 				C1B0B17B2FBBB5B5006F37EF /* Shared (Extension) */,
 				C1B0B1832FBBB5B5006F37EF /* iOS (App) */,
 				C1B0B1942FBBB5B5006F37EF /* macOS (App) */,
 				C1B0B1A32FBBB5B5006F37EF /* iOS (Extension) */,
 				C1B0B1AD2FBBB5B5006F37EF /* macOS (Extension) */,
+				C1C00BB0303A122B00E11D0D /* Frameworks */,
 				C1B0B1822FBBB5B5006F37EF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -184,6 +192,7 @@
 		C1B0B1722FBBB5B3006F37EF /* Shared (App) */ = {
 			isa = PBXGroup;
 			children = (
+				C1C00BAC303A089200E11D0D /* StoreManager.swift */,
 				C1B0B1792FBBB5B3006F37EF /* ViewController.swift */,
 				C1B0B17A2FBBB5B5006F37EF /* Assets.xcassets */,
 				C1B0B1732FBBB5B3006F37EF /* Resources */,
@@ -263,23 +272,30 @@
 		C1B0B1CD2FBBB5B6006F37EF /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				C1B0B1CE2FBBB5B6006F37EF /* status.html */,
+				C1C4605E304BC4CF00D7B38E /* guide-assets */,
+				C1C4605E304BC4CF00D7B39A /* _locales */,
 				C1B0B1CF2FBBB5B6006F37EF /* popup.js */,
 				C1B0B1D02FBBB5B6006F37EF /* LICENSE */,
 				C1B0B1D12FBBB5B6006F37EF /* background.js */,
 				C1B0B1D22FBBB5B6006F37EF /* popup.html */,
 				C1B0B1D32FBBB5B6006F37EF /* observer.js */,
 				C1B0B1D42FBBB5B6006F37EF /* icons */,
-				C1B0B1D52FBBB5B6006F37EF /* status.js */,
 				C1B0B1D62FBBB5B6006F37EF /* manifest.json */,
 				C1B0B1D72FBBB5B6006F37EF /* popup.css */,
 				C1B0B1D82FBBB5B6006F37EF /* content.js */,
-				C1B0B1D92FBBB5B6006F37EF /* status.css */,
 				C1B0B1F52FBBB5B6006F37EF /* ExtPay.js */,
 			);
 			name = Resources;
 			path = "Shared (Extension)";
 			sourceTree = SOURCE_ROOT;
+		};
+		C1C00BB0303A122B00E11D0D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C1C00BB1303A122B00E11D0D /* StoreKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
@@ -435,6 +451,7 @@
 				C1B0B1B62FBBB5B5006F37EF /* Script.js in Resources */,
 				C1B0B1BA2FBBB5B5006F37EF /* Assets.xcassets in Resources */,
 				C1B0B1B02FBBB5B5006F37EF /* Main.html in Resources */,
+				C1C00BB4303A141D00E11D0D /* StyxMultiCart.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -444,14 +461,11 @@
 			files = (
 				C1B0B1EF2FBBB5B6006F37EF /* popup.css in Resources */,
 				C1B0B1F02FBBB5B6006F37EF /* content.js in Resources */,
-				C1B0B1ED2FBBB5B6006F37EF /* status.js in Resources */,
 				C1B0B1EB2FBBB5B6006F37EF /* observer.js in Resources */,
 				C1B0B1E92FBBB5B6006F37EF /* background.js in Resources */,
-				C1B0B1F12FBBB5B6006F37EF /* status.css in Resources */,
 				C1B0B1EA2FBBB5B6006F37EF /* popup.html in Resources */,
 				C1B0B1EE2FBBB5B6006F37EF /* manifest.json in Resources */,
 				C1B0B1E82FBBB5B6006F37EF /* LICENSE in Resources */,
-				C1B0B1E62FBBB5B6006F37EF /* status.html in Resources */,
 				C1B0B1EC2FBBB5B6006F37EF /* icons in Resources */,
 				C1B0B1E72FBBB5B6006F37EF /* popup.js in Resources */,
 				C1B0B1F22FBBB5B6006F37EF /* ExtPay.js in Resources */,
@@ -464,15 +478,14 @@
 			files = (
 				C1B0B1E32FBBB5B6006F37EF /* popup.css in Resources */,
 				C1B0B1E42FBBB5B6006F37EF /* content.js in Resources */,
-				C1B0B1E12FBBB5B6006F37EF /* status.js in Resources */,
 				C1B0B1DF2FBBB5B6006F37EF /* observer.js in Resources */,
 				C1B0B1DD2FBBB5B6006F37EF /* background.js in Resources */,
-				C1B0B1E52FBBB5B6006F37EF /* status.css in Resources */,
 				C1B0B1DE2FBBB5B6006F37EF /* popup.html in Resources */,
 				C1B0B1E22FBBB5B6006F37EF /* manifest.json in Resources */,
 				C1B0B1DC2FBBB5B6006F37EF /* LICENSE in Resources */,
-				C1B0B1DA2FBBB5B6006F37EF /* status.html in Resources */,
 				C1B0B1E02FBBB5B6006F37EF /* icons in Resources */,
+				9874517D320AF958E9065488 /* guide-assets in Resources */,
+				9874517D320AF958E9065499 /* _locales in Resources */,
 				C1B0B1DB2FBBB5B6006F37EF /* popup.js in Resources */,
 				C1B0B1F32FBBB5B6006F37EF /* ExtPay.js in Resources */,
 			);
@@ -495,6 +508,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C1C00BAD303A089200E11D0D /* StoreManager.swift in Sources */,
 				C1B0B1B82FBBB5B5006F37EF /* ViewController.swift in Sources */,
 				C1B0B1962FBBB5B5006F37EF /* AppDelegate.swift in Sources */,
 			);
@@ -696,7 +710,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -729,7 +743,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -768,7 +782,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -808,7 +822,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -832,8 +846,10 @@
 		C1B0B1C72FBBB5B5006F37EF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Styx Multi-Cart Extension (macOS).entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8XHKTX9X49;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -847,13 +863,14 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgoolsby.styx.multicart.Extension;
 				PRODUCT_NAME = "Styx Multi-Cart Extension";
+				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -867,8 +884,10 @@
 		C1B0B1C82FBBB5B5006F37EF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Styx Multi-Cart Extension (macOS).entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8XHKTX9X49;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -882,13 +901,14 @@
 					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgoolsby.styx.multicart.Extension;
 				PRODUCT_NAME = "Styx Multi-Cart Extension";
+				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -904,8 +924,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Styx Multi-Cart (macOS).entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8XHKTX9X49;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -913,14 +936,15 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "macOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Styx Multi-Cart";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MACOSX_DEPLOYMENT_TARGET = 12.4;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -929,6 +953,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgoolsby.styx.multicart;
 				PRODUCT_NAME = "Styx Multi-Cart";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -945,8 +970,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Styx Multi-Cart (macOS).entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8XHKTX9X49;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
@@ -954,14 +982,15 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "macOS (App)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Styx Multi-Cart";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.shopping";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.14;
-				MARKETING_VERSION = 1.0;
+				MACOSX_DEPLOYMENT_TARGET = 12.4;
+				MARKETING_VERSION = 1.0.9;
 				OTHER_LDFLAGS = (
 					"-framework",
 					SafariServices,
@@ -970,6 +999,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.jaredgoolsby.styx.multicart;
 				PRODUCT_NAME = "Styx Multi-Cart";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

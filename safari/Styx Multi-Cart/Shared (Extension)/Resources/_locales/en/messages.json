@@ -1,0 +1,2050 @@
+{
+  "manifest_name": {
+    "message": "Styx Multi-Cart",
+    "description": "Extension name shown in chrome://extensions, the toolbar, and the Chrome Web Store. Brand name — keep as \"Styx Multi-Cart\" in every locale, do not translate."
+  },
+  "manifest_description": {
+    "message": "Empty your Amazon cart, save it for later, and manage multiple carts with reusable Amazon Lists.",
+    "description": "Extension description shown in chrome://extensions and the Chrome Web Store listing."
+  },
+  "manifest_actionTitle": {
+    "message": "Styx Multi-Cart",
+    "description": "Toolbar icon hover tooltip. Brand name — keep as \"Styx Multi-Cart\" in every locale."
+  },
+  "popup_header_premiumBadge": {
+    "message": "Premium",
+    "description": "Small badge in the popup header shown only to Premium subscribers."
+  },
+  "popup_header_premiumBadge_title": {
+    "message": "You have Premium",
+    "description": "Tooltip on the Premium badge in the header."
+  },
+  "popup_header_tagline": {
+    "message": "From Cart Chaos to Checkout Bliss",
+    "description": "Playful one-line tagline under the brand name. A pun on 'chaos' vs 'bliss' — translate for tone/wit rather than literally; a natural equivalent phrase in the target language is preferred over a word-for-word translation."
+  },
+  "popup_header_settingsToggle_ariaLabel": {
+    "message": "Open settings",
+    "description": "Accessible label for the gear icon button that opens Settings."
+  },
+  "popup_header_settingsToggle_title": {
+    "message": "Settings",
+    "description": "Tooltip for the gear icon button."
+  },
+  "popup_header_themeToggle": {
+    "message": "Toggle light/dark mode",
+    "description": "Tooltip and accessible label for the light/dark theme toggle button (shown before JS resolves the current theme)."
+  },
+  "popup_save_label": {
+    "message": "Save current Amazon cart as",
+    "description": "Label above the text field used to name a new saved cart."
+  },
+  "popup_save_input_placeholder": {
+    "message": "e.g. Birthday gifts",
+    "description": "Placeholder example text in the cart-name text field. Reused for other 'name a cart' prompts too."
+  },
+  "popup_save_button": {
+    "message": "Save Cart",
+    "description": "Button that saves the current Amazon cart as a new cart."
+  },
+  "popup_save_button_title": {
+    "message": "Save the current Amazon cart",
+    "description": "Tooltip for the Save Cart button."
+  },
+  "popup_intercept_toggle_title": {
+    "message": "When you click Amazon's Add to Cart on a product page, pick a saved cart instead.",
+    "description": "Tooltip explaining the 'intercept Add to Cart' toggle."
+  },
+  "popup_intercept_prefix": {
+    "message": "Intercept Amazon's",
+    "description": "First half of the sentence \"Intercept Amazon's [Add to Cart]\" — the bracketed part is a separate emphasized (italic) key (popup_action_addToCart) rendered right after this text. Word order may not translate literally; rephrase so the two pieces read naturally back to back."
+  },
+  "popup_action_addToCart": {
+    "message": "Add to Cart",
+    "description": "Amazon's own 'Add to Cart' action name, shown in italics right after popup_intercept_prefix. Should match how Amazon itself labels this button in this language where possible."
+  },
+  "popup_intercept_sub": {
+    "message": "Pick a saved cart instead of Amazon's live cart.",
+    "description": "Secondary explanatory line under the intercept toggle."
+  },
+  "popup_tier_free": {
+    "message": "Free",
+    "description": "Badge text for the free tier."
+  },
+  "popup_action_upgrade": {
+    "message": "Upgrade",
+    "description": "Short button label opening the paywall/upgrade modal."
+  },
+  "popup_action_hideThis": {
+    "message": "Hide this",
+    "description": "Tooltip on the small × dismiss button on the tier strip and lapsed banner."
+  },
+  "popup_tier_hideAriaLabel": {
+    "message": "Hide tier indicator",
+    "description": "Accessible label for dismissing the free/premium tier strip."
+  },
+  "popup_lapsed_hideAriaLabel": {
+    "message": "Hide lapsed banner",
+    "description": "Accessible label for dismissing the lapsed-Premium banner."
+  },
+  "popup_tier_usage": {
+    "message": "{{1}} / {{2}} saved carts",
+    "description": "e.g. '2 / 3 saved carts'. $1 is how many carts saved, $2 is the plan limit. Always plural 'carts' in English for simplicity even if $2 is 1 (rare edge case)."
+  },
+  "popup_lapsed_suffix_one": {
+    "message": " cart is read-only",
+    "description": "Appended after the lapsed-cart count when exactly 1 cart is locked, e.g. '1 cart is read-only'. Leading space intentional."
+  },
+  "popup_lapsed_suffix_other": {
+    "message": " carts are read-only",
+    "description": "Appended after the lapsed-cart count when more than 1 cart is locked, e.g. '3 carts are read-only'. Leading space intentional."
+  },
+  "popup_lapsed_renewNote": {
+    "message": "— Renew Premium to edit them again.",
+    "description": "Second sentence of the lapsed-cart banner, following the count/suffix."
+  },
+  "popup_action_renew": {
+    "message": "Renew",
+    "description": "Button that reopens the paywall in 'renew' mode for a lapsed Premium subscription."
+  },
+  "popup_list_title": {
+    "message": "Your Carts",
+    "description": "Heading above the list of carts."
+  },
+  "popup_list_gotoCarts_title": {
+    "message": "Open your carts on Amazon",
+    "description": "Tooltip on the clickable cart-count control that opens Amazon's Lists page."
+  },
+  "popup_list_cartsWord": {
+    "message": "carts",
+    "description": "The word 'carts' shown next to the cart count number."
+  },
+  "popup_list_refresh_title": {
+    "message": "Refresh your carts from Amazon",
+    "description": "Tooltip/aria-label for the refresh icon button."
+  },
+  "popup_clear_button": {
+    "message": "Clear Amazon cart",
+    "description": "Button that empties the user's live Amazon cart."
+  },
+  "popup_clear_button_title": {
+    "message": "Remove every item from your active Amazon cart",
+    "description": "Tooltip for the Clear Amazon cart button."
+  },
+  "popup_saveForLater_button": {
+    "message": "Save Amazon cart for later",
+    "description": "Button that saves the live Amazon cart as a new cart WITHOUT clearing it."
+  },
+  "popup_saveForLater_button_lines": {
+    "message": "Save Amazon cart\nfor later",
+    "description": "Two-line label for the popup Save button (line break after the noun, before the \"for later\" part). Popup-only; the single-line popup_saveForLater_button is used elsewhere (guide, in-page label matching)."
+  },
+  "popup_saveForLater_button_title": {
+    "message": "Save everything in your Amazon cart as a new cart, without clearing it",
+    "description": "Tooltip for the Save Amazon cart for later button."
+  },
+  "popup_lists_loading": {
+    "message": "Loading your Amazon lists…",
+    "description": "Status text shown while Amazon lists are being fetched."
+  },
+  "popup_lists_empty": {
+    "message": "No Amazon lists found. Make sure you are signed in to Amazon.",
+    "description": "Empty-state message when the user has no Amazon lists."
+  },
+  "popup_action_continue": {
+    "message": "Continue →",
+    "description": "Button that proceeds from the combine-cart selection bar to the combine modal. Keep the arrow glyph."
+  },
+  "popup_action_cancel": {
+    "message": "Cancel",
+    "description": "Generic Cancel button, used across several dialogs."
+  },
+  "popup_action_ok": {
+    "message": "OK",
+    "description": "Generic OK button, used as the default confirm-dialog affirmative label."
+  },
+  "popup_action_done": {
+    "message": "Done",
+    "description": "Generic Done button, e.g. closing Settings, or the Merge Carts toggle button while active."
+  },
+  "popup_action_delete": {
+    "message": "Delete",
+    "description": "Generic Delete button/action label."
+  },
+  "popup_action_create": {
+    "message": "Create",
+    "description": "Generic Create button label used in 'name a new cart' prompts."
+  },
+  "popup_action_rename": {
+    "message": "Rename",
+    "description": "Confirm button for the rename-cart prompt."
+  },
+  "popup_action_switch": {
+    "message": "Switch",
+    "description": "Confirm button for switching the live Amazon cart to a saved cart's contents."
+  },
+  "popup_action_update": {
+    "message": "Update",
+    "description": "Confirm button for re-syncing a cart to its already-linked Amazon list."
+  },
+  "popup_action_saveToAmazon": {
+    "message": "Save to Amazon",
+    "description": "Confirm button for creating a new Amazon list from a cart."
+  },
+  "popup_action_addAll": {
+    "message": "Add all",
+    "description": "Confirm button for adding every available item in an Amazon list to the live cart."
+  },
+  "popup_combine_title": {
+    "message": "Combine carts",
+    "description": "Title of the combine-carts modal."
+  },
+  "popup_combine_sub": {
+    "message": "Pick a direction. Items merge by ASIN; duplicates keep the higher quantity.",
+    "description": "Explanatory text under the combine-carts modal title."
+  },
+  "popup_combine_movePrefix": {
+    "message": "Move",
+    "description": "First word of the caption \"Move [cart A] into [cart B]\" in the combine modal — the cart-name pills are fixed-position DOM elements the translation cannot move, so keep this to a single leading word/short phrase where the target language allows; note this is a known simplification for SOV/other word-order languages."
+  },
+  "popup_combine_moveInfix": {
+    "message": "into",
+    "description": "Middle word of the caption \"Move [cart A] into [cart B]\" — sits between two fixed-position cart-name pills, see popup_combine_movePrefix note."
+  },
+  "popup_combine_pickTwo": {
+    "message": "Pick 2 carts to combine.",
+    "description": "Combine-mode status text: no carts selected yet."
+  },
+  "popup_combine_pickOneMore": {
+    "message": "Pick 1 more.",
+    "description": "Combine-mode status text: exactly 1 cart selected."
+  },
+  "popup_combine_readyToMerge": {
+    "message": "Ready to merge?",
+    "description": "Combine-mode status text: 2 carts selected, ready to continue."
+  },
+  "popup_combine_mergeCarts": {
+    "message": "Merge Carts",
+    "description": "Button that enters combine-selection mode."
+  },
+  "popup_combine_selectAriaLabel": {
+    "message": "Select cart \"{{1}}\" to combine",
+    "description": "Accessible label on the selection checkbox for a cart tile in combine mode. $1 is the cart's name."
+  },
+  "popup_err_loadBothCartsFailed": {
+    "message": "Could not load both carts.",
+    "description": "Error toast when opening the combine modal fails to find both selected carts."
+  },
+  "popup_err_crossRegionMerge": {
+    "message": "Can't merge: \"{{1}}\" is on {{2}} but \"{{3}}\" is on {{4}}.",
+    "description": "Error toast when the two carts being combined are on different Amazon regional sites. $1/$3 are cart names, $2/$4 are the Amazon hostnames (e.g. www.amazon.de)."
+  },
+  "popup_err_combineCartsFailed": {
+    "message": "Could not combine carts.",
+    "description": "Generic error toast for a failed combine operation."
+  },
+  "popup_combine_itemsAdded": {
+    "message": "{{1}} added",
+    "description": "Fragment inside the merge-result toast, e.g. '3 items added'. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "popup_combine_qtyBumped": {
+    "message": "{{1}} qty bumped",
+    "description": "Fragment inside the merge-result toast reporting how many duplicate items had their quantity increased. $1 is a number."
+  },
+  "popup_combine_merged": {
+    "message": "Merged \"{{1}}\" into \"{{2}}\"{{3}}.",
+    "description": "Success toast after combining two carts. $1/$2 are cart names, $3 is an optional parenthetical detail fragment (e.g. ' (3 items added, 1 qty bumped)') or empty string."
+  },
+  "popup_move_title": {
+    "message": "Move item",
+    "description": "Title of the move-item-to-another-cart modal."
+  },
+  "popup_move_sub": {
+    "message": "Pick the cart to move it into.",
+    "description": "Explanatory text under the Move item modal title."
+  },
+  "popup_move_createNew": {
+    "message": "Create new cart",
+    "description": "Button that creates a brand-new cart as the move destination."
+  },
+  "popup_move_noOtherCarts": {
+    "message": "No other carts to move into yet.",
+    "description": "Empty-state text when there are no valid destination carts to move an item into."
+  },
+  "popup_untitled": {
+    "message": "(untitled)",
+    "description": "Fallback item name shown in the move-item modal header when an item has no title."
+  },
+  "popup_err_moveItemFailed": {
+    "message": "Could not move item.",
+    "description": "Error toast when moving an item between carts fails."
+  },
+  "popup_genericCart": {
+    "message": "cart",
+    "description": "Generic fallback word for 'cart' used inside a sentence when no specific name is available."
+  },
+  "popup_toast_moved": {
+    "message": "Moved \"{{1}}\" to \"{{2}}\".",
+    "description": "Success toast after moving an item. $1 is the item title, $2 is the destination cart name."
+  },
+  "popup_err_createDestinationFailed": {
+    "message": "Could not create a destination for this item.",
+    "description": "Error toast when the 'create new cart as move destination' flow can't find its source context."
+  },
+  "popup_prompt_createDestination_title": {
+    "message": "Create destination cart",
+    "description": "Title of the name-a-cart prompt used inside the move-item flow."
+  },
+  "popup_err_createCartFailed": {
+    "message": "Could not create cart.",
+    "description": "Generic error toast for a failed create-cart operation."
+  },
+  "popup_err_createdButNotMoved": {
+    "message": "Created the cart, but could not move the item.",
+    "description": "Error toast for the edge case where cart creation succeeds but the follow-up item move fails."
+  },
+  "popup_err_updateQtyFailed": {
+    "message": "Could not update quantity",
+    "description": "Error toast when changing an item's quantity fails."
+  },
+  "popup_confirm_removeLast_title": {
+    "message": "Remove last item?",
+    "description": "Title of the confirm dialog shown when removing an item would empty (and delete) the cart."
+  },
+  "popup_confirm_removeLast_before": {
+    "message": "Removing ",
+    "description": "Text immediately before the bold item name in the 'remove last item' confirm dialog body, e.g. 'Removing [Wireless Mouse] empties and deletes this cart.' Trailing space intentional."
+  },
+  "popup_confirm_removeLast_after": {
+    "message": " empties and deletes this cart.",
+    "description": "Text immediately after the bold item name in the 'remove last item' confirm dialog body. Leading space intentional."
+  },
+  "popup_confirm_removeLast_okLabel": {
+    "message": "Remove & delete",
+    "description": "Destructive confirm button for removing the last item (which deletes the cart)."
+  },
+  "popup_err_removeItemFailed": {
+    "message": "Could not remove item",
+    "description": "Error toast when removing an item from a cart fails."
+  },
+  "popup_toast_cartEmptiedRemoved": {
+    "message": "Cart emptied — removing from list",
+    "description": "Toast shown when removing an item empties and deletes its cart."
+  },
+  "popup_lockPill_title": {
+    "message": "Renew Premium to edit this cart",
+    "description": "Tooltip on the lock pill shown on a read-only (lapsed-Premium) cart."
+  },
+  "popup_lockPill_label": {
+    "message": "Read-Only — Go Premium?",
+    "description": "Text on the clickable lock pill on a read-only cart, opens the paywall in renew mode."
+  },
+  "popup_locked_renameTitle": {
+    "message": "Locked — renew Premium to rename",
+    "description": "Tooltip on a disabled rename button for a read-only cart."
+  },
+  "popup_locked_useTitle": {
+    "message": "Locked — renew Premium to use this cart",
+    "description": "Tooltip on disabled Switch/Save buttons for a read-only cart."
+  },
+  "popup_item_countQty": {
+    "message": "{{1}} · {{2}} qty",
+    "description": "e.g. '3 items · 5 qty'. $1 is an already-formatted 'N item(s)' phrase, $2 is the total quantity number."
+  },
+  "popup_item_hostSaved": {
+    "message": "{{1}} · saved {{2}}",
+    "description": "e.g. 'amazon.de · saved 3 days ago'. $1 is the Amazon hostname, $2 is an already-formatted relative time phrase."
+  },
+  "popup_sync_synced": {
+    "message": "✓ Synced {{1}}",
+    "description": "Shown on a cart that's linked to an Amazon list, e.g. '✓ Synced 2 hr ago'. $1 is an already-formatted relative time phrase. Keep the ✓ glyph."
+  },
+  "popup_sync_viewList": {
+    "message": "View list",
+    "description": "Link text that navigates to the linked Amazon list."
+  },
+  "popup_sync_updateAmazonList": {
+    "message": "Update Amazon List",
+    "description": "Save button label when a cart is already linked to an Amazon list (re-sync instead of first-time save)."
+  },
+  "popup_count_item_one": {
+    "message": "{{1}} item",
+    "description": "Singular item count, e.g. '1 item'."
+  },
+  "popup_count_item_other": {
+    "message": "{{1}} items",
+    "description": "Plural item count, e.g. '3 items'."
+  },
+  "popup_unavailable": {
+    "message": "Unavailable",
+    "description": "Badge/reason text shown on a cart item Amazon reports as no longer available."
+  },
+  "popup_genericItem": {
+    "message": "Item",
+    "description": "Generic fallback word for a single item when no title/ASIN is available."
+  },
+  "popup_thumb_moveAriaLabel": {
+    "message": "{{1}} — click to move to another cart",
+    "description": "Accessible label on an item thumbnail tile (the whole tile acts as a 'move' button). $1 is the item title."
+  },
+  "popup_thumb_removeTitle": {
+    "message": "Remove item",
+    "description": "Tooltip on the × button on an item thumbnail."
+  },
+  "popup_thumb_removeAriaLabel": {
+    "message": "Remove {{1}}",
+    "description": "Accessible label on the × remove button, $1 is the item title."
+  },
+  "popup_thumb_qtyTitle": {
+    "message": "Change quantity",
+    "description": "Tooltip on the quantity badge button on an item thumbnail."
+  },
+  "popup_thumb_qtyAriaLabel": {
+    "message": "Quantity {{1}}, click to change",
+    "description": "Accessible label on the quantity badge button. $1 is the current quantity number."
+  },
+  "popup_thumb_showLess": {
+    "message": "Show less",
+    "description": "Button that collapses an expanded thumbnail strip back to the capped view."
+  },
+  "popup_thumb_showFewerAriaLabel": {
+    "message": "Show fewer items",
+    "description": "Accessible label for the Show less button."
+  },
+  "popup_thumb_showMoreAriaLabel": {
+    "message": "Show {{1}} more items",
+    "description": "Accessible label for the '+N' expand-thumbnails button. $1 is the number of additional items."
+  },
+  "popup_amazonList_viewOnAmazon_ariaLabel": {
+    "message": "View list on Amazon",
+    "description": "Accessible label on the external-link icon for an Amazon list card."
+  },
+  "popup_amazonList_viewOnAmazon_title": {
+    "message": "View on Amazon",
+    "description": "Tooltip on the external-link icon for an Amazon list card."
+  },
+  "popup_amazonList_addAll_ariaLabel": {
+    "message": "Add all to Amazon cart",
+    "description": "Accessible label for the icon button that adds every item in a list to the live Amazon cart."
+  },
+  "popup_amazonList_addAll_title": {
+    "message": "Add All to Amazon Cart",
+    "description": "Tooltip for the add-all-to-cart icon button, and also shown when every item in the list is available."
+  },
+  "popup_amazonList_addAvailable_title": {
+    "message": "Add {{1}} to your Amazon cart",
+    "description": "Tooltip variant shown when some items in the list are unavailable — only the available ones would be added. $1 is an already-formatted 'N available item(s)' phrase (see popup_amazonList_addAvailableCount)."
+  },
+  "popup_amazonList_noAvailableItems": {
+    "message": "This list has no available items",
+    "description": "Tooltip shown on the disabled add-all button when a list has zero available items."
+  },
+  "popup_amazonList_viewItems": {
+    "message": "View items",
+    "description": "Placeholder link text shown on a list card before its item count is known."
+  },
+  "popup_amazonList_genericName": {
+    "message": "Amazon list",
+    "description": "Fallback name for an Amazon list with no title."
+  },
+  "popup_amazonList_unavailableSuffix": {
+    "message": " · {{1}} unavailable",
+    "description": "Appended to an item/qty count line when some items are unavailable, e.g. ' · 2 unavailable'. Leading space intentional. $1 is a number."
+  },
+  "popup_amazonList_premiumUpgradeToUse": {
+    "message": "Premium cart — upgrade to use",
+    "description": "Meta text shown on a list card that's locked (over the free-tier limit)."
+  },
+  "popup_amazonList_unlockAriaLabel": {
+    "message": "Unlock {{1}} with Premium",
+    "description": "Accessible label on a locked list's name button. $1 is the list name."
+  },
+  "popup_amazonList_showItemsAriaLabel": {
+    "message": "Show items in {{1}}",
+    "description": "Accessible label on an unlocked list's expand/collapse name button. $1 is the list name."
+  },
+  "popup_amazonList_loadingItems": {
+    "message": "Loading items from Amazon…",
+    "description": "Status text while an individual Amazon list's items are being fetched."
+  },
+  "popup_err_loadAmazonListFailed": {
+    "message": "Could not load this Amazon list.",
+    "description": "Error text when a single Amazon list's items fail to load."
+  },
+  "popup_err_loadAmazonListsFailed": {
+    "message": "Couldn't load your Amazon lists.",
+    "description": "Error text when the whole Amazon lists dashboard fails to load."
+  },
+  "popup_err_noAvailableItemsToAdd": {
+    "message": "This list has no available items to add.",
+    "description": "Error toast when trying to add-all from a list with zero available items."
+  },
+  "popup_confirm_sendToCart_title": {
+    "message": "Send these items to your Amazon cart?",
+    "description": "Title of the confirm dialog before bulk-adding a list's items to the live cart."
+  },
+  "popup_confirm_sendToCart_message": {
+    "message": "Add {{1}} from \"{{2}}\" to your active Amazon cart? Existing cart items will stay.",
+    "description": "Body of the send-to-cart confirm dialog. $1 is an already-formatted 'N available item(s)' phrase, $2 is the list name."
+  },
+  "popup_confirm_sendToCart_unavailableNote": {
+    "message": "{{1}} will be skipped.",
+    "description": "Extra sentence appended to the send-to-cart confirm body when some items are unavailable. $1 is an already-formatted 'N unavailable item(s)' phrase."
+  },
+  "popup_toast_addingToCart": {
+    "message": "Adding {{1}} to your Amazon cart…",
+    "description": "Toast shown while bulk-adding items to the live cart. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "popup_err_addListToCartFailed": {
+    "message": "Could not add this list to your cart.",
+    "description": "Error toast when bulk-adding a list's items to the cart fails."
+  },
+  "popup_prompt_createNewCart_title": {
+    "message": "Create a new cart",
+    "description": "Title of the name-a-new-cart prompt from the '+' / Create new cart action."
+  },
+  "popup_toast_created": {
+    "message": "Created \"{{1}}\".",
+    "description": "Success toast after creating a new empty cart. $1 is the cart name."
+  },
+  "popup_thisFallback": {
+    "message": "this",
+    "description": "Generic fallback pronoun used inside a sentence when a cart name is unexpectedly empty, e.g. '...contents of \"this\".'"
+  },
+  "popup_thisCartFallback": {
+    "message": "this cart",
+    "description": "Generic fallback phrase used inside a sentence when a cart name is unexpectedly empty."
+  },
+  "popup_confirm_switch_title": {
+    "message": "Switch to this cart?",
+    "description": "Title of the confirm dialog before replacing the live Amazon cart's contents."
+  },
+  "popup_confirm_switch_message": {
+    "message": "This will replace your current Amazon cart with the contents of \"{{1}}\".",
+    "description": "Body of the switch-cart confirm dialog. $1 is the cart name."
+  },
+  "popup_toast_switchingCarts": {
+    "message": "Switching carts — loading {{1}}. If Amazon shows an upsell, choose an option there to continue.",
+    "description": "Toast shown while the live cart is being replaced. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "popup_err_switchCartsFailed": {
+    "message": "Could not switch carts",
+    "description": "Error toast when switching the live cart fails."
+  },
+  "popup_confirm_updateList_title": {
+    "message": "Update Amazon list?",
+    "description": "Title of the confirm dialog for re-syncing a cart to its linked Amazon list."
+  },
+  "popup_confirm_saveToList_title": {
+    "message": "Save to Amazon list?",
+    "description": "Title of the confirm dialog for creating a new Amazon list from a cart."
+  },
+  "popup_confirm_updateList_message": {
+    "message": "Re-sync \"{{1}}\" to its Amazon list. Styx opens Amazon tabs to add the items — keep them open until it finishes.",
+    "description": "Body of the update-Amazon-list confirm dialog. $1 is the cart name."
+  },
+  "popup_confirm_saveToList_message": {
+    "message": "Create a private Amazon list named \"{{1}}\" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.",
+    "description": "Body of the save-to-Amazon-list confirm dialog. $1 is the cart name."
+  },
+  "popup_toast_savingToAmazonList": {
+    "message": "Saving to your Amazon list — Styx is opening Amazon tabs. This can take a moment…",
+    "description": "Toast shown while a cart is being saved/synced to an Amazon list."
+  },
+  "popup_toast_savedPartial": {
+    "message": "Saved {{1}}/{{2}}. {{3}} couldn't be added.",
+    "description": "Toast when saving a cart to an Amazon list partially fails. $1 added count, $2 total count, $3 failed count (all plain numbers)."
+  },
+  "popup_toast_savedToAmazonList": {
+    "message": "Saved {{1}} to your Amazon list.",
+    "description": "Success toast after saving a cart to an Amazon list. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "popup_err_saveToAmazonFailed": {
+    "message": "Could not save to Amazon",
+    "description": "Error toast when saving/syncing a cart to an Amazon list fails."
+  },
+  "popup_prompt_renameCart_title": {
+    "message": "Rename cart",
+    "description": "Title of the rename-cart prompt dialog."
+  },
+  "popup_prompt_renameCart_placeholder": {
+    "message": "Cart name",
+    "description": "Placeholder text in the rename-cart input field."
+  },
+  "popup_err_renameFailed": {
+    "message": "Could not rename",
+    "description": "Error toast when renaming a cart fails."
+  },
+  "popup_confirm_deleteCart_title": {
+    "message": "Delete saved cart?",
+    "description": "Title of the confirm dialog before permanently deleting a cart."
+  },
+  "popup_confirm_deleteCart_message": {
+    "message": "\"{{1}}\" will be permanently removed.",
+    "description": "Body of the delete-cart confirm dialog. $1 is the cart name."
+  },
+  "popup_toast_deleted": {
+    "message": "Deleted",
+    "description": "Success toast after deleting a cart."
+  },
+  "popup_err_deleteFailed": {
+    "message": "Could not delete",
+    "description": "Error toast when deleting a cart fails."
+  },
+  "popup_item_rename_title": {
+    "message": "Rename cart",
+    "description": "Tooltip on a cart tile's name button (clicking it renames the cart)."
+  },
+  "popup_item_switchTo": {
+    "message": "Switch to This Cart",
+    "description": "Button on a cart tile that replaces the live Amazon cart with this cart's contents."
+  },
+  "popup_item_switchTo_title": {
+    "message": "Move all items to your Amazon cart",
+    "description": "Tooltip for the Switch to This Cart button."
+  },
+  "popup_item_saveToList": {
+    "message": "Save to Amazon List",
+    "description": "Button on a cart tile that saves/syncs it as an Amazon list."
+  },
+  "popup_item_saveToList_title": {
+    "message": "Save this cart as an Amazon list so it syncs across devices",
+    "description": "Tooltip for the Save to Amazon List button."
+  },
+  "popup_item_delete_title": {
+    "message": "Delete entire cart",
+    "description": "Tooltip for the Delete button on a cart tile."
+  },
+  "popup_qty_ariaLabel": {
+    "message": "Change item quantity",
+    "description": "Accessible label for the quantity +/- popover dialog."
+  },
+  "popup_qty_decrease": {
+    "message": "Decrease quantity",
+    "description": "Accessible label for the − button in the quantity popover."
+  },
+  "popup_qty_increase": {
+    "message": "Increase quantity",
+    "description": "Accessible label for the + button in the quantity popover."
+  },
+  "popup_confirm_defaultTitle": {
+    "message": "Are you sure?",
+    "description": "Fallback title for the generic confirm dialog when no specific title is supplied."
+  },
+  "popup_prompt_defaultTitle": {
+    "message": "Enter a value",
+    "description": "Fallback title for the generic text-input prompt dialog when no specific title is supplied."
+  },
+  "popup_paywall_title": {
+    "message": "Upgrade to Premium",
+    "description": "Default paywall modal title (shown for the generic 'cta' trigger and as the settings-modal heading equivalent)."
+  },
+  "popup_paywall_sub": {
+    "message": "You're using all your free saved carts. Premium unlocks more space for how you actually shop.",
+    "description": "Static paywall subtitle baked into the HTML before JS sets a trigger-specific one; rarely visible but keep translated for consistency."
+  },
+  "popup_paywall_ctaSub": {
+    "message": "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.",
+    "description": "Paywall subtitle shown when the user clicks a generic Upgrade button (not triggered by hitting the free limit or renewing)."
+  },
+  "popup_paywall_limitTitle": {
+    "message": "You've used all {{1}} free carts",
+    "description": "Paywall title shown when the user hits the free-tier cart limit. $1 is the free limit number (currently 3)."
+  },
+  "popup_paywall_limitSub": {
+    "message": "Upgrade to Premium to save more — your existing carts stay exactly as they are.",
+    "description": "Paywall subtitle shown when the user hits the free-tier limit."
+  },
+  "popup_paywall_renewTitle": {
+    "message": "Welcome back",
+    "description": "Paywall title shown when renewing a lapsed Premium subscription."
+  },
+  "popup_paywall_renewSub": {
+    "message": "Renew Premium to unlock your read-only carts. Everything you saved is still here, waiting.",
+    "description": "Paywall subtitle shown when renewing a lapsed subscription."
+  },
+  "popup_paywall_feature_unlimited": {
+    "message": "Unlimited carts (vs. 3 free)",
+    "description": "First bullet point in the paywall's feature list."
+  },
+  "popup_paywall_feature_curated": {
+    "message": "Keep curated lists for gifts, restocks, occasions",
+    "description": "Second bullet point in the paywall's feature list."
+  },
+  "popup_paywall_feature_cancelAnytime": {
+    "message": "Cancel anytime — all carts stay visible with 3 free",
+    "description": "Third bullet point in the paywall's feature list."
+  },
+  "popup_paywall_haveCode": {
+    "message": "Have a code?",
+    "description": "Collapsed <summary> label that expands the promo-code redemption form."
+  },
+  "popup_paywall_promoCode": {
+    "message": "Promo code",
+    "description": "Screen-reader-only label for the promo code input field."
+  },
+  "popup_paywall_enterCode": {
+    "message": "Enter code",
+    "description": "Placeholder text in the promo code input field."
+  },
+  "popup_paywall_redeem": {
+    "message": "Redeem",
+    "description": "Submit button for the promo code form."
+  },
+  "popup_paywall_annual": {
+    "message": "Annual",
+    "description": "Label on the annual-subscription plan button."
+  },
+  "popup_paywall_annualPrice": {
+    "message": "{{D}}9.99 / yr",
+    "description": "Price on the annual-subscription plan button. Billing is USD-only via ExtensionPay — keep this as a literal USD figure in every locale, do not convert currency or attempt localized pricing."
+  },
+  "popup_paywall_lifetime": {
+    "message": "Lifetime",
+    "description": "Label on the one-time lifetime-purchase plan button."
+  },
+  "popup_paywall_lifetimePrice": {
+    "message": "{{D}}19.99 once",
+    "description": "Price on the lifetime plan button. Billing is USD-only via ExtensionPay — keep this as a literal USD figure in every locale, do not convert currency."
+  },
+  "popup_paywall_maybeLater": {
+    "message": "Maybe later",
+    "description": "Dismiss button on the paywall modal."
+  },
+  "popup_paywall_openingCheckout": {
+    "message": "Opening checkout…",
+    "description": "Transient button text while the Stripe/ExtensionPay checkout tab is opening."
+  },
+  "popup_err_openCheckoutFailed": {
+    "message": "Couldn't open checkout.",
+    "description": "Error toast when opening the payment checkout page fails."
+  },
+  "popup_promo_enterCode": {
+    "message": "Enter a code.",
+    "description": "Validation message when the promo code field is submitted empty."
+  },
+  "popup_promo_checking": {
+    "message": "Checking…",
+    "description": "Transient status while a promo code is being validated."
+  },
+  "popup_promo_genericError": {
+    "message": "Something went wrong. Try again.",
+    "description": "Fallback error message for a failed promo code redemption."
+  },
+  "popup_promo_unlocked90": {
+    "message": "Premium unlocked for 90 days!",
+    "description": "Success message shown inline after redeeming a valid promo code."
+  },
+  "popup_promo_unlockedToast": {
+    "message": "Premium unlocked — enjoy!",
+    "description": "Success toast after redeeming a valid promo code."
+  },
+  "popup_debug_toggle": {
+    "message": "Debug",
+    "description": "Collapsed <summary> label for the developer diagnostics panel at the bottom of the popup (only visible after the STYXDEV unlock code)."
+  },
+  "popup_debug_diagnostics_title": {
+    "message": "Cart diagnostics",
+    "description": "Heading for the cart-diagnostics section of the developer panel."
+  },
+  "popup_debug_diagnostics_run": {
+    "message": "Run cart diagnostics",
+    "description": "Button that runs a diagnostic scrape of the current Amazon cart page."
+  },
+  "popup_debug_backup_title": {
+    "message": "Backup / restore (dev)",
+    "description": "Heading for the backup/restore section of the developer panel."
+  },
+  "popup_debug_backup_export": {
+    "message": "Export backup",
+    "description": "Button that exports all carts/lists to a JSON file."
+  },
+  "popup_debug_backup_restore": {
+    "message": "Restore from file…",
+    "description": "Button that restores carts/lists from a previously exported JSON file."
+  },
+  "popup_debug_backup_hint": {
+    "message": "Export reads every Amazon list's items (slow — one tab per list) and bundles them with the local mc.* storage into a JSON file. Restore recreates each custom list on Amazon from that file (also slow — drives Add-to-List per item). Watch the status window for progress. Restore does not touch entitlement or overwrite storage.",
+    "description": "Explanatory hint text for the backup/restore developer tool. Keep the literal 'mc.*' storage-key prefix untranslated exactly as written."
+  },
+  "popup_debug_logs_title": {
+    "message": "Diagnostic logs",
+    "description": "Heading for the diagnostic-logs section of the developer panel."
+  },
+  "popup_debug_logs_copy": {
+    "message": "Copy diagnostic logs",
+    "description": "Button that copies a diagnostic report (version, state, recent logs) to the clipboard."
+  },
+  "popup_debug_logs_hint": {
+    "message": "Copies the extension version, current state, and recent logs from every context (service worker, content scripts, popup) to the clipboard. Keep Developer mode on, reproduce the issue, then copy and send the result to support.",
+    "description": "Explanatory hint text for the Copy diagnostic logs button."
+  },
+  "popup_settings_title": {
+    "message": "Settings",
+    "description": "Title of the Settings modal."
+  },
+  "popup_settings_amazon_heading": {
+    "message": "Amazon",
+    "description": "Section heading in Settings for Amazon-related options."
+  },
+  "popup_settings_relabel_label": {
+    "message": "Rename Amazon lists to “carts”",
+    "description": "Toggle label for renaming Amazon's own Lists UI to say 'carts'."
+  },
+  "popup_settings_relabel_sub": {
+    "message": "On relabels Amazon’s Lists page as “Your Styx Carts” and adds “Cart” to each of your list names (e.g. “Jared’s List” → “Jared’s List Cart”). Off leaves Amazon untouched.",
+    "description": "Explanatory sub-text under the relabel-Amazon-lists toggle. Contains an illustrative example name change — keep the arrow (→) and quoting style, translate the example naturally."
+  },
+  "popup_settings_fab_heading": {
+    "message": "Floating button",
+    "description": "Section heading in Settings for the on-page floating button options."
+  },
+  "popup_settings_fabpulse_label": {
+    "message": "Pulse the floating button",
+    "description": "Toggle label for the floating button's attention-pulse animation."
+  },
+  "popup_settings_fabpulse_sub": {
+    "message": "The round Styx button glows orange on Amazon pages as a reminder to use it. Turn off for a static button.",
+    "description": "Explanatory sub-text under the pulse-floating-button toggle."
+  },
+  "popup_settings_display_heading": {
+    "message": "Display",
+    "description": "Section heading in Settings for display/surface options (Chrome only)."
+  },
+  "popup_settings_sidepanel_label": {
+    "message": "Open in side panel",
+    "description": "Toggle label for choosing side panel vs popup surface."
+  },
+  "popup_settings_sidepanel_sub": {
+    "message": "On docks Styx as a side panel (default). Off opens a compact popup from the toolbar instead.",
+    "description": "Explanatory sub-text under the side-panel toggle."
+  },
+  "popup_settings_dev_heading": {
+    "message": "Developer",
+    "description": "Section heading in Settings for the Developer mode toggle (hidden until unlocked)."
+  },
+  "popup_settings_devmode_label": {
+    "message": "Developer mode",
+    "description": "Toggle label for enabling Developer mode."
+  },
+  "popup_settings_devmode_sub": {
+    "message": "Shows the debug panel at the bottom of the popup and enables verbose logs in the service worker console. Safe to leave off.",
+    "description": "Explanatory sub-text under the Developer mode toggle."
+  },
+  "popup_settings_affiliate_heading": {
+    "message": "Affiliate disclosure",
+    "description": "Section heading in Settings for the Amazon Associates disclosure."
+  },
+  "popup_settings_affiliate_body": {
+    "message": "When you send a whole cart to Amazon, Styx uses Amazon’s bulk add-to-cart endpoint, which won’t add your items unless the link carries an Amazon Associates tag (tag=styxmcart-20). Styx supplies a placeholder tag only so bulk cart restore works — it is not a registered Associates account, and Styx earns no commission or referral fee from your purchases.",
+    "description": "Legal/disclosure text explaining the Amazon Associates tag used for bulk cart restore. IMPORTANT: keep the literal text \"tag=styxmcart-20\" exactly as written, untranslated, wherever it falls in the sentence — it is a real URL query parameter, not a translatable word. This is disclosure copy; translate carefully and precisely, ideally with review before a real store launch."
+  },
+  "popup_settings_affiliate_learnMore": {
+    "message": "Learn more",
+    "description": "Link text following the affiliate disclosure paragraph, links to a permissions explainer page."
+  },
+  "popup_settings_versionLabel": {
+    "message": "Styx Multi-Cart v{{1}}",
+    "description": "Version string shown at the bottom of Settings, e.g. 'Styx Multi-Cart v1.0.6'. Keep the brand name untranslated; $1 is the version number."
+  },
+  "popup_settings_version_ariaLabel": {
+    "message": "Version",
+    "description": "Accessible label for the version string element."
+  },
+  "popup_support_options_ariaLabel": {
+    "message": "Support options",
+    "description": "Accessible label for the support popover menu."
+  },
+  "popup_support_needHelp": {
+    "message": "Need help?",
+    "description": "Heading inside the support popover menu."
+  },
+  "popup_support_reportBug": {
+    "message": "Report a bug",
+    "description": "Link label to file a new GitHub issue."
+  },
+  "popup_support_reportBug_sub": {
+    "message": "Open a new GitHub issue",
+    "description": "Secondary explanatory text under 'Report a bug'."
+  },
+  "popup_support_howToReport": {
+    "message": "How to report",
+    "description": "Link label to a guide on writing a good bug report."
+  },
+  "popup_support_howToReport_sub": {
+    "message": "Tips for a good report",
+    "description": "Secondary explanatory text under 'How to report'."
+  },
+  "popup_support_knownIssues": {
+    "message": "Known issues",
+    "description": "Link label to browse existing GitHub issues."
+  },
+  "popup_support_knownIssues_sub": {
+    "message": "Browse reported bugs",
+    "description": "Secondary explanatory text under 'Known issues'."
+  },
+  "popup_support_toggle_ariaLabel": {
+    "message": "Support and bug report",
+    "description": "Accessible label for the floating support button."
+  },
+  "popup_support_toggle_title": {
+    "message": "Support · Report a bug",
+    "description": "Tooltip for the floating support button. Keep the middle-dot separator."
+  },
+  "popup_theme_switchToLight": {
+    "message": "Switch to light mode",
+    "description": "Tooltip/accessible label for the theme toggle when currently in dark mode (clicking switches to light)."
+  },
+  "popup_theme_switchToDark": {
+    "message": "Switch to dark mode",
+    "description": "Tooltip/accessible label for the theme toggle when currently in light mode (clicking switches to dark)."
+  },
+  "popup_defaultCartName": {
+    "message": "Cart · {{1}}, {{2}}",
+    "description": "Default name suggested for a newly saved cart when the user leaves the name field blank, e.g. 'Cart · Jan 5, 3:45 PM'. $1 is a localized date, $2 is a localized time (both already formatted via toLocaleDateString/toLocaleTimeString). Keep the middle-dot separator and comma."
+  },
+  "popup_toast_saved": {
+    "message": "Saved {{1}}",
+    "description": "Success toast after saving the live cart, e.g. 'Saved 3 items'. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "popup_err_saveCartFailed": {
+    "message": "Could not save cart",
+    "description": "Generic error toast for a failed save-cart operation."
+  },
+  "popup_thisItem": {
+    "message": "this item",
+    "description": "Fragment used inside the clear-cart confirm message when exactly 1 item is in the live cart, e.g. 'Save this item for a later checkout...'."
+  },
+  "popup_theseNItems": {
+    "message": "these {{1}} items",
+    "description": "Fragment used inside the clear-cart confirm message when N items are in the live cart, e.g. 'Save these 5 items for a later checkout...'. $1 is a number."
+  },
+  "popup_theseItems": {
+    "message": "these items",
+    "description": "Fragment used inside the clear-cart confirm message when the item count is unknown."
+  },
+  "popup_confirm_clear_title": {
+    "message": "Clear your Amazon cart?",
+    "description": "Title of the confirm dialog before clearing the live Amazon cart."
+  },
+  "popup_confirm_clear_message": {
+    "message": "Save {{1}} for a later checkout and they'll be waiting as a unique Styx cart in your Amazon Lists — or just clear it to shop for a different occasion.",
+    "description": "Body of the clear-cart confirm dialog. $1 is one of popup_thisItem / popup_theseNItems / popup_theseItems."
+  },
+  "popup_confirm_clear_altLabel": {
+    "message": "Save & Clear",
+    "description": "Secondary affirmative button on the clear-cart confirm dialog: saves the cart as a new Styx cart, then clears it."
+  },
+  "popup_confirm_clear_okLabel": {
+    "message": "Clear it!",
+    "description": "Primary destructive button on the clear-cart confirm dialog: clears without saving."
+  },
+  "popup_toast_savingThenClearing": {
+    "message": "Saving your cart to a new Amazon list, then clearing it…",
+    "description": "Toast shown for the Save & Clear flow."
+  },
+  "popup_toast_cartAlreadyEmpty": {
+    "message": "Your Amazon cart is already empty.",
+    "description": "Toast shown when Clear Cart is clicked but the cart was already empty."
+  },
+  "popup_toast_clearingCart": {
+    "message": "Clearing your cart — check the Amazon tab.",
+    "description": "Toast shown while the live cart is being cleared."
+  },
+  "popup_err_clearCartFailed": {
+    "message": "Could not clear cart",
+    "description": "Error toast when clearing the live cart fails."
+  },
+  "popup_toast_savingForLater": {
+    "message": "Saving {{1}} to a new cart — your Amazon cart stays as it is.",
+    "description": "Toast for the 'Save Amazon cart for later' action (saves without clearing). $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "popup_err_saveSettingFailed": {
+    "message": "Could not save setting",
+    "description": "Generic error toast when persisting a settings toggle fails."
+  },
+  "popup_toast_relabelOn": {
+    "message": "Amazon lists now show as your Styx carts.",
+    "description": "Confirmation toast when the 'rename Amazon lists to carts' setting is turned on."
+  },
+  "popup_toast_relabelOff": {
+    "message": "Amazon lists left as-is.",
+    "description": "Confirmation toast when the 'rename Amazon lists to carts' setting is turned off."
+  },
+  "popup_toast_fabPulseOn": {
+    "message": "Floating button will pulse.",
+    "description": "Confirmation toast when the floating-button pulse setting is turned on."
+  },
+  "popup_toast_fabPulseOff": {
+    "message": "Floating button pulse off.",
+    "description": "Confirmation toast when the floating-button pulse setting is turned off."
+  },
+  "popup_toast_surfaceSidepanel": {
+    "message": "Opens as side panel. Click the toolbar icon to reopen.",
+    "description": "Confirmation toast when switching the display surface to side panel."
+  },
+  "popup_toast_surfacePopup": {
+    "message": "Opens as popup. Click the toolbar icon to reopen.",
+    "description": "Confirmation toast when switching the display surface to popup."
+  },
+  "popup_toast_devModeOn": {
+    "message": "Developer mode on",
+    "description": "Confirmation toast when Developer mode is enabled from Settings."
+  },
+  "popup_toast_devModeOff": {
+    "message": "Developer mode off",
+    "description": "Confirmation toast when Developer mode is disabled from Settings."
+  },
+  "popup_time_justNow": {
+    "message": "just now",
+    "description": "Relative-time label for events under 1 minute ago."
+  },
+  "popup_time_minAgo": {
+    "message": "{{1}} min ago",
+    "description": "Relative-time label, e.g. '5 min ago'. $1 is a number; no singular/plural distinction is made (matches source English behavior)."
+  },
+  "popup_time_hrAgo": {
+    "message": "{{1}} hr ago",
+    "description": "Relative-time label, e.g. '2 hr ago'. $1 is a number; no singular/plural distinction."
+  },
+  "popup_time_dayAgo": {
+    "message": "{{1}} days ago",
+    "description": "Relative-time label, e.g. '3 days ago'. $1 is a number. Simplification: always plural, including for 1 day (matches the common cross-locale approach since chrome.i18n has no built-in plural rules)."
+  },
+  "popup_err_noSwResponse": {
+    "message": "No response from extension service worker.",
+    "description": "Internal error shown when the background service worker doesn't respond in time to a message."
+  },
+  "popup_err_unknownError": {
+    "message": "Unknown error",
+    "description": "Fallback error text for an unspecified runtime error."
+  },
+  "popup_err_premiumLimitReached": {
+    "message": "You've reached the cart limit. Delete or merge carts to free up space.",
+    "description": "Error toast for the legacy local-cart storage limit (rarely reachable — Amazon-list carts are uncapped on Premium)."
+  },
+  "popup_err_cartLocked": {
+    "message": "This cart is locked — renew Premium or delete others to free a slot.",
+    "description": "Error toast when an action is blocked because a cart is locked (read-only, lapsed Premium)."
+  },
+  "observer_close": {
+    "message": "Close",
+    "description": "Generic 'Close' accessible label/button used across several on-Amazon-page overlays injected by the extension."
+  },
+  "observer_closeImage": {
+    "message": "Close image",
+    "description": "Accessible label for closing the guide's screenshot lightbox."
+  },
+  "observer_screenshot": {
+    "message": "Screenshot",
+    "description": "Fallback accessible label for the screenshot lightbox when no alt text is available."
+  },
+  "observer_back": {
+    "message": "← Back",
+    "description": "Back button inside the on-page 'create new cart' mini-form. Keep the leading arrow glyph."
+  },
+  "observer_backToCarts": {
+    "message": "← Back to carts",
+    "description": "Back button that returns from the Premium-upgrade screen to the cart list, inside the on-page cart picker. Keep the leading arrow glyph."
+  },
+  "observer_notNow": {
+    "message": "Not now",
+    "description": "Dismiss button on the on-page upgrade overlay and onboarding guide."
+  },
+  "observer_tryAgain": {
+    "message": "Try again",
+    "description": "Button text shown after a failed action, inviting the user to retry."
+  },
+  "observer_pleaseTryAgain": {
+    "message": "Please try again.",
+    "description": "Generic fallback error detail text."
+  },
+  "observer_genericCart": {
+    "message": "Cart",
+    "description": "Fallback label shown for a cart tile whose item count is unknown, in the on-page cart picker."
+  },
+  "observer_genericItem": {
+    "message": "(item)",
+    "description": "Minimal fallback item title when Amazon's page couldn't be scraped for a real title, kept in parentheses to read as a placeholder."
+  },
+  "observer_cartWord": {
+    "message": "Cart",
+    "description": "The word 'Cart', appended to list/cart names during the Amazon Lists → Styx Carts rebrand (e.g. 'Birthday gifts' becomes 'Birthday gifts Cart'), and used as a prefix for auto-generated cart names (e.g. 'Cart Jan 5'). Keep capitalized to match the original brand styling."
+  },
+  "observer_readOnly": {
+    "message": "Read-only",
+    "description": "Small pill label on a locked (read-only) cart row in the on-page cart picker."
+  },
+  "observer_lockedRenewTitle": {
+    "message": "Locked — click to renew Premium",
+    "description": "Tooltip on a locked cart row in the on-page cart picker."
+  },
+  "observer_addToWhichCart": {
+    "message": "Add to which cart?",
+    "description": "Prompt heading in the on-page cart picker, asking which cart to add the current item to."
+  },
+  "observer_createNewCartRow": {
+    "message": "+ Create new cart",
+    "description": "Button at the bottom of the on-page cart picker's list that opens the inline create-cart form. Keep the leading '+ '."
+  },
+  "observer_addToAmazonCart": {
+    "message": "Add to Amazon cart",
+    "description": "Footer 'escape hatch' button in the on-page cart picker — bypasses Styx and lets Amazon's own Add to Cart proceed normally."
+  },
+  "observer_addToAmazonCartCaps": {
+    "message": "Add to Amazon Cart",
+    "description": "Relabeled text for Amazon's native per-item 'Add to Cart' button on the Lists page, once the Lists→Carts rebrand is on. Distinct capitalization from observer_addToAmazonCart intentionally matches the original source strings."
+  },
+  "observer_addDirectlyToAmazonCart": {
+    "message": "Add directly to Amazon cart",
+    "description": "Relabeled text for Amazon's native 'Add to Cart' button on a product page, once the Lists→Carts rebrand is on — clarifies it bypasses Styx's cart picker."
+  },
+  "observer_noAmazonListsYet": {
+    "message": "No Amazon lists yet — create one below.",
+    "description": "Empty-state row in the on-page cart picker when the user has no Amazon lists."
+  },
+  "observer_addingToCart": {
+    "message": "Adding to \"{{1}}\" — watch the status window…",
+    "description": "Status text shown in the on-page cart picker header while an item is being added to a cart. $1 is the cart name."
+  },
+  "observer_err_addItemFailed": {
+    "message": "Could not add item.",
+    "description": "Error text in the on-page cart picker when adding an item to a cart fails."
+  },
+  "observer_addedTo": {
+    "message": "Added to \"{{1}}\" ✓",
+    "description": "Success confirmation shown in the on-page cart picker after adding an item to a cart. $1 is the cart name. Keep the ✓ glyph."
+  },
+  "observer_qtyBumpedIn": {
+    "message": "Quantity bumped in \"{{1}}\" ✓",
+    "description": "Success confirmation shown when adding an item that was already in the target cart, so its quantity was increased instead. $1 is the cart name. Keep the ✓ glyph."
+  },
+  "observer_qtyLabel": {
+    "message": "Qty",
+    "description": "Short label before the quantity number in the on-page cart picker header, e.g. 'Qty 2'."
+  },
+  "observer_create_title": {
+    "message": "New cart for this item",
+    "description": "Title of the inline 'create new cart' form inside the on-page cart picker."
+  },
+  "observer_create_sub": {
+    "message": "Name it, and we'll add \"{{1}}\" right in.",
+    "description": "Subtitle of the create-cart form. $1 is the (already HTML-escaped) item title."
+  },
+  "observer_create_submit": {
+    "message": "Create & add",
+    "description": "Submit button for the inline create-cart form."
+  },
+  "observer_create_needName": {
+    "message": "Give it a name first.",
+    "description": "Validation message when the create-cart form is submitted with an empty name."
+  },
+  "observer_create_creating": {
+    "message": "Creating your list — watch the status window…",
+    "description": "Status message shown while a new Amazon list/cart is being created."
+  },
+  "observer_err_createListFailed": {
+    "message": "Could not create list.",
+    "description": "Error message when creating a new Amazon list/cart fails."
+  },
+  "observer_upgrade_limitTitle": {
+    "message": "Cart Limit Reached",
+    "description": "Title of the on-page upgrade overlay shown when the free-tier cart limit is hit."
+  },
+  "observer_upgrade_limitSub": {
+    "message": "You've reached the free limit of 3 carts. Upgrade to Premium to create unlimited carts and unlock full editing!",
+    "description": "Subtitle of the on-page upgrade overlay for the cart-limit trigger."
+  },
+  "observer_upgrade_renewTitle": {
+    "message": "Renew Premium",
+    "description": "Title of the on-page upgrade overlay shown when clicking a locked (lapsed-Premium) cart row."
+  },
+  "observer_upgrade_renewSub": {
+    "message": "This cart is read-only on the free plan. Upgrade to Premium to add items to all your saved carts!",
+    "description": "Subtitle of the on-page upgrade overlay for the renew trigger."
+  },
+  "observer_upgrade_feature_unlimited": {
+    "message": "Unlimited carts",
+    "description": "Feature bullet in the on-page upgrade overlay."
+  },
+  "observer_upgrade_feature_fullEditing": {
+    "message": "Edit, restore, rename, merge — full functionality",
+    "description": "Feature bullet in the on-page upgrade overlay."
+  },
+  "observer_upgrade_feature_cancelAnytime": {
+    "message": "Cancel anytime; carts stay readable",
+    "description": "Feature bullet in the on-page upgrade overlay."
+  },
+  "observer_upgrade_premiumCartTitle": {
+    "message": "Premium cart",
+    "description": "Title of the on-page upgrade overlay shown from the wishlist 'Send All' button when the list is locked."
+  },
+  "observer_upgrade_premiumCartSub": {
+    "message": "This cart is locked on the free plan. Upgrade to send it to your Amazon cart and unlock all your carts.",
+    "description": "Subtitle of the wishlist-page upgrade overlay."
+  },
+  "observer_upgrade_feature_allCarts": {
+    "message": "Use all your Amazon-list carts",
+    "description": "Feature bullet in the wishlist-page upgrade overlay. Keep 'all' emphasized (wrapped in bold) if the target language's phrasing allows it naturally."
+  },
+  "observer_upgrade_feature_sendAny": {
+    "message": "Send any cart to your Amazon cart",
+    "description": "Feature bullet in the wishlist-page upgrade overlay."
+  },
+  "observer_yourStyxCarts": {
+    "message": "Your Styx Carts",
+    "description": "Relabeled heading for Amazon's 'Your Lists' tab, shown when the Lists→Carts rebrand is on."
+  },
+  "observer_addToStyxCart": {
+    "message": "Add to Styx Cart",
+    "description": "Relabeled text for Amazon's native 'Add to List' popover header/button, once the Lists→Carts rebrand is on."
+  },
+  "observer_viewYourStyxCart": {
+    "message": "View Your Styx Cart",
+    "description": "Relabeled text for Amazon's native 'View Your List' button, once the Lists→Carts rebrand is on."
+  },
+  "observer_addToAStyxCart": {
+    "message": "Add to a Styx cart",
+    "description": "Relabeled text for the relocated native Add-to-List button next to a product's Add to Cart button, once the Lists→Carts rebrand is on."
+  },
+  "observer_createStyxCartTitle": {
+    "message": "Create a new Styx Cart (Amazon list)",
+    "description": "Relabeled title of Amazon's native 'Create a new list or registry' modal. Keep '(Amazon list)' in parentheses for user clarity about what's actually being created underneath."
+  },
+  "observer_styxCartNamePrefix": {
+    "message": "Styx Cart name",
+    "description": "Relabeled prefix for Amazon's 'List name' field label inside the create-list modal (the rest of the original label, e.g. '(required)', is preserved verbatim after this replacement)."
+  },
+  "observer_sendAllToAmazonCart": {
+    "message": "Send All to Amazon Cart",
+    "description": "Label for the button Styx injects next to an Amazon list's title, and its docked/sticky mirror, that bulk-adds every item in the list to the live Amazon cart."
+  },
+  "observer_noItemsFound": {
+    "message": "No items found",
+    "description": "Transient button label when the 'Send All to Amazon Cart' button can't find any items to add."
+  },
+  "observer_addingN": {
+    "message": "Adding {{1}}…",
+    "description": "Transient button label while items are being added to the cart. $1 is a plain number."
+  },
+  "observer_sendingNToCart": {
+    "message": "Sending {{1}} to cart…",
+    "description": "Transient button label while items are being sent to the Amazon cart. $1 is a plain number."
+  },
+  "observer_buildingAmazonList": {
+    "message": "Building your Amazon list",
+    "description": "Title of the floating on-page toast shown while a new Amazon list is being built from a cart."
+  },
+  "observer_working": {
+    "message": "Working…",
+    "description": "Generic fallback detail text for the floating on-page toast."
+  },
+  "observer_cartSaved": {
+    "message": "Cart saved",
+    "description": "Default success title for the floating on-page toast after a cart-to-list save completes."
+  },
+  "observer_nameYourNewList": {
+    "message": "Name your new Amazon list (new Styx cart):",
+    "description": "Label on the on-page prompt for naming a new cart when saving the live Amazon cart."
+  },
+  "observer_saveCartHelp": {
+    "message": "After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension.",
+    "description": "Helper text under the name-your-cart prompt input. Keep 'Styx Multi-Cart' as the untranslated brand name."
+  },
+  "observer_clearCartConfirmBody": {
+    "message": "Save these items to a new Styx cart for later, or clear them now to shop for a different occasion.",
+    "description": "Body text of the on-page 'Clear your Amazon cart?' confirm dialog."
+  },
+  "observer_savingAndClearing": {
+    "message": "Saving & clearing…",
+    "description": "Transient label on the on-page Clear-cart button during the Save & Clear flow."
+  },
+  "observer_clearingCart": {
+    "message": "Clearing cart…",
+    "description": "Transient label on the on-page Clear-cart button during a plain clear."
+  },
+  "observer_savingThenClearing": {
+    "message": "Saving your cart, then clearing it…",
+    "description": "Floating toast detail text for the Save & Clear flow."
+  },
+  "observer_clearingAmazonCart": {
+    "message": "Clearing your Amazon cart…",
+    "description": "Floating toast detail text for the plain clear flow."
+  },
+  "observer_savingYourCart": {
+    "message": "Saving your cart",
+    "description": "Floating toast title for the Save & Clear flow."
+  },
+  "observer_clearingYourCart": {
+    "message": "Clearing your cart",
+    "description": "Floating toast title for the plain clear flow."
+  },
+  "observer_cartSavedAndCleared": {
+    "message": "Cart saved and cleared",
+    "description": "Floating toast success title for the Save & Clear flow."
+  },
+  "observer_cartClearingStarted": {
+    "message": "Cart clearing started",
+    "description": "Floating toast success title for the plain clear flow."
+  },
+  "observer_checkAmazonTab": {
+    "message": "Check the Amazon tab for progress.",
+    "description": "Floating toast success detail, pointing the user at the Amazon tab where the operation continues."
+  },
+  "observer_couldntClearCart": {
+    "message": "Couldn't clear cart",
+    "description": "Floating toast error title when clearing the cart fails."
+  },
+  "observer_saveEverythingTitle": {
+    "message": "Save everything in this cart to a new Amazon list",
+    "description": "Tooltip for the on-page 'Save Amazon cart for later' button on the cart page."
+  },
+  "observer_savingToAmazon": {
+    "message": "Saving to Amazon…",
+    "description": "Transient label on the on-page Save-cart button while the save is in progress."
+  },
+  "observer_openingAmazonTabs": {
+    "message": "Opening Amazon tabs to add each item — please keep this tab open.",
+    "description": "Floating toast detail text while a cart is being saved to a new Amazon list."
+  },
+  "observer_listSaved": {
+    "message": "List saved",
+    "description": "Floating toast success title after a cart is saved to a new Amazon list."
+  },
+  "observer_savedPartialOpeningList": {
+    "message": "Saved {{1}}/{{2}} to \"{{3}}\". {{4}} need a manual add. Opening your list…",
+    "description": "Floating toast detail when saving a cart to a list partially fails. $1 saved count, $2 total count, $3 list name, $4 failed count (all plain numbers except $3)."
+  },
+  "observer_savedOpeningList": {
+    "message": "Saved {{1}} to \"{{2}}\". Opening your list…",
+    "description": "Floating toast detail after successfully saving a cart to a new Amazon list. $1 is an already-formatted 'N item(s)' phrase, $2 is the list name."
+  },
+  "observer_extensionContextInvalid": {
+    "message": "Extension context invalid",
+    "description": "Internal error when the extension's background context is no longer reachable (e.g. right after an update/reload)."
+  },
+  "observer_openStyxMultiCart": {
+    "message": "Open Styx Multi-Cart",
+    "description": "Accessible label for the round floating action button (FAB) that opens the Styx panel on Amazon pages."
+  },
+  "observer_proceedToCheckout": {
+    "message": "Proceed to checkout",
+    "description": "Amazon's own checkout button name, referenced inside the onboarding guide's first step ('The same two buttons sit right under Proceed to checkout')."
+  },
+  "observer_guide_ariaLabel": {
+    "message": "Styx Multi-Cart quick start",
+    "description": "Accessible label for the onboarding guide dialog."
+  },
+  "observer_guide_kicker": {
+    "message": "Quick start",
+    "description": "Small kicker label above the onboarding guide's content."
+  },
+  "observer_guide_fabButtonAlt": {
+    "message": "The round Styx button",
+    "description": "Alt text for the small inline screenshot of the floating action button, shown in the guide's intro line. The screenshot image itself stays in English regardless of locale."
+  },
+  "observer_guide_introText": {
+    "message": "Click the Styx button in the bottom-right of any Amazon page to open the panel.",
+    "description": "Intro sentence at the top of every onboarding guide page."
+  },
+  "observer_guide_stepOf": {
+    "message": "Step {{1}} of {{2}}",
+    "description": "Progress indicator in the onboarding guide, e.g. 'Step 2 of 3'. $1 and $2 are plain numbers."
+  },
+  "observer_guideFinish": {
+    "message": "Finish",
+    "description": "Button label on the final page of the onboarding guide."
+  },
+  "observer_startHere": {
+    "message": "Start here...",
+    "description": "Speech bubble shown next to the floating button after the user finishes the onboarding guide; points them to click the button."
+  },
+  "observer_guideNext": {
+    "message": "Next",
+    "description": "Button label to advance to the next onboarding guide page."
+  },
+  "observer_guide1_title": {
+    "message": "Clear your Amazon cart",
+    "description": "Title of onboarding guide step 1."
+  },
+  "observer_guide1_option1": {
+    "message": "Option 1 — in the Styx panel",
+    "description": "Sub-heading for the first way to clear/save a cart, described in guide step 1."
+  },
+  "observer_guide1_bullet1_text": {
+    "message": "Click {{1}} to empty the live cart, or {{2}} to keep a copy in a new Styx Cart first.",
+    "description": "Body text of guide step 1's first bullet. $1 and $2 are already-bolded (HTML <strong> wrapped) button names — 'Clear Amazon cart' and 'Save Amazon cart for later' respectively — safe to reorder around them, but keep them as whole units (don't split the placeholder text itself)."
+  },
+  "observer_guide1_shot1_alt": {
+    "message": "Clear Amazon cart and Save Amazon cart for later buttons at the top of the Styx panel",
+    "description": "Alt text for a screenshot in guide step 1. The screenshot image itself stays in English regardless of locale — this text is read by screen readers."
+  },
+  "observer_guide1_sublist1": {
+    "message": "Styx Carts are simply Amazon lists with added versatility.",
+    "description": "Sub-bullet under guide step 1's first bullet."
+  },
+  "observer_guide1_option2": {
+    "message": "Option 2 — on your Amazon cart page",
+    "description": "Sub-heading for the second way to clear/save a cart, described in guide step 1."
+  },
+  "observer_guide1_bullet2_text": {
+    "message": "The same two buttons sit right under {{1}}.",
+    "description": "Body text of guide step 1's second bullet. $1 is the bolded (HTML <strong> wrapped) name of Amazon's own 'Proceed to checkout' button."
+  },
+  "observer_guide1_shot2_alt": {
+    "message": "Clear Amazon cart and Save Amazon cart for later buttons below Proceed to checkout on the Amazon cart page",
+    "description": "Alt text for a screenshot in guide step 1."
+  },
+  "observer_guide2_title": {
+    "message": "Put items in different carts for separate purchases",
+    "description": "Title of onboarding guide step 2."
+  },
+  "observer_guide2_copy1": {
+    "message": "Want to organize your purchases as you shop?...",
+    "description": "First intro line of guide step 2."
+  },
+  "observer_guide2_copy2": {
+    "message": "Choose {{1}} on an item's page or 'add' button",
+    "description": "Second intro line of guide step 2. $1 is the bolded (HTML <strong> wrapped) name of Styx's own 'Add to a Styx cart' button."
+  },
+  "observer_guide2_copy3": {
+    "message": "Then pick an existing cart or {{1}}.",
+    "description": "Third intro line of guide step 2. $1 is the bolded (HTML <strong> wrapped) '+ Create new cart' button label."
+  },
+  "observer_guide2_shot1_alt": {
+    "message": "Add to a Styx cart button on an Amazon product page",
+    "description": "Alt text for a screenshot in guide step 2."
+  },
+  "observer_guide2_shot2_alt": {
+    "message": "The Styx cart picker listing your carts, with a Create new cart option",
+    "description": "Alt text for a screenshot in guide step 2."
+  },
+  "observer_guide2_bullet1": {
+    "message": "Use separate carts for trips, projects, or people.",
+    "description": "First bullet point in guide step 2."
+  },
+  "observer_guide2_bullet2": {
+    "message": "Adding an item directly to your Amazon cart or 'Buy now' are still available options.",
+    "description": "Second bullet point in guide step 2."
+  },
+  "observer_guide3_title": {
+    "message": "Send a whole cart to Amazon",
+    "description": "Title of onboarding guide step 3 (the final step)."
+  },
+  "observer_guide3_copy": {
+    "message": "Ready to checkout with a specific cart? You can send it to your Amazon cart multiple ways...",
+    "description": "Intro line of guide step 3."
+  },
+  "observer_guide3_option1": {
+    "message": "Option 1 — at the top of a cart",
+    "description": "Sub-heading for the first way to send a cart to Amazon, in guide step 3."
+  },
+  "observer_guide3_bullet1_text": {
+    "message": "On any Styx cart (Amazon list) page.",
+    "description": "Body text of guide step 3's first bullet."
+  },
+  "observer_guide3_shot1_alt": {
+    "message": "Send All to Amazon Cart button at the top of a list page",
+    "description": "Alt text for a screenshot in guide step 3."
+  },
+  "observer_guide3_option2": {
+    "message": "Option 2 — docked while you scroll",
+    "description": "Sub-heading for the second way to send a cart to Amazon, in guide step 3."
+  },
+  "observer_guide3_bullet2_text": {
+    "message": "Once you scroll past that button it docks in the bottom-right, so it is always in reach on long lists.",
+    "description": "Body text of guide step 3's second bullet."
+  },
+  "observer_guide3_shot2_alt": {
+    "message": "Send All to Amazon Cart button docked beside the floating Styx button",
+    "description": "Alt text for a screenshot in guide step 3."
+  },
+  "observer_guide3_option3": {
+    "message": "Option 3 — in the Styx panel",
+    "description": "Sub-heading for the third way to send a cart to Amazon, in guide step 3."
+  },
+  "observer_guide3_bullet3_text": {
+    "message": "Click the cart button on any cart's row in the extension panel",
+    "description": "Body text of guide step 3's third bullet."
+  },
+  "observer_guide3_shot3_alt": {
+    "message": "Add All to Amazon Cart button on a cart row in the Styx panel",
+    "description": "Alt text for a screenshot in guide step 3."
+  },
+  "observer_guide3_bullet4": {
+    "message": "Styx adds all the items to whatever is already in your Amazon cart, then reports the result when it is done.",
+    "description": "Fourth (plain) bullet point in guide step 3."
+  },
+  "observer_guide3_bullet5": {
+    "message": "<strong>We've already loaded your Amazon lists</strong> so you can start using Styx carts right away. Click {{1}} to start a whole new way to shop on Amazon!",
+    "description": "Final bullet point in guide step 3, containing the wrap-up call to action. Keep the <strong>...</strong> HTML tags exactly as they are (do not translate the tags themselves, only the text inside them). $1 is the bolded (HTML <strong> wrapped) 'Finish' button label."
+  },
+  "bg_done": {
+    "message": "Done",
+    "description": "Default title for the in-progress-operation status once it completes, queryable via MC_GET_STATUS."
+  },
+  "bg_doneCap": {
+    "message": "Done.",
+    "description": "Short 'done' detail line for the operation-status indicator, e.g. after 'Creating X' or 'Adding to X' completes."
+  },
+  "bg_starting": {
+    "message": "Starting…",
+    "description": "Initial detail line for the operation-status indicator right after an operation is kicked off."
+  },
+  "bg_thisItem": {
+    "message": "this item",
+    "description": "Fallback fragment used inside a sentence when an item's title is unknown, e.g. 'Choose a cartable format for \"this item\"...'."
+  },
+  "bg_genericItemLowercase": {
+    "message": "item",
+    "description": "Lowercase generic fallback word for a single item, used inline in a bullet like '• item (×2)'."
+  },
+  "bg_genericListName": {
+    "message": "list",
+    "description": "Generic fallback word for a list/cart name when none is known yet."
+  },
+  "bg_amazonCartFallbackName": {
+    "message": "Amazon cart",
+    "description": "Fallback name used when saving the live Amazon cart to a new list without a user-supplied name."
+  },
+  "bg_styxCartFallbackName": {
+    "message": "Styx cart",
+    "description": "Fallback name used when creating a new cart from the on-page picker without a user-supplied name."
+  },
+  "bg_clearingCart": {
+    "message": "Clearing cart",
+    "description": "Short operation-status title shown while the live Amazon cart is being emptied."
+  },
+  "bg_clearingCartEllipsis": {
+    "message": "Clearing cart…",
+    "description": "Initial on-page toast message when a cart clear begins."
+  },
+  "bg_removedOfTotal": {
+    "message": "Removed {{1}} of {{2}}…",
+    "description": "Operation-status detail during a clear, e.g. 'Removed 3 of 12…'. $1 and $2 are plain numbers."
+  },
+  "bg_removedSoFar": {
+    "message": "{{1}} removed so far…",
+    "description": "Operation-status detail during a clear when the total isn't known, e.g. '3 removed so far…'. $1 is a plain number."
+  },
+  "bg_clearingCartRemovedOfTotal": {
+    "message": "Clearing cart — removed {{1}} of {{2}}…",
+    "description": "On-page toast detail during a clear, e.g. 'Clearing cart — removed 3 of 12…'. $1 and $2 are plain numbers."
+  },
+  "bg_clearingCartRemovedSoFar": {
+    "message": "Clearing cart — {{1}} removed so far…",
+    "description": "On-page toast detail during a clear when the total isn't known. $1 is a plain number."
+  },
+  "bg_couldNotClearCartRemaining": {
+    "message": "Could not clear cart — {{1}} still in cart",
+    "description": "Error shown when a clear-cart operation can't finish. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_cartClearedRemoved": {
+    "message": "Cart cleared — {{1}} removed",
+    "description": "Success message after a cart is fully cleared. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_restoringCart": {
+    "message": "Restoring {{1}}",
+    "description": "Operation-status title while restoring a saved cart, e.g. 'Restoring \"Birthday gifts\"'. $1 is the cart label (already quoted, or a generic fallback word)."
+  },
+  "bg_loadingFirstProduct": {
+    "message": "Loading first product…",
+    "description": "Operation-status detail when a cart restore is opening its first product page."
+  },
+  "bg_batchOf": {
+    "message": "batch {{1}}/{{2}} ({{3}} items)",
+    "description": "Fragment describing a bulk-add batch, e.g. 'batch 2/4 (25 items)'. $1 batch number, $2 total batches, $3 item count in this batch (all plain numbers)."
+  },
+  "bg_itemsInOneGo": {
+    "message": "{{1}} items in one go",
+    "description": "Fragment used when there's only one bulk-add batch, e.g. '25 items in one go'. $1 is a plain number."
+  },
+  "bg_loadingBulkAddFor": {
+    "message": "Loading bulk add for {{1}}…",
+    "description": "Operation-status detail while a bulk-add batch page loads. $1 is an already-formatted batch description (bg_batchOf or bg_itemsInOneGo)."
+  },
+  "bg_loadingBulkAddBatch": {
+    "message": "Loading bulk add — batch {{1}} of {{2}} ({{3}} items)…",
+    "description": "On-page toast while a bulk-add batch page loads (multi-batch case). $1 batch number, $2 total batches, $3 item count (all plain numbers)."
+  },
+  "bg_loadingBulkAddForItems": {
+    "message": "Loading bulk add for {{1}}…",
+    "description": "On-page toast while a bulk-add page loads (single-batch case). $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_bulkRejectedFallback": {
+    "message": "Amazon couldn't prepare these items in bulk — adding them one at a time…",
+    "description": "On-page toast when Amazon's bulk-add endpoint rejects every item, before falling back to the slower per-item engine."
+  },
+  "bg_amazonRejectedBulkAdd": {
+    "message": "Amazon rejected the bulk-add items",
+    "description": "Error summary when Amazon's bulk-add endpoint accepted the request but rejected every product."
+  },
+  "bg_addToCartFallback": {
+    "message": "Add To Cart",
+    "description": "Fallback guess for the label of Amazon's highlighted bulk-add confirm button, used only when the real button text couldn't be read from the page."
+  },
+  "bg_clickHighlightedBatch": {
+    "message": "Click the highlighted \"{{1}}\" to confirm batch {{2}} of {{3}} ({{4}} items)",
+    "description": "On-page toast instructing the user to click the highlighted confirm button (multi-batch case). $1 is the button's label, $2 batch number, $3 total batches, $4 item count."
+  },
+  "bg_clickHighlightedItems": {
+    "message": "Click the highlighted \"{{1}}\" to add {{2}} to your Amazon cart",
+    "description": "On-page toast instructing the user to click the highlighted confirm button (single-batch case). $1 is the button's label, $2 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_waitingForConfirmation": {
+    "message": "Waiting for your confirmation…",
+    "description": "Operation-status detail while waiting for the user to click Amazon's bulk-add confirm button."
+  },
+  "bg_userDidNotConfirmBulkAdd": {
+    "message": "User did not confirm bulk add: {{1}}",
+    "description": "Internal error summary when the user abandons the bulk-add confirm page (closes the tab or times out). $1 is a lower-level reason string."
+  },
+  "bg_couldntFindConfirmButton": {
+    "message": "Couldn't find the confirm button — checking your cart…",
+    "description": "On-page toast when Amazon's bulk-add confirm button couldn't be located, before falling back to checking the cart directly."
+  },
+  "bg_clickAddToCartManual": {
+    "message": "Click \"Add To Cart\" on the page when you're ready — restore continues automatically",
+    "description": "On-page toast inviting the user to manually click Add to Cart when Styx couldn't find/highlight the button itself."
+  },
+  "bg_bulkRestorePartial": {
+    "message": "Bulk restore added {{1}} of {{2}} items — {{3}} skipped",
+    "description": "Summary after a bulk restore partially succeeds and the user declines the per-item fallback. $1 added count, $2 total count, $3 skipped count (all plain numbers)."
+  },
+  "bg_bulkRestoreZero": {
+    "message": "Bulk restore added 0 items — try again or restore one by one",
+    "description": "Summary after a bulk restore adds nothing and the user declines the per-item fallback."
+  },
+  "bg_noProductsOnBulkPage": {
+    "message": "Amazon rendered no products on the bulk-add page",
+    "description": "Error returned when Amazon's bulk-add confirm page shows no products at all (likely rejected the whole batch)."
+  },
+  "bg_confirmButtonNotFound": {
+    "message": "Confirm button not found within 10s",
+    "description": "Error returned when Styx can't locate Amazon's bulk-add confirm button within its search window."
+  },
+  "bg_savedCartHasNoItems": {
+    "message": "This saved cart has no items.",
+    "description": "Error when trying to restore a cart that has no items."
+  },
+  "bg_productUnavailable": {
+    "message": "Product is unavailable",
+    "description": "Fallback reason when a product can't be classified more specifically during restore."
+  },
+  "bg_skippingUnavailableItem": {
+    "message": "Skipping unavailable item {{1}} of {{2}}: {{3}}",
+    "description": "Operation-status detail when an item is skipped during restore because it's unavailable. $1 and $2 are plain numbers (position/total), $3 is a shortened item title."
+  },
+  "bg_unavailableSkipped": {
+    "message": "Unavailable — skipped {{1}}",
+    "description": "On-page toast when an item is skipped during restore because it's unavailable. $1 is a shortened item title."
+  },
+  "bg_noFormatSelected": {
+    "message": "A purchasable format was not selected",
+    "description": "Error reason when the user doesn't pick an alternate format for an item whose saved edition is uncartable."
+  },
+  "bg_itemOf": {
+    "message": "Item {{1}} of {{2}}: {{3}}",
+    "description": "Operation-status detail while restoring items one by one. $1 and $2 are plain numbers (position/total), $3 is a shortened item title."
+  },
+  "bg_restoringCartAdding": {
+    "message": "Restoring cart — adding {{1}} of {{2}}: {{3}}",
+    "description": "On-page toast while restoring items one by one. $1 and $2 are plain numbers (position/total), $3 is a shortened item title."
+  },
+  "bg_atcButtonNotFound": {
+    "message": "ATC button not found",
+    "description": "Short internal failure reason recorded when a product's Add to Cart button couldn't be found or clicked."
+  },
+  "bg_ageEarlierToday": {
+    "message": "earlier today",
+    "description": "Relative-age fragment for a previously recorded upsell choice made less than an hour ago."
+  },
+  "bg_ageRecently": {
+    "message": "recently",
+    "description": "Relative-age fragment for a previously recorded upsell choice made within the last day."
+  },
+  "bg_ageFromBefore": {
+    "message": "from before",
+    "description": "Relative-age fragment for a previously recorded upsell choice older than a day."
+  },
+  "bg_noCoverage": {
+    "message": "No coverage",
+    "description": "Description of a previously recorded upsell choice where the user declined protection-plan coverage."
+  },
+  "bg_selectedOption": {
+    "message": "selected option",
+    "description": "Generic fallback description of a previously recorded upsell choice when the specific option label isn't available."
+  },
+  "bg_applyingChoiceAge": {
+    "message": "Applying your choice {{1}}: {{2}}…",
+    "description": "Operation-status detail when auto-replaying a previously recorded upsell choice. $1 is an already-formatted relative-age phrase (bg_ageEarlierToday etc.), $2 is a quoted choice description."
+  },
+  "bg_applyingSavedChoice": {
+    "message": "Applying your saved choice: {{1}}",
+    "description": "On-page toast when auto-replaying a previously recorded upsell choice. $1 is a quoted choice description."
+  },
+  "bg_cartRestoredPartial": {
+    "message": "Cart restored — {{1}} of {{2}} added ({{3}} failed)",
+    "description": "Final summary toast after a per-item restore with some failures. $1 added count, $2 total count, $3 failed count (all plain numbers)."
+  },
+  "bg_cartRestoredAll": {
+    "message": "Cart restored — {{1}} added",
+    "description": "Final summary toast after a fully successful per-item restore. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_addingWishlistToCart": {
+    "message": "Adding wishlist to cart",
+    "description": "Operation-status title while bulk-adding a wishlist's items to the live Amazon cart."
+  },
+  "bg_addingItemsFromListPage": {
+    "message": "Adding {{1}} from the list page…",
+    "description": "Operation-status detail while adding items via the list page's native Add-to-Cart buttons. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_addingItemsFromList": {
+    "message": "Adding {{1}} from the list…",
+    "description": "On-page toast while adding items via the list page. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_addedItemsToCart": {
+    "message": "Added {{1}} to your Amazon cart",
+    "description": "Success toast after items are added to the live Amazon cart. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_couldNotSaveCart": {
+    "message": "Could not save your cart.",
+    "description": "Fallback error when saving a cart to a new Amazon list fails without a more specific reason."
+  },
+  "bg_couldntSaveLeftUntouched": {
+    "message": "Couldn't save — cart left untouched. {{1}}",
+    "description": "Operation-status title when a save fails, so the clear step is correctly skipped. $1 is a more specific error reason."
+  },
+  "bg_couldntSaveCartTitle": {
+    "message": "Couldn't save your cart",
+    "description": "Title of the on-page toast when saving a cart fails."
+  },
+  "bg_cartLeftAsIs": {
+    "message": "Your Amazon cart was left as-is. {{1}}",
+    "description": "Detail of the on-page toast when saving a cart fails — reassures the user nothing was lost. $1 is a more specific error reason."
+  },
+  "bg_savedNOfTotal": {
+    "message": "Saved {{1}}/{{2}} items",
+    "description": "Fragment summarizing a partially-successful save, e.g. 'Saved 8/10 items'. $1 and $2 are plain numbers."
+  },
+  "bg_savedNItems": {
+    "message": "Saved {{1}}",
+    "description": "Fragment summarizing a fully successful save. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_savedNoteToCartUntouched": {
+    "message": "{{1}} to \"{{2}}\" — your cart is untouched.",
+    "description": "Operation-status title after a save-only (no clear) completes. $1 is an already-formatted save summary (bg_savedNOfTotal or bg_savedNItems), $2 is the cart name."
+  },
+  "bg_cartSavedForLater": {
+    "message": "Cart saved for later",
+    "description": "Title of the on-page toast after a save-only (no clear) completes successfully."
+  },
+  "bg_savedNoteToCartUntouchedDetail": {
+    "message": "{{1}} to \"{{2}}\". Your Amazon cart is untouched.",
+    "description": "Detail of the on-page toast after a save-only completes. $1 is an already-formatted save summary, $2 is the cart name."
+  },
+  "bg_savedNoteNowClearing": {
+    "message": "{{1}} — now clearing your cart…",
+    "description": "Operation-status detail for the Save & Clear flow, once the save finished and the clear step begins. $1 is an already-formatted save summary."
+  },
+  "bg_savedAndCleared": {
+    "message": "Saved and cleared",
+    "description": "Title of the on-page toast when a Save & Clear completes fully."
+  },
+  "bg_savedNoteToCartEmpty": {
+    "message": "{{1}} to \"{{2}}\". Your Amazon cart is empty.",
+    "description": "Detail of the on-page toast when a Save & Clear completes fully. $1 is an already-formatted save summary, $2 is the cart name."
+  },
+  "bg_savedButCouldntClear": {
+    "message": "Saved, but couldn't clear",
+    "description": "Title of the on-page toast when the save half of Save & Clear succeeds but the clear half fails."
+  },
+  "bg_savedNoteCouldntClear": {
+    "message": "{{1}} to \"{{2}}\", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again.",
+    "description": "Detail of the on-page toast when the clear half of Save & Clear fails. $1 is an already-formatted save summary, $2 is the cart name."
+  },
+  "bg_amazonNeedsFormatChoice": {
+    "message": "Amazon needs a format choice",
+    "description": "Operation-status title when a saved item's edition is uncartable and the user must pick another format."
+  },
+  "bg_chooseCartableFormat": {
+    "message": "Choose a cartable format for \"{{1}}\" to continue adding the rest.",
+    "description": "Operation-status detail asking the user to pick another format. $1 is a shortened item title."
+  },
+  "bg_chooseFormatOnAmazon": {
+    "message": "Choose a format on Amazon",
+    "description": "Title of the on-page prompt dialog asking the user to pick another format."
+  },
+  "bg_savedFormatCannotBeAdded": {
+    "message": "The saved format of \"{{1}}\" cannot be added to the cart. Choose another format or edition on this page that offers Add to Cart. Styx will resume automatically.",
+    "description": "Body of the on-page prompt dialog asking the user to pick another format. $1 is a shortened item title."
+  },
+  "bg_choiceChooseFormat": {
+    "message": "Choose a format",
+    "description": "Primary button label on the format-choice prompt."
+  },
+  "bg_choiceSkipThisItem": {
+    "message": "Skip this item",
+    "description": "Secondary button label on the format-choice prompt."
+  },
+  "bg_couldNotShowFormatPrompt": {
+    "message": "Could not show the format picker prompt",
+    "description": "Internal error reason when the format-choice prompt can't be injected into the page."
+  },
+  "bg_skippedFormatUnavailable": {
+    "message": "Skipped because the saved format is unavailable",
+    "description": "Reason recorded when the user chooses to skip an item rather than pick a new format."
+  },
+  "bg_chooseFormatShowsAtc": {
+    "message": "Choose a format for \"{{1}}\" that shows Add to Cart — Styx will resume automatically",
+    "description": "On-page toast after the user chooses to pick a new format, prompting them to find one with a working Add to Cart. $1 is a shortened item title."
+  },
+  "bg_amazonTabWasClosed": {
+    "message": "Amazon tab was closed",
+    "description": "Error reason when the Amazon tab closes while waiting for a format choice."
+  },
+  "bg_selectedFormatUnavailable": {
+    "message": "The selected format is unavailable",
+    "description": "Error reason when the newly selected format also turns out to be unavailable."
+  },
+  "bg_noFormatSelectedTimeout": {
+    "message": "No cartable format was selected within 10 minutes",
+    "description": "Error reason when the user doesn't pick a format within the time limit."
+  },
+  "bg_savedFormatUnavailableChooseAnother": {
+    "message": "The saved format is unavailable; choose another format",
+    "description": "Reason returned by the product-availability classifier when a book/media item's saved edition has alternate purchasable formats. Used to decide whether to pause and prompt the user."
+  },
+  "bg_pageNoLongerExists": {
+    "message": "Product page no longer exists",
+    "description": "Reason returned by the product-availability classifier when Amazon shows a 404/removed-page state."
+  },
+  "bg_productCurrentlyUnavailable": {
+    "message": "Product is currently unavailable",
+    "description": "Fallback reason returned by the product-availability classifier when Amazon's own availability text couldn't be read."
+  },
+  "bg_waitingOnYourChoice": {
+    "message": "Waiting on your choice",
+    "description": "Operation-status title while waiting for the user to resolve a protection-plan/warranty upsell."
+  },
+  "bg_pickProtectionOption": {
+    "message": "Pick a protection option for \"{{1}}\" on the Amazon page — restore resumes automatically.",
+    "description": "Operation-status detail while waiting on an upsell choice. $1 is a shortened item title."
+  },
+  "bg_amazonNeedsProtectionPlanChoice": {
+    "message": "Amazon needs your protection-plan choice for \"{{1}}\". Pick an option below — Styx will keep restoring the rest of your cart as soon as you choose.",
+    "description": "On-page toast while waiting on a protection-plan upsell choice. $1 is a shortened item title."
+  },
+  "bg_addToListDropdownNotFound": {
+    "message": "Add-to-List dropdown not found on this page.",
+    "description": "Error when Amazon's native Add-to-List split-button dropdown can't be located on a product page."
+  },
+  "bg_createEntryNotFound": {
+    "message": "Create-a-List entry not found in the chooser.",
+    "description": "Error when the 'create a new list' entry can't be found in Amazon's Add-to-List dropdown."
+  },
+  "bg_createListFormDidNotAppear": {
+    "message": "Create-list form did not appear.",
+    "description": "Error when Amazon's create-list modal doesn't render after being triggered."
+  },
+  "bg_createButtonNotFound": {
+    "message": "Create button not found in the create-list form.",
+    "description": "Error when the Create submit button can't be found in Amazon's create-list modal."
+  },
+  "bg_noConfirmationAfterCreate": {
+    "message": "No confirmation after clicking Create.",
+    "description": "Error when Amazon gives no visible confirmation after submitting the create-list form."
+  },
+  "bg_noResultFromCreateList": {
+    "message": "no result from pageCreateListAndAdd",
+    "description": "Internal fallback error when the create-list page script produces no result at all."
+  },
+  "bg_listNotFoundInMenu": {
+    "message": "List __LISTID__ not found in the Add-to-List menu.",
+    "description": "Error when a specific list id isn't found among the rows in Amazon's Add-to-List dropdown. IMPORTANT: keep the literal token \"__LISTID__\" exactly as written — it is replaced with the actual list id by code via string.replace, not by chrome.i18n's own $NAME$ placeholder system (avoid $..$ tokens here, they collide with Chrome's manifest-load validation)."
+  },
+  "bg_noResult": {
+    "message": "no result",
+    "description": "Internal fallback error when a page script produces no result at all."
+  },
+  "bg_bulkIncomplete_title": {
+    "message": "Bulk add incomplete",
+    "description": "Title of the on-page prompt shown when Amazon's bulk-add endpoint only partially (or not at all) added the requested items."
+  },
+  "bg_bulkIncomplete_stillMissing": {
+    "message": "Still missing:\n{{1}}",
+    "description": "Section header + list appended to the bulk-incomplete prompt body. $1 is a newline-separated bullet list of missing item names (already formatted, may contain the literal bullet character •)."
+  },
+  "bg_bulkIncomplete_andNMore": {
+    "message": "…and {{1}} more",
+    "description": "Truncation line appended to the missing-items list when there are more than the display cap. $1 is a plain number. Rendered after a bullet character the caller prepends."
+  },
+  "bg_bulkIncomplete_summaryPartial": {
+    "message": "Bulk add only got {{1}} of {{2}} items into your cart.\n\nWould you like to restore the remaining {{3}} one at a time? This is slower but more reliable.",
+    "description": "Body of the bulk-incomplete prompt when some items landed. $1 added count, $2 total count, $3 missing count (all plain numbers)."
+  },
+  "bg_bulkIncomplete_summaryNone": {
+    "message": "The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognized).\n\nWould you like to restore all {{1}} items one at a time instead?",
+    "description": "Body of the bulk-incomplete prompt when nothing landed. $1 is a plain number (total item count)."
+  },
+  "bg_bulkIncomplete_choiceManual": {
+    "message": "I'll click \"Add To Cart\" myself",
+    "description": "Choice button on the bulk-incomplete prompt, offered when the confirm page is still open."
+  },
+  "bg_bulkIncomplete_choiceFallback": {
+    "message": "Restore one by one",
+    "description": "Choice button on the bulk-incomplete prompt, triggers the slower per-item restore engine."
+  },
+  "bg_bulkIncomplete_choiceSkip": {
+    "message": "Skip missed items",
+    "description": "Choice button on the bulk-incomplete prompt, abandons the missing items."
+  },
+  "bg_savingCart": {
+    "message": "Saving cart",
+    "description": "Operation-status title while saving the live Amazon cart to a new list."
+  },
+  "bg_savingItemsToNewList": {
+    "message": "Saving {{1}} to a new Amazon list…",
+    "description": "Operation-status detail while saving the live cart. $1 is an already-formatted 'N item(s)' phrase."
+  },
+  "bg_addingToList": {
+    "message": "Adding to {{1}}",
+    "description": "Operation-status title while adding a single item to a specific Amazon list. $1 is the list name."
+  },
+  "bg_openingProductPage": {
+    "message": "Opening the product page…",
+    "description": "Operation-status detail while navigating to a product page to add it to a list."
+  },
+  "bg_addToListFailed": {
+    "message": "Add to list failed.",
+    "description": "Fallback error when adding an item to an Amazon list fails without a more specific reason."
+  },
+  "bg_creatingList": {
+    "message": "Creating {{1}}",
+    "description": "Operation-status title while creating a new Amazon list seeded with one item. $1 is the list name."
+  },
+  "bg_settingUpYourList": {
+    "message": "Setting up your list…",
+    "description": "Operation-status detail while a new Amazon list is being created."
+  },
+  "bg_cartAppearsEmpty": {
+    "message": "Cart appears empty — nothing to save.",
+    "description": "Error when trying to save a cart that has no items (legacy local-cart path)."
+  },
+  "bg_amazonCartLooksEmpty": {
+    "message": "Your Amazon cart looks empty — nothing to save.",
+    "description": "Error when trying to save the live Amazon cart and it appears empty."
+  },
+  "bg_missingListIdOrAsin": {
+    "message": "Missing list id or ASIN.",
+    "description": "Validation error when a required list id or product id is missing from a request."
+  },
+  "bg_missingAsin": {
+    "message": "Missing ASIN.",
+    "description": "Validation error when a required product id is missing from a request."
+  },
+  "bg_missingListId": {
+    "message": "Missing list id.",
+    "description": "Validation error when a required list id is missing from a request."
+  },
+  "bg_paymentServiceNotAvailable": {
+    "message": "Payment service not available.",
+    "description": "Error when the checkout/payment integration isn't ready."
+  },
+  "bg_couldntOpenCheckout": {
+    "message": "Couldn't open checkout.",
+    "description": "Error when opening the payment checkout page fails."
+  },
+  "bg_purchasesHandledInApp": {
+    "message": "Purchases are handled in the Styx Multi-Cart app.",
+    "description": "Error shown on Safari when a purchase flow is attempted through the extension instead of the native host app."
+  },
+  "bg_noAvailableItemsOnWishlist": {
+    "message": "No available items were found on this wishlist.",
+    "description": "Error when a wishlist has no items eligible to add to the cart."
+  },
+  "bg_cartLimitReachedUpgrade": {
+    "message": "Cart limit reached — upgrade to add more.",
+    "description": "Error when a free-tier user tries to create a cart beyond their limit."
+  },
+  "bg_noResultPeriod": {
+    "message": "No result.",
+    "description": "Generic internal fallback error when an operation produces no result at all."
+  },
+  "bg_promoCodeInvalid": {
+    "message": "That code isn't valid.",
+    "description": "Error when a redeemed promo code doesn't match any known valid code."
+  },
+  "bg_promoCodeAlreadyUsed": {
+    "message": "This code has already been used on this device.",
+    "description": "Error when a promo code was already redeemed on this device."
+  },
+  "bg_firstError": {
+    "message": "First error: {{1}}",
+    "description": "Diagnostic summary prefix showing the first failure reason when a batch operation adds nothing. $1 is a lower-level error message."
+  },
+  "bg_nothingWasAdded": {
+    "message": "Nothing was added.",
+    "description": "Diagnostic summary when a batch operation adds nothing and no specific failure was recorded."
+  },
+  "bg_cartHasNoItemsToSave": {
+    "message": "This cart has no items to save.",
+    "description": "Error when trying to save a cart that has no items."
+  },
+  "bg_savingLabelToAmazon": {
+    "message": "Saving {{1}} to Amazon",
+    "description": "Operation-status title while a cart is being saved/synced to its Amazon list. $1 is the cart's quoted name or a generic fallback word."
+  },
+  "bg_atcButtonNotFoundFull": {
+    "message": "Add to Cart button not found or not visible",
+    "description": "Error recorded when a product's Add to Cart button can't be located on the page at all."
+  },
+  "bg_atcButtonStayedDisabled": {
+    "message": "Add to Cart button stayed disabled",
+    "description": "Error recorded when a product's Add to Cart button is found but never becomes clickable."
+  },
+  "promo_tagline1": {
+    "message": "Clear your Amazon cart.",
+    "description": "First line of the Chrome Web Store promo tile tagline (also used as the on-page render's headline)."
+  },
+  "promo_tagline2": {
+    "message": "Or save it for later.",
+    "description": "Second line of the Chrome Web Store promo tile tagline."
+  },
+  "promo_subtext": {
+    "message": "Free & unlimited · No tracking",
+    "description": "Small subtext line on the Chrome Web Store promo tiles. Keep the middle-dot separator."
+  },
+  "popup_op_saving": {
+    "message": "Saving cart…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "Clearing cart…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "Working…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "Please wait for this to finish before starting another action.",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "Another Styx action is still running. Please wait for it to finish.",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "Save",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "Name this cart",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Saves everything in your Amazon cart as a new cart. Your Amazon cart stays as it is.",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
+  }
+}

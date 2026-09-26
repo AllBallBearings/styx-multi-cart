@@ -9,107 +9,22 @@
   <body>
     <header class="mc-header">
       <div class="mc-brand">
-        <svg
-          class="mc-logo"
-          viewBox="0 0 32 32"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-hidden="true"
-        >
-          <!-- Background tile -->
-          <rect width="32" height="32" rx="7" fill="#131a22" />
-
-          <!-- Top cart (apex of the pyramid) -->
-          <g
-            stroke="#ff9900"
-            stroke-width="1.1"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            fill="none"
-          >
-            <path d="M12 8.6 L19 8.6 L18.3 11.8 L12.7 11.8 Z" />
-            <path d="M12 8.6 L10.5 7.3" />
-          </g>
-          <circle cx="13.7" cy="13.3" r="0.9" fill="#ff9900" />
-          <circle cx="17.3" cy="13.3" r="0.9" fill="#ff9900" />
-
-          <!-- Bottom-left cart — centered vertically, above the river -->
-          <g
-            stroke="#ff9900"
-            stroke-width="1.1"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            fill="none"
-          >
-            <path d="M4 14.4 L11 14.4 L10.3 17.6 L4.7 17.6 Z" />
-            <path d="M4 14.4 L2.5 13.1" />
-          </g>
-          <circle cx="5.9" cy="19.1" r="0.9" fill="#ff9900" />
-          <circle cx="9.1" cy="19.1" r="0.9" fill="#ff9900" />
-
-          <!-- Bottom-right cart — shifted right so handle clears top cart wheel -->
-          <g
-            stroke="#ff9900"
-            stroke-width="1.1"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            fill="none"
-          >
-            <path d="M21 14.4 L28 14.4 L27.3 17.6 L21.7 17.6 Z" />
-            <path d="M21 14.4 L19.5 13.1" />
-          </g>
-          <circle cx="22.9" cy="19.1" r="0.9" fill="#ff9900" />
-          <circle cx="26.1" cy="19.1" r="0.9" fill="#ff9900" />
-
-          <!-- The river Styx — raised slightly so it laps the wheels -->
-          <path
-            d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8 L 32 32 L 0 32 Z"
-            fill="#1a3a5c"
-            opacity="0.55"
-          />
-          <path
-            d="M0 19.8 Q 4 18.4, 8 19.8 T 16 19.8 T 24 19.8 T 32 19.8"
-            stroke="#5db5ff"
-            stroke-width="1"
-            fill="none"
-            stroke-linecap="round"
-          />
-          <path
-            d="M0 23 Q 4 22, 8 23 T 16 23 T 24 23 T 32 23"
-            stroke="#5db5ff"
-            stroke-width="0.8"
-            fill="none"
-            stroke-linecap="round"
-            opacity="0.55"
-          />
-          <path
-            d="M0 25.9 Q 4 25, 8 25.9 T 16 25.9 T 24 25.9 T 32 25.9"
-            stroke="#5db5ff"
-            stroke-width="0.7"
-            fill="none"
-            stroke-linecap="round"
-            opacity="0.38"
-          />
-          <path
-            d="M0 28.5 Q 4 27.8, 8 28.5 T 16 28.5 T 24 28.5 T 32 28.5"
-            stroke="#5db5ff"
-            stroke-width="0.6"
-            fill="none"
-            stroke-linecap="round"
-            opacity="0.25"
-          />
-        </svg>
+        <!-- Rendered from store-assets/product-logo.svg (see _render_logo_assets.mjs);
+             an <img> so the header can't drift from the real logo again. -->
+        <img class="mc-logo" src="icons/icon128.png" alt="" width="32" height="32" />
         <div class="mc-brand-text">
           <div class="mc-brand-title">
-            <h1>Styx Multi-Cart</h1>
+            <h1 data-i18n="manifest_name"></h1>
             <span
               id="mc-header-premium-badge"
               class="mc-header-premium-badge"
               hidden
-              title="You have Premium"
-              >Premium</span
+              data-i18n="popup_header_premiumBadge"
+              data-i18n-attr="title:popup_header_premiumBadge_title"
+              ></span
             >
           </div>
-          <p class="mc-tag">From Cart Chaos to Checkout Bliss</p>
+          <p class="mc-tag" data-i18n="popup_header_tagline"></p>
         </div>
       </div>
       <div class="mc-header-actions">
@@ -117,8 +32,7 @@
           id="mc-settings-toggle"
           class="mc-icon-btn"
           type="button"
-          aria-label="Open settings"
-          title="Settings"
+          data-i18n-attr="aria-label:popup_header_settingsToggle_ariaLabel|title:popup_header_settingsToggle_title"
         >
           <!-- gear icon -->
           <svg
@@ -140,8 +54,7 @@
           id="mc-theme-toggle"
           class="mc-icon-btn mc-theme-toggle"
           type="button"
-          aria-label="Toggle light/dark mode"
-          title="Toggle light/dark mode"
+          data-i18n-attr="aria-label:popup_header_themeToggle|title:popup_header_themeToggle"
         >
           <!-- icon injected by popup.js -->
         </button>
@@ -149,13 +62,13 @@
     </header>
 
     <section class="mc-save-block" hidden>
-      <label for="mc-name" class="mc-label">Save current Amazon cart as</label>
+      <label for="mc-name" class="mc-label" data-i18n="popup_save_label"></label>
       <div class="mc-save-row">
         <input
           id="mc-name"
           type="text"
           class="mc-input"
-          placeholder="e.g. Birthday gifts"
+          data-i18n-attr="placeholder:popup_save_input_placeholder"
           autocomplete="off"
           maxlength="60"
         />
@@ -165,45 +78,51 @@
           id="mc-save"
           class="mc-btn mc-btn-primary"
           type="button"
-          title="Save the current Amazon cart"
-        >
-          Save Cart
-        </button>
+          data-i18n="popup_save_button"
+          data-i18n-attr="title:popup_save_button_title"
+        ></button>
       </div>
       <label
         class="mc-toggle"
-        title="When you click Amazon's Add to Cart on a product page, pick a saved cart instead."
+        data-i18n-attr="title:popup_intercept_toggle_title"
       >
         <input id="mc-intercept-toggle" type="checkbox" />
         <span class="mc-toggle-label">
-          Intercept Amazon's <em>Add to Cart</em>
-          <span class="mc-toggle-sub"
-            >Pick a saved cart instead of Amazon's live cart.</span
-          >
+          <span data-i18n="popup_intercept_prefix"></span> <em data-i18n="popup_action_addToCart"></em>
+          <span class="mc-toggle-sub" data-i18n="popup_intercept_sub"></span>
         </span>
       </label>
     </section>
 
     <section class="mc-list-block">
+      <!-- Live progress for long operations (save / clear / restore / add-to-list).
+           Driven by polling MC_GET_STATUS; while it is shown the rest of the panel
+           is inert so a second operation can't be started on top of it. -->
+      <div id="mc-op-status" class="mc-op-status" role="status" aria-live="polite" hidden>
+        <span class="mc-op-spinner" aria-hidden="true"></span>
+        <div class="mc-op-text">
+          <div id="mc-op-title" class="mc-op-title"></div>
+          <div id="mc-op-detail" class="mc-op-detail" hidden></div>
+          <div class="mc-op-wait" data-i18n="popup_op_wait"></div>
+        </div>
+      </div>
       <div id="mc-tier-strip" class="mc-tier-strip" hidden>
         <span id="mc-tier-badge" class="mc-tier-badge" data-tier="free"
-          >Free</span
+          data-i18n="popup_tier_free"></span
         >
-        <span id="mc-tier-usage" class="mc-tier-usage">0 / 3 carts</span>
+        <span id="mc-tier-usage" class="mc-tier-usage"></span>
         <button
           id="mc-tier-upgrade"
           class="mc-btn mc-btn-primary mc-btn-sm mc-tier-upgrade"
           type="button"
           hidden
-        >
-          Upgrade
-        </button>
+          data-i18n="popup_action_upgrade"
+        ></button>
         <button
           class="mc-dismiss"
           type="button"
           data-action="dismiss-tier-strip"
-          title="Hide this"
-          aria-label="Hide tier indicator"
+          data-i18n-attr="title:popup_action_hideThis|aria-label:popup_tier_hideAriaLabel"
         >
           ×
         </button>
@@ -218,39 +137,37 @@
         <span class="mc-banner-icon" aria-hidden="true">🔒</span>
         <span class="mc-banner-body">
           <strong id="mc-lapsed-count">0</strong>
-          <span id="mc-lapsed-suffix"> carts are read-only</span>
-          — Renew Premium to edit them again.
+          <span id="mc-lapsed-suffix"></span>
+          <span data-i18n="popup_lapsed_renewNote"></span>
         </span>
         <button
           id="mc-lapsed-renew"
           class="mc-btn mc-btn-primary mc-btn-sm"
           type="button"
-        >
-          Renew
-        </button>
+          data-i18n="popup_action_renew"
+        ></button>
         <button
           class="mc-dismiss"
           type="button"
           data-action="dismiss-lapsed-banner"
-          title="Hide this"
-          aria-label="Hide lapsed banner"
+          data-i18n-attr="title:popup_action_hideThis|aria-label:popup_lapsed_hideAriaLabel"
         >
           ×
         </button>
       </div>
 
       <div class="mc-list-header">
-        <h2>Your Carts</h2>
+        <h2 data-i18n="popup_list_title"></h2>
         <!-- The cart count doubles as the "open them on Amazon" control, so
              the number itself reads as clickable. -->
         <button
           id="mc-goto-carts"
           class="mc-count-btn"
           type="button"
-          title="Open your carts on Amazon"
+          data-i18n-attr="title:popup_list_gotoCarts_title"
         >
           <span id="mc-list-count" class="mc-count-btn-num">0</span>
-          <span class="mc-count-btn-word">carts</span>
+          <span class="mc-count-btn-word" data-i18n="popup_list_cartsWord"></span>
           <svg
             class="mc-count-btn-arrow"
             viewBox="0 0 24 24"
@@ -269,8 +186,7 @@
           id="mc-amazon-lists-refresh"
           class="mc-icon-btn mc-icon-btn-xs"
           type="button"
-          title="Refresh your carts from Amazon"
-          aria-label="Refresh your carts from Amazon"
+          data-i18n-attr="title:popup_list_refresh_title|aria-label:popup_list_refresh_title"
         >
           <svg
             viewBox="0 0 24 24"
@@ -290,7 +206,7 @@
             id="mc-clear"
             class="mc-btn mc-cart-action mc-btn-clear"
             type="button"
-            title="Remove every item from your active Amazon cart"
+            data-i18n-attr="title:popup_clear_button_title"
           >
             <svg class="mc-cart-action-icon mc-clear-cart-icon" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <g stroke-width="2" transform="rotate(34 10 10)">
@@ -302,13 +218,13 @@
               <rect class="mc-cart-falling-item" x="22.5" y="11.5" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(14 24.75 13.75)" />
               <rect class="mc-cart-falling-item" x="21.5" y="17" width="4.5" height="4.5" fill="none" fill-opacity="0" stroke="currentColor" stroke-width="1.6" transform="rotate(32 23.75 19.25)" />
             </svg>
-            Clear Amazon cart
+            <span data-i18n="popup_clear_button"></span>
           </button>
           <button
             id="mc-save-for-later"
             class="mc-btn mc-cart-action mc-btn-save"
             type="button"
-            title="Save everything in your Amazon cart as a new cart, without clearing it"
+            data-i18n-attr="title:popup_saveForLater_button_title"
           >
             <svg class="mc-cart-action-icon mc-save-cart-icon" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3.4 4.8h5.2l2.15 10h9.45l3.15-7.3" stroke-width="2" />
@@ -321,7 +237,7 @@
               <circle cx="20.2" cy="17.5" r="0.48" fill="#131a22" stroke="none" />
               <path d="M6.1 19.8v0.9c0 1 0.8 1.8 1.8 1.8h14.6c1 0 1.8-0.8 1.8-1.8v-0.9" stroke-width="2" />
             </svg>
-            Save Amazon cart for later
+            <span class="mc-cart-action-label" data-i18n="popup_saveForLater_button_lines"></span>
           </button>
         </div>
         <div hidden>
@@ -330,29 +246,25 @@
         </div>
       </div>
       <div id="mc-combine-bar" class="mc-combine-bar" hidden>
-        <span id="mc-combine-status">Pick 2 carts to combine.</span>
+        <span id="mc-combine-status" data-i18n="popup_combine_pickTwo"></span>
         <button
           id="mc-combine-continue"
           class="mc-btn mc-btn-primary mc-btn-sm"
           type="button"
           disabled
-        >
-          Continue →
-        </button>
+          data-i18n="popup_action_continue"
+        ></button>
         <button
           id="mc-combine-cancel"
           class="mc-btn mc-btn-ghost mc-btn-sm"
           type="button"
-        >
-          Cancel
-        </button>
+          data-i18n="popup_action_cancel"
+        ></button>
       </div>
-      <p id="mc-amazon-lists-status" class="mc-amazon-lists-status">
-        Loading your Amazon lists…
+      <p id="mc-amazon-lists-status" class="mc-amazon-lists-status" data-i18n="popup_lists_loading">
       </p>
       <ul id="mc-list" class="mc-list" aria-live="polite"></ul>
-      <p id="mc-empty" class="mc-empty" hidden>
-        No Amazon lists found. Make sure you are signed in to Amazon.
+      <p id="mc-empty" class="mc-empty" hidden data-i18n="popup_lists_empty">
       </p>
     </section>
 
@@ -406,99 +318,35 @@
     </div>
 
     <details id="mc-debug" class="mc-debug" hidden>
-      <summary class="mc-debug-toggle">Debug</summary>
+      <summary class="mc-debug-toggle" data-i18n="popup_debug_toggle"></summary>
       <div class="mc-debug-body">
-        <!-- MC_DEBUG_ENT_START -->
-        <!--
-          DEVELOPER-ONLY entitlement presets. These forge a premium/lapsed/free
-          state directly into storage, so scripts/build-zip.sh strips this whole
-          marked block out of the Chrome Web Store build.
-        -->
-        <div class="mc-debug-section">
-          <div class="mc-debug-section-title">Entitlement</div>
-          <div id="mc-debug-ent-state" class="mc-debug-state">loading…</div>
-          <div class="mc-debug-btn-row">
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="premium"
-            >
-              Premium · 1y
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="premium-warn"
-            >
-              Premium · 5d
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="lapsed"
-            >
-              Lapsed
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="free"
-            >
-              Free
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="unlock"
-            >
-              Unlock (use real)
-            </button>
-            <button
-              class="mc-btn mc-btn-ghost mc-btn-sm"
-              type="button"
-              data-debug-ent="reset-dismiss"
-            >
-              Reset dismissed
-            </button>
-          </div>
-          <div class="mc-debug-hint">
-            <strong>Ctrl/Cmd+Alt+P</strong> flips Premium ⇄ Free instantly (no
-            panel needed) and locks it so ExtPay/StoreKit won't revert it —
-            clean for screenshots and video. Ctrl+Alt+D toggles this panel.
-            "Unlock" clears the pin and re-syncs the real account.
-          </div>
-        </div>
-        <!-- MC_DEBUG_ENT_END -->
 
         <div class="mc-debug-section">
-          <div class="mc-debug-section-title">Cart diagnostics</div>
+          <div class="mc-debug-section-title" data-i18n="popup_debug_diagnostics_title"></div>
           <button
             id="mc-diagnose"
             class="mc-btn mc-btn-ghost mc-btn-sm"
             type="button"
-          >
-            Run cart diagnostics
-          </button>
+            data-i18n="popup_debug_diagnostics_run"
+          ></button>
           <pre id="mc-debug-output" class="mc-debug-output"></pre>
         </div>
 
         <div class="mc-debug-section">
-          <div class="mc-debug-section-title">Backup / restore (dev)</div>
+          <div class="mc-debug-section-title" data-i18n="popup_debug_backup_title"></div>
           <div class="mc-debug-btn-row">
             <button
               id="mc-dev-export"
               class="mc-btn mc-btn-ghost mc-btn-sm"
               type="button"
-            >
-              Export backup
-            </button>
+              data-i18n="popup_debug_backup_export"
+            ></button>
             <button
               id="mc-dev-restore"
               class="mc-btn mc-btn-ghost mc-btn-sm"
               type="button"
-            >
-              Restore from file…
-            </button>
+              data-i18n="popup_debug_backup_restore"
+            ></button>
             <input
               id="mc-dev-restore-file"
               type="file"
@@ -507,30 +355,19 @@
             />
           </div>
           <div id="mc-dev-backup-state" class="mc-debug-state" hidden></div>
-          <div class="mc-debug-hint">
-            Export reads every Amazon list's items (slow — one tab per list) and
-            bundles them with the local <code>mc.*</code> storage into a JSON
-            file. Restore recreates each custom list on Amazon from that file
-            (also slow — drives Add-to-List per item). Watch the status window
-            for progress. Restore does not touch entitlement or overwrite
-            storage.
+          <div class="mc-debug-hint" data-i18n="popup_debug_backup_hint">
           </div>
         </div>
 
         <div class="mc-debug-section">
-          <div class="mc-debug-section-title">Diagnostic logs</div>
+          <div class="mc-debug-section-title" data-i18n="popup_debug_logs_title"></div>
           <button
             id="mc-copy-logs"
             class="mc-btn mc-btn-ghost mc-btn-sm"
             type="button"
-          >
-            Copy diagnostic logs
-          </button>
-          <div class="mc-debug-hint">
-            Copies the extension version, current state, and recent logs from
-            every context (service worker, content scripts, popup) to the
-            clipboard. Keep Developer mode on, reproduce the issue, then copy
-            and send the result to support.
+            data-i18n="popup_debug_logs_copy"
+          ></button>
+          <div class="mc-debug-hint" data-i18n="popup_debug_logs_hint">
           </div>
         </div>
       </div>
@@ -544,7 +381,7 @@
               class="mc-item-name"
               data-action="rename"
               type="button"
-              title="Rename cart"
+              data-i18n-attr="title:popup_item_rename_title"
             ></button>
             <span class="mc-item-count"></span>
           </div>
@@ -556,24 +393,21 @@
           <button
             class="mc-btn mc-btn-primary mc-btn-sm"
             data-action="restore"
-            title="Move all items to your Amazon cart"
-          >
-            Switch to This Cart
-          </button>
+            data-i18n="popup_item_switchTo"
+            data-i18n-attr="title:popup_item_switchTo_title"
+          ></button>
           <button
             class="mc-btn mc-btn-ghost mc-btn-sm"
             data-action="save-to-list"
-            title="Save this cart as an Amazon list so it syncs across devices"
-          >
-            Save to Amazon List
-          </button>
+            data-i18n="popup_item_saveToList"
+            data-i18n-attr="title:popup_item_saveToList_title"
+          ></button>
           <button
             class="mc-btn mc-btn-ghost mc-btn-sm mc-btn-danger"
             data-action="delete"
-            title="Delete entire cart"
-          >
-            Delete
-          </button>
+            data-i18n="popup_action_delete"
+            data-i18n-attr="title:popup_item_delete_title"
+          ></button>
         </div>
       </li>
     </template>
@@ -583,8 +417,7 @@
         <div class="mc-amazon-list-topright">
           <a
             class="mc-amazon-list-open"
-            aria-label="View list on Amazon"
-            title="View on Amazon"
+            data-i18n-attr="aria-label:popup_amazonList_viewOnAmazon_ariaLabel|title:popup_amazonList_viewOnAmazon_title"
           >
             <svg
               viewBox="0 0 24 24"
@@ -607,8 +440,7 @@
             class="mc-amazon-list-addall"
             data-action="load-amazon-list-cart"
             type="button"
-            aria-label="Add all to Amazon cart"
-            title="Add All to Amazon Cart"
+            data-i18n-attr="aria-label:popup_amazonList_addAll_ariaLabel|title:popup_amazonList_addAll_title"
           >
             <svg
               viewBox="0 0 30 24"
@@ -641,7 +473,7 @@
               type="button"
               aria-expanded="false"
             ></button>
-            <span class="mc-item-count">View items</span>
+            <span class="mc-item-count" data-i18n="popup_amazonList_viewItems"></span>
           </div>
           <div class="mc-item-meta mc-amazon-list-meta"></div>
           <p class="mc-amazon-list-load-status" hidden></p>
@@ -656,13 +488,13 @@
       class="mc-qty-pop"
       hidden
       role="dialog"
-      aria-label="Change item quantity"
+      data-i18n-attr="aria-label:popup_qty_ariaLabel"
     >
       <button
         class="mc-qty-pop-btn"
         data-action="qty-pop-dec"
         type="button"
-        aria-label="Decrease quantity"
+        data-i18n-attr="aria-label:popup_qty_decrease"
       >
         −
       </button>
@@ -671,7 +503,7 @@
         class="mc-qty-pop-btn"
         data-action="qty-pop-inc"
         type="button"
-        aria-label="Increase quantity"
+        data-i18n-attr="aria-label:popup_qty_increase"
       >
         +
       </button>
@@ -689,10 +521,8 @@
     >
       <div class="mc-modal-backdrop" data-action="modal-cancel"></div>
       <div class="mc-modal-card">
-        <h3 id="mc-combine-title" class="mc-modal-title">Combine carts</h3>
-        <p class="mc-modal-sub">
-          Pick a direction. Items merge by ASIN; duplicates keep the higher
-          quantity.
+        <h3 id="mc-combine-title" class="mc-modal-title" data-i18n="popup_combine_title"></h3>
+        <p class="mc-modal-sub" data-i18n="popup_combine_sub">
         </p>
 
         <div class="mc-combine-options">
@@ -739,7 +569,7 @@
               <span class="mc-cart-name" data-slot="b"></span>
             </div>
             <span class="mc-combine-caption"
-              >Move <em data-slot="a"></em> into <em data-slot="b"></em
+              ><span data-i18n="popup_combine_movePrefix"></span> <em data-slot="a"></em> <span data-i18n="popup_combine_moveInfix"></span> <em data-slot="b"></em
             ></span>
           </button>
 
@@ -786,7 +616,7 @@
               <span class="mc-cart-name" data-slot="b"></span>
             </div>
             <span class="mc-combine-caption"
-              >Move <em data-slot="b"></em> into <em data-slot="a"></em
+              ><span data-i18n="popup_combine_movePrefix"></span> <em data-slot="b"></em> <span data-i18n="popup_combine_moveInfix"></span> <em data-slot="a"></em
             ></span>
           </button>
         </div>
@@ -796,9 +626,8 @@
             class="mc-btn mc-btn-ghost mc-btn-sm"
             data-action="modal-cancel"
             type="button"
-          >
-            Cancel
-          </button>
+            data-i18n="popup_action_cancel"
+          ></button>
         </div>
       </div>
     </div>
@@ -815,7 +644,7 @@
     >
       <div class="mc-modal-backdrop" data-action="move-cancel"></div>
       <div class="mc-modal-card mc-move-card">
-        <h3 id="mc-move-title" class="mc-modal-title">Move item</h3>
+        <h3 id="mc-move-title" class="mc-modal-title" data-i18n="popup_move_title"></h3>
         <div class="mc-move-item">
           <img
             class="mc-move-thumb"
@@ -825,23 +654,21 @@
           />
           <span class="mc-move-item-name"></span>
         </div>
-        <p class="mc-modal-sub">Pick the cart to move it into.</p>
+        <p class="mc-modal-sub" data-i18n="popup_move_sub"></p>
         <button
           class="mc-btn mc-btn-primary mc-move-create"
           data-action="move-create"
           type="button"
-        >
-          Create new cart
-        </button>
+          data-i18n="popup_move_createNew"
+        ></button>
         <ul class="mc-move-list"></ul>
         <div class="mc-modal-actions">
           <button
             class="mc-btn mc-btn-ghost mc-btn-sm"
             data-action="move-cancel"
             type="button"
-          >
-            Cancel
-          </button>
+            data-i18n="popup_action_cancel"
+          ></button>
         </div>
       </div>
     </div>
@@ -858,8 +685,8 @@
     >
       <div class="mc-modal-backdrop" data-action="confirm-cancel"></div>
       <div class="mc-modal-card mc-confirm-card">
-        <p id="mc-confirm-kicker" class="mc-confirm-kicker" hidden>Styx Multi-Cart</p>
-        <h3 id="mc-confirm-title" class="mc-modal-title">Are you sure?</h3>
+        <p id="mc-confirm-kicker" class="mc-confirm-kicker" hidden data-i18n="manifest_name"></p>
+        <h3 id="mc-confirm-title" class="mc-modal-title" data-i18n="popup_confirm_defaultTitle"></h3>
         <p id="mc-confirm-body" class="mc-modal-sub"></p>
         <div class="mc-modal-actions">
           <!-- Optional second affirmative (e.g. "Save & Clear"). Hidden unless
@@ -876,17 +703,15 @@
             class="mc-btn mc-btn-primary"
             type="button"
             data-action="confirm-ok"
-          >
-            OK
-          </button>
+            data-i18n="popup_action_ok"
+          ></button>
           <button
             id="mc-confirm-cancel"
             class="mc-btn mc-btn-ghost"
             type="button"
             data-action="confirm-cancel"
-          >
-            Cancel
-          </button>
+            data-i18n="popup_action_cancel"
+          ></button>
         </div>
       </div>
     </div>
@@ -903,7 +728,7 @@
     >
       <div class="mc-modal-backdrop" data-action="prompt-cancel"></div>
       <div class="mc-modal-card mc-prompt-card">
-        <h3 id="mc-prompt-title" class="mc-modal-title">Enter a value</h3>
+        <h3 id="mc-prompt-title" class="mc-modal-title" data-i18n="popup_prompt_defaultTitle"></h3>
         <p id="mc-prompt-body" class="mc-modal-sub" hidden></p>
         <form id="mc-prompt-form" class="mc-prompt-form" autocomplete="off">
           <input
@@ -919,17 +744,15 @@
               class="mc-btn mc-btn-primary"
               type="submit"
               data-action="prompt-ok"
-            >
-              OK
-            </button>
+              data-i18n="popup_action_ok"
+            ></button>
             <button
               id="mc-prompt-cancel"
               class="mc-btn mc-btn-ghost"
               type="button"
               data-action="prompt-cancel"
-            >
-              Cancel
-            </button>
+              data-i18n="popup_action_cancel"
+            ></button>
           </div>
         </form>
       </div>
@@ -947,29 +770,27 @@
     >
       <div class="mc-modal-backdrop" data-action="paywall-close"></div>
       <div class="mc-modal-card mc-paywall-card">
-        <h3 id="mc-paywall-title" class="mc-modal-title">Upgrade to Premium</h3>
-        <p id="mc-paywall-sub" class="mc-modal-sub">
-          You're using all your free saved carts. Premium unlocks more space for
-          how you actually shop.
+        <h3 id="mc-paywall-title" class="mc-modal-title" data-i18n="popup_paywall_title"></h3>
+        <p id="mc-paywall-sub" class="mc-modal-sub" data-i18n="popup_paywall_sub">
         </p>
 
         <div class="mc-paywall-plan">
           <ul class="mc-paywall-features">
-            <li><strong>Unlimited carts</strong> (vs. 3 free)</li>
-            <li>Keep curated lists for gifts, restocks, occasions</li>
-            <li>Cancel anytime — all carts stay visible with 3 free</li>
+            <li data-i18n="popup_paywall_feature_unlimited"></li>
+            <li data-i18n="popup_paywall_feature_curated"></li>
+            <li data-i18n="popup_paywall_feature_cancelAnytime"></li>
           </ul>
         </div>
 
         <details class="mc-paywall-promo" id="mc-paywall-promo">
-          <summary>Have a code?</summary>
+          <summary data-i18n="popup_paywall_haveCode"></summary>
           <form id="mc-promo-form" class="mc-promo-form" autocomplete="off">
-            <label class="mc-sr-only" for="mc-promo-input">Promo code</label>
+            <label class="mc-sr-only" for="mc-promo-input" data-i18n="popup_paywall_promoCode"></label>
             <input
               id="mc-promo-input"
               class="mc-input"
               type="text"
-              placeholder="Enter code"
+              data-i18n-attr="placeholder:popup_paywall_enterCode"
               spellcheck="false"
               autocapitalize="characters"
               maxlength="32"
@@ -978,9 +799,8 @@
               id="mc-promo-submit"
               class="mc-btn mc-btn-ghost mc-btn-sm"
               type="submit"
-            >
-              Redeem
-            </button>
+              data-i18n="popup_paywall_redeem"
+            ></button>
           </form>
           <p
             id="mc-promo-msg"
@@ -998,8 +818,8 @@
             data-action="paywall-upgrade"
             data-plan="annual"
           >
-            <span class="mc-paywall-btn-label">Annual</span>
-            <span class="mc-paywall-btn-price">$9.99 / yr</span>
+            <span class="mc-paywall-btn-label" data-i18n="popup_paywall_annual"></span>
+            <span class="mc-paywall-btn-price" data-i18n="popup_paywall_annualPrice"></span>
           </button>
           <button
             id="mc-paywall-cta-lifetime"
@@ -1008,16 +828,15 @@
             data-action="paywall-upgrade"
             data-plan="lifetime"
           >
-            <span class="mc-paywall-btn-label">Lifetime</span>
-            <span class="mc-paywall-btn-price">$19.99 once</span>
+            <span class="mc-paywall-btn-label" data-i18n="popup_paywall_lifetime"></span>
+            <span class="mc-paywall-btn-price" data-i18n="popup_paywall_lifetimePrice"></span>
           </button>
           <button
             class="mc-btn mc-btn-ghost"
             type="button"
             data-action="paywall-close"
-          >
-            Maybe later
-          </button>
+            data-i18n="popup_paywall_maybeLater"
+          ></button>
         </div>
       </div>
     </div>
@@ -1033,32 +852,27 @@
     >
       <div class="mc-modal-backdrop" data-action="settings-close"></div>
       <div class="mc-modal-card">
-        <h3 id="mc-settings-title" class="mc-modal-title">Settings</h3>
+        <h3 id="mc-settings-title" class="mc-modal-title" data-i18n="popup_settings_title"></h3>
 
         <div class="mc-settings-section">
-          <h4 class="mc-settings-heading">Amazon</h4>
+          <h4 class="mc-settings-heading" data-i18n="popup_settings_amazon_heading"></h4>
           <label class="mc-toggle">
             <input id="mc-relabel-toggle" type="checkbox" />
             <span class="mc-toggle-label">
-              Rename Amazon lists to “carts”
-              <span class="mc-toggle-sub">
-                On relabels Amazon’s Lists page as “Your Styx Carts” and adds
-                “Cart” to each of your list names (e.g. “Jared’s List” →
-                “Jared’s List Cart”). Off leaves Amazon untouched.
+              <span data-i18n="popup_settings_relabel_label"></span>
+              <span class="mc-toggle-sub" data-i18n="popup_settings_relabel_sub">
               </span>
             </span>
           </label>
         </div>
 
         <div class="mc-settings-section">
-          <h4 class="mc-settings-heading">Floating button</h4>
+          <h4 class="mc-settings-heading" data-i18n="popup_settings_fab_heading"></h4>
           <label class="mc-toggle">
             <input id="mc-fabpulse-toggle" type="checkbox" />
             <span class="mc-toggle-label">
-              Pulse the floating button
-              <span class="mc-toggle-sub">
-                The round Styx button glows orange on Amazon pages as a reminder
-                to use it. Turn off for a static button.
+              <span data-i18n="popup_settings_fabpulse_label"></span>
+              <span class="mc-toggle-sub" data-i18n="popup_settings_fabpulse_sub">
               </span>
             </span>
           </label>
@@ -1069,49 +883,39 @@
           class="mc-settings-section"
           hidden
         >
-          <h4 class="mc-settings-heading">Display</h4>
+          <h4 class="mc-settings-heading" data-i18n="popup_settings_display_heading"></h4>
           <label class="mc-toggle">
             <input id="mc-sidepanel-toggle" type="checkbox" />
             <span class="mc-toggle-label">
-              Open in side panel
-              <span class="mc-toggle-sub">
-                On docks Styx as a side panel (default). Off opens a compact
-                popup from the toolbar instead.
+              <span data-i18n="popup_settings_sidepanel_label"></span>
+              <span class="mc-toggle-sub" data-i18n="popup_settings_sidepanel_sub">
               </span>
             </span>
           </label>
         </div>
 
         <div id="mc-settings-dev-section" class="mc-settings-section" hidden>
-          <h4 class="mc-settings-heading">Developer</h4>
+          <h4 class="mc-settings-heading" data-i18n="popup_settings_dev_heading"></h4>
           <label class="mc-toggle">
             <input id="mc-devmode-toggle" type="checkbox" />
             <span class="mc-toggle-label">
-              Developer mode
-              <span class="mc-toggle-sub">
-                Shows the debug panel at the bottom of the popup and enables
-                verbose logs in the service worker console. Safe to leave off.
+              <span data-i18n="popup_settings_devmode_label"></span>
+              <span class="mc-toggle-sub" data-i18n="popup_settings_devmode_sub">
               </span>
             </span>
           </label>
         </div>
 
         <div class="mc-settings-section">
-          <h4 class="mc-settings-heading">Affiliate disclosure</h4>
+          <h4 class="mc-settings-heading" data-i18n="popup_settings_affiliate_heading"></h4>
           <p class="mc-settings-note">
-            When you send a whole cart to Amazon, Styx uses Amazon’s bulk
-            add-to-cart endpoint, which won’t add your items unless the link
-            carries an Amazon Associates tag (<code>tag=styxmcart-20</code>).
-            Styx supplies a placeholder tag
-            <strong>only so bulk cart restore works</strong> — it is not a
-            registered Associates account, and
-            <strong>Styx earns no commission or referral fee</strong> from your
-            purchases.
+            <span data-i18n="popup_settings_affiliate_body"></span>
             <a
               href="https://allballbearings.github.io/styx-multi-cart/permissions.html"
               target="_blank"
               rel="noopener"
-              >Learn more</a
+              data-i18n="popup_settings_affiliate_learnMore"
+              ></a
             >.
           </p>
         </div>
@@ -1120,15 +924,14 @@
           <span
             id="mc-settings-version"
             class="mc-settings-version"
-            aria-label="Version"
+            data-i18n-attr="aria-label:popup_settings_version_ariaLabel"
           ></span>
           <button
             class="mc-btn mc-btn-ghost"
             type="button"
             data-action="settings-close"
-          >
-            Done
-          </button>
+            data-i18n="popup_action_done"
+          ></button>
         </div>
       </div>
     </div>
@@ -1140,11 +943,11 @@
         id="mc-support-pop"
         class="mc-support-pop"
         role="menu"
-        aria-label="Support options"
+        data-i18n-attr="aria-label:popup_support_options_ariaLabel"
         hidden
         inert
       >
-        <div class="mc-support-pop-title">Need help?</div>
+        <div class="mc-support-pop-title" data-i18n="popup_support_needHelp"></div>
         <a
           id="mc-support-report"
           class="mc-support-link"
@@ -1174,8 +977,8 @@
             </svg>
           </span>
           <span class="mc-support-link-body">
-            <span class="mc-support-link-label">Report a bug</span>
-            <span class="mc-support-link-sub">Open a new GitHub issue</span>
+            <span class="mc-support-link-label" data-i18n="popup_support_reportBug"></span>
+            <span class="mc-support-link-sub" data-i18n="popup_support_reportBug_sub"></span>
           </span>
         </a>
         <a
@@ -1203,8 +1006,8 @@
             </svg>
           </span>
           <span class="mc-support-link-body">
-            <span class="mc-support-link-label">How to report</span>
-            <span class="mc-support-link-sub">Tips for a good report</span>
+            <span class="mc-support-link-label" data-i18n="popup_support_howToReport"></span>
+            <span class="mc-support-link-sub" data-i18n="popup_support_howToReport_sub"></span>
           </span>
         </a>
         <a
@@ -1229,8 +1032,8 @@
             </svg>
           </span>
           <span class="mc-support-link-body">
-            <span class="mc-support-link-label">Known issues</span>
-            <span class="mc-support-link-sub">Browse reported bugs</span>
+            <span class="mc-support-link-label" data-i18n="popup_support_knownIssues"></span>
+            <span class="mc-support-link-sub" data-i18n="popup_support_knownIssues_sub"></span>
           </span>
         </a>
       </div>
@@ -1241,8 +1044,7 @@
         aria-haspopup="true"
         aria-expanded="false"
         aria-controls="mc-support-pop"
-        aria-label="Support and bug report"
-        title="Support · Report a bug"
+        data-i18n-attr="aria-label:popup_support_toggle_ariaLabel|title:popup_support_toggle_title"
       >
         <!-- support icon: speech bubble with an exclamation mark -->
         <svg

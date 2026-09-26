@@ -1,0 +1,1546 @@
+{
+  "manifest_name": {
+    "message": "Styx Multi-Cart"
+  },
+  "manifest_description": {
+    "message": "Empty your Amazon cart, save it for later, and manage multiple carts with reusable Amazon Lists."
+  },
+  "manifest_actionTitle": {
+    "message": "Styx Multi-Cart"
+  },
+  "popup_header_premiumBadge": {
+    "message": "Premium"
+  },
+  "popup_header_premiumBadge_title": {
+    "message": "You have Premium"
+  },
+  "popup_header_tagline": {
+    "message": "From Cart Chaos to Checkout Bliss"
+  },
+  "popup_header_settingsToggle_ariaLabel": {
+    "message": "Open settings"
+  },
+  "popup_header_settingsToggle_title": {
+    "message": "Settings"
+  },
+  "popup_header_themeToggle": {
+    "message": "Toggle light/dark mode"
+  },
+  "popup_save_label": {
+    "message": "Save current Amazon cart as"
+  },
+  "popup_save_input_placeholder": {
+    "message": "e.g. Birthday gifts"
+  },
+  "popup_save_button": {
+    "message": "Save Cart"
+  },
+  "popup_save_button_title": {
+    "message": "Save the current Amazon cart"
+  },
+  "popup_intercept_toggle_title": {
+    "message": "When you click Amazon's Add to Cart on a product page, pick a saved cart instead."
+  },
+  "popup_intercept_prefix": {
+    "message": "Intercept Amazon's"
+  },
+  "popup_action_addToCart": {
+    "message": "Add to Cart"
+  },
+  "popup_intercept_sub": {
+    "message": "Pick a saved cart instead of Amazon's live cart."
+  },
+  "popup_tier_free": {
+    "message": "Free"
+  },
+  "popup_action_upgrade": {
+    "message": "Upgrade"
+  },
+  "popup_action_hideThis": {
+    "message": "Hide this"
+  },
+  "popup_tier_hideAriaLabel": {
+    "message": "Hide tier indicator"
+  },
+  "popup_lapsed_hideAriaLabel": {
+    "message": "Hide lapsed banner"
+  },
+  "popup_tier_usage": {
+    "message": "{{1}} / {{2}} saved carts"
+  },
+  "popup_lapsed_suffix_one": {
+    "message": " cart is read-only"
+  },
+  "popup_lapsed_suffix_other": {
+    "message": " carts are read-only"
+  },
+  "popup_lapsed_renewNote": {
+    "message": "— Renew Premium to edit them again."
+  },
+  "popup_action_renew": {
+    "message": "Renew"
+  },
+  "popup_list_title": {
+    "message": "Your Carts"
+  },
+  "popup_list_gotoCarts_title": {
+    "message": "Open your carts on Amazon"
+  },
+  "popup_list_cartsWord": {
+    "message": "carts"
+  },
+  "popup_list_refresh_title": {
+    "message": "Refresh your carts from Amazon"
+  },
+  "popup_clear_button": {
+    "message": "Clear Amazon cart"
+  },
+  "popup_clear_button_title": {
+    "message": "Remove every item from your active Amazon cart"
+  },
+  "popup_saveForLater_button": {
+    "message": "Save Amazon cart for later"
+  },
+  "popup_saveForLater_button_lines": {
+    "message": "Save Amazon cart\nfor later"
+  },
+  "popup_saveForLater_button_title": {
+    "message": "Save everything in your Amazon cart as a new cart, without clearing it"
+  },
+  "popup_lists_loading": {
+    "message": "Loading your Amazon lists…"
+  },
+  "popup_lists_empty": {
+    "message": "No Amazon lists found. Make sure you are signed in to Amazon."
+  },
+  "popup_action_continue": {
+    "message": "Continue →"
+  },
+  "popup_action_cancel": {
+    "message": "Cancel"
+  },
+  "popup_action_ok": {
+    "message": "OK"
+  },
+  "popup_action_done": {
+    "message": "Done"
+  },
+  "popup_action_delete": {
+    "message": "Delete"
+  },
+  "popup_action_create": {
+    "message": "Create"
+  },
+  "popup_action_rename": {
+    "message": "Rename"
+  },
+  "popup_action_switch": {
+    "message": "Switch"
+  },
+  "popup_action_update": {
+    "message": "Update"
+  },
+  "popup_action_saveToAmazon": {
+    "message": "Save to Amazon"
+  },
+  "popup_action_addAll": {
+    "message": "Add all"
+  },
+  "popup_combine_title": {
+    "message": "Combine carts"
+  },
+  "popup_combine_sub": {
+    "message": "Pick a direction. Items merge by ASIN; duplicates keep the higher quantity."
+  },
+  "popup_combine_movePrefix": {
+    "message": "Move"
+  },
+  "popup_combine_moveInfix": {
+    "message": "into"
+  },
+  "popup_combine_pickTwo": {
+    "message": "Pick 2 carts to combine."
+  },
+  "popup_combine_pickOneMore": {
+    "message": "Pick 1 more."
+  },
+  "popup_combine_readyToMerge": {
+    "message": "Ready to merge?"
+  },
+  "popup_combine_mergeCarts": {
+    "message": "Merge Carts"
+  },
+  "popup_combine_selectAriaLabel": {
+    "message": "Select cart \"{{1}}\" to combine"
+  },
+  "popup_err_loadBothCartsFailed": {
+    "message": "Could not load both carts."
+  },
+  "popup_err_crossRegionMerge": {
+    "message": "Can't merge: \"{{1}}\" is on {{2}} but \"{{3}}\" is on {{4}}."
+  },
+  "popup_err_combineCartsFailed": {
+    "message": "Could not combine carts."
+  },
+  "popup_combine_itemsAdded": {
+    "message": "{{1}} added"
+  },
+  "popup_combine_qtyBumped": {
+    "message": "{{1}} qty bumped"
+  },
+  "popup_combine_merged": {
+    "message": "Merged \"{{1}}\" into \"{{2}}\"{{3}}."
+  },
+  "popup_move_title": {
+    "message": "Move item"
+  },
+  "popup_move_sub": {
+    "message": "Pick the cart to move it into."
+  },
+  "popup_move_createNew": {
+    "message": "Create new cart"
+  },
+  "popup_move_noOtherCarts": {
+    "message": "No other carts to move into yet."
+  },
+  "popup_untitled": {
+    "message": "(untitled)"
+  },
+  "popup_err_moveItemFailed": {
+    "message": "Could not move item."
+  },
+  "popup_genericCart": {
+    "message": "cart"
+  },
+  "popup_toast_moved": {
+    "message": "Moved \"{{1}}\" to \"{{2}}\"."
+  },
+  "popup_err_createDestinationFailed": {
+    "message": "Could not create a destination for this item."
+  },
+  "popup_prompt_createDestination_title": {
+    "message": "Create destination cart"
+  },
+  "popup_err_createCartFailed": {
+    "message": "Could not create cart."
+  },
+  "popup_err_createdButNotMoved": {
+    "message": "Created the cart, but could not move the item."
+  },
+  "popup_err_updateQtyFailed": {
+    "message": "Could not update quantity"
+  },
+  "popup_confirm_removeLast_title": {
+    "message": "Remove last item?"
+  },
+  "popup_confirm_removeLast_before": {
+    "message": "Removing "
+  },
+  "popup_confirm_removeLast_after": {
+    "message": " empties and deletes this cart."
+  },
+  "popup_confirm_removeLast_okLabel": {
+    "message": "Remove & delete"
+  },
+  "popup_err_removeItemFailed": {
+    "message": "Could not remove item"
+  },
+  "popup_toast_cartEmptiedRemoved": {
+    "message": "Cart emptied — removing from list"
+  },
+  "popup_lockPill_title": {
+    "message": "Renew Premium to edit this cart"
+  },
+  "popup_lockPill_label": {
+    "message": "Read-Only — Go Premium?"
+  },
+  "popup_locked_renameTitle": {
+    "message": "Locked — renew Premium to rename"
+  },
+  "popup_locked_useTitle": {
+    "message": "Locked — renew Premium to use this cart"
+  },
+  "popup_item_countQty": {
+    "message": "{{1}} · {{2}} qty"
+  },
+  "popup_item_hostSaved": {
+    "message": "{{1}} · saved {{2}}"
+  },
+  "popup_sync_synced": {
+    "message": "✓ Synced {{1}}"
+  },
+  "popup_sync_viewList": {
+    "message": "View list"
+  },
+  "popup_sync_updateAmazonList": {
+    "message": "Update Amazon List"
+  },
+  "popup_count_item_one": {
+    "message": "{{1}} item"
+  },
+  "popup_count_item_other": {
+    "message": "{{1}} items"
+  },
+  "popup_unavailable": {
+    "message": "Unavailable"
+  },
+  "popup_genericItem": {
+    "message": "Item"
+  },
+  "popup_thumb_moveAriaLabel": {
+    "message": "{{1}} — click to move to another cart"
+  },
+  "popup_thumb_removeTitle": {
+    "message": "Remove item"
+  },
+  "popup_thumb_removeAriaLabel": {
+    "message": "Remove {{1}}"
+  },
+  "popup_thumb_qtyTitle": {
+    "message": "Change quantity"
+  },
+  "popup_thumb_qtyAriaLabel": {
+    "message": "Quantity {{1}}, click to change"
+  },
+  "popup_thumb_showLess": {
+    "message": "Show less"
+  },
+  "popup_thumb_showFewerAriaLabel": {
+    "message": "Show fewer items"
+  },
+  "popup_thumb_showMoreAriaLabel": {
+    "message": "Show {{1}} more items"
+  },
+  "popup_amazonList_viewOnAmazon_ariaLabel": {
+    "message": "View list on Amazon"
+  },
+  "popup_amazonList_viewOnAmazon_title": {
+    "message": "View on Amazon"
+  },
+  "popup_amazonList_addAll_ariaLabel": {
+    "message": "Add all to Amazon cart"
+  },
+  "popup_amazonList_addAll_title": {
+    "message": "Add All to Amazon Cart"
+  },
+  "popup_amazonList_addAvailable_title": {
+    "message": "Add {{1}} to your Amazon cart"
+  },
+  "popup_amazonList_noAvailableItems": {
+    "message": "This list has no available items"
+  },
+  "popup_amazonList_viewItems": {
+    "message": "View items"
+  },
+  "popup_amazonList_genericName": {
+    "message": "Amazon list"
+  },
+  "popup_amazonList_unavailableSuffix": {
+    "message": " · {{1}} unavailable"
+  },
+  "popup_amazonList_premiumUpgradeToUse": {
+    "message": "Premium cart — upgrade to use"
+  },
+  "popup_amazonList_unlockAriaLabel": {
+    "message": "Unlock {{1}} with Premium"
+  },
+  "popup_amazonList_showItemsAriaLabel": {
+    "message": "Show items in {{1}}"
+  },
+  "popup_amazonList_loadingItems": {
+    "message": "Loading items from Amazon…"
+  },
+  "popup_err_loadAmazonListFailed": {
+    "message": "Could not load this Amazon list."
+  },
+  "popup_err_loadAmazonListsFailed": {
+    "message": "Couldn't load your Amazon lists."
+  },
+  "popup_err_noAvailableItemsToAdd": {
+    "message": "This list has no available items to add."
+  },
+  "popup_confirm_sendToCart_title": {
+    "message": "Send these items to your Amazon cart?"
+  },
+  "popup_confirm_sendToCart_message": {
+    "message": "Add {{1}} from \"{{2}}\" to your active Amazon cart? Existing cart items will stay."
+  },
+  "popup_confirm_sendToCart_unavailableNote": {
+    "message": "{{1}} will be skipped."
+  },
+  "popup_toast_addingToCart": {
+    "message": "Adding {{1}} to your Amazon cart…"
+  },
+  "popup_err_addListToCartFailed": {
+    "message": "Could not add this list to your cart."
+  },
+  "popup_prompt_createNewCart_title": {
+    "message": "Create a new cart"
+  },
+  "popup_toast_created": {
+    "message": "Created \"{{1}}\"."
+  },
+  "popup_thisFallback": {
+    "message": "this"
+  },
+  "popup_thisCartFallback": {
+    "message": "this cart"
+  },
+  "popup_confirm_switch_title": {
+    "message": "Switch to this cart?"
+  },
+  "popup_confirm_switch_message": {
+    "message": "This will replace your current Amazon cart with the contents of \"{{1}}\"."
+  },
+  "popup_toast_switchingCarts": {
+    "message": "Switching carts — loading {{1}}. If Amazon shows an upsell, choose an option there to continue."
+  },
+  "popup_err_switchCartsFailed": {
+    "message": "Could not switch carts"
+  },
+  "popup_confirm_updateList_title": {
+    "message": "Update Amazon list?"
+  },
+  "popup_confirm_saveToList_title": {
+    "message": "Save to Amazon list?"
+  },
+  "popup_confirm_updateList_message": {
+    "message": "Re-sync \"{{1}}\" to its Amazon list. Styx opens Amazon tabs to add the items — keep them open until it finishes."
+  },
+  "popup_confirm_saveToList_message": {
+    "message": "Create a private Amazon list named \"{{1}}\" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon."
+  },
+  "popup_toast_savingToAmazonList": {
+    "message": "Saving to your Amazon list — Styx is opening Amazon tabs. This can take a moment…"
+  },
+  "popup_toast_savedPartial": {
+    "message": "Saved {{1}}/{{2}}. {{3}} couldn't be added."
+  },
+  "popup_toast_savedToAmazonList": {
+    "message": "Saved {{1}} to your Amazon list."
+  },
+  "popup_err_saveToAmazonFailed": {
+    "message": "Could not save to Amazon"
+  },
+  "popup_prompt_renameCart_title": {
+    "message": "Rename cart"
+  },
+  "popup_prompt_renameCart_placeholder": {
+    "message": "Cart name"
+  },
+  "popup_err_renameFailed": {
+    "message": "Could not rename"
+  },
+  "popup_confirm_deleteCart_title": {
+    "message": "Delete saved cart?"
+  },
+  "popup_confirm_deleteCart_message": {
+    "message": "\"{{1}}\" will be permanently removed."
+  },
+  "popup_toast_deleted": {
+    "message": "Deleted"
+  },
+  "popup_err_deleteFailed": {
+    "message": "Could not delete"
+  },
+  "popup_item_rename_title": {
+    "message": "Rename cart"
+  },
+  "popup_item_switchTo": {
+    "message": "Switch to This Cart"
+  },
+  "popup_item_switchTo_title": {
+    "message": "Move all items to your Amazon cart"
+  },
+  "popup_item_saveToList": {
+    "message": "Save to Amazon List"
+  },
+  "popup_item_saveToList_title": {
+    "message": "Save this cart as an Amazon list so it syncs across devices"
+  },
+  "popup_item_delete_title": {
+    "message": "Delete entire cart"
+  },
+  "popup_qty_ariaLabel": {
+    "message": "Change item quantity"
+  },
+  "popup_qty_decrease": {
+    "message": "Decrease quantity"
+  },
+  "popup_qty_increase": {
+    "message": "Increase quantity"
+  },
+  "popup_confirm_defaultTitle": {
+    "message": "Are you sure?"
+  },
+  "popup_prompt_defaultTitle": {
+    "message": "Enter a value"
+  },
+  "popup_paywall_title": {
+    "message": "Upgrade to Premium"
+  },
+  "popup_paywall_sub": {
+    "message": "You're using all your free saved carts. Premium unlocks more space for how you actually shop."
+  },
+  "popup_paywall_ctaSub": {
+    "message": "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons."
+  },
+  "popup_paywall_limitTitle": {
+    "message": "You've used all {{1}} free carts"
+  },
+  "popup_paywall_limitSub": {
+    "message": "Upgrade to Premium to save more — your existing carts stay exactly as they are."
+  },
+  "popup_paywall_renewTitle": {
+    "message": "Welcome back"
+  },
+  "popup_paywall_renewSub": {
+    "message": "Renew Premium to unlock your read-only carts. Everything you saved is still here, waiting."
+  },
+  "popup_paywall_feature_unlimited": {
+    "message": "Unlimited carts (vs. 3 free)"
+  },
+  "popup_paywall_feature_curated": {
+    "message": "Keep curated lists for gifts, restocks, occasions"
+  },
+  "popup_paywall_feature_cancelAnytime": {
+    "message": "Cancel anytime — all carts stay visible with 3 free"
+  },
+  "popup_paywall_haveCode": {
+    "message": "Have a code?"
+  },
+  "popup_paywall_promoCode": {
+    "message": "Promo code"
+  },
+  "popup_paywall_enterCode": {
+    "message": "Enter code"
+  },
+  "popup_paywall_redeem": {
+    "message": "Redeem"
+  },
+  "popup_paywall_annual": {
+    "message": "Annual"
+  },
+  "popup_paywall_annualPrice": {
+    "message": "{{D}}9.99 / yr"
+  },
+  "popup_paywall_lifetime": {
+    "message": "Lifetime"
+  },
+  "popup_paywall_lifetimePrice": {
+    "message": "{{D}}19.99 once"
+  },
+  "popup_paywall_maybeLater": {
+    "message": "Maybe later"
+  },
+  "popup_paywall_openingCheckout": {
+    "message": "Opening checkout…"
+  },
+  "popup_err_openCheckoutFailed": {
+    "message": "Couldn't open checkout."
+  },
+  "popup_promo_enterCode": {
+    "message": "Enter a code."
+  },
+  "popup_promo_checking": {
+    "message": "Checking…"
+  },
+  "popup_promo_genericError": {
+    "message": "Something went wrong. Try again."
+  },
+  "popup_promo_unlocked90": {
+    "message": "Premium unlocked for 90 days!"
+  },
+  "popup_promo_unlockedToast": {
+    "message": "Premium unlocked — enjoy!"
+  },
+  "popup_debug_toggle": {
+    "message": "Debug"
+  },
+  "popup_debug_diagnostics_title": {
+    "message": "Cart diagnostics"
+  },
+  "popup_debug_diagnostics_run": {
+    "message": "Run cart diagnostics"
+  },
+  "popup_debug_backup_title": {
+    "message": "Backup / restore (dev)"
+  },
+  "popup_debug_backup_export": {
+    "message": "Export backup"
+  },
+  "popup_debug_backup_restore": {
+    "message": "Restore from file…"
+  },
+  "popup_debug_backup_hint": {
+    "message": "Export reads every Amazon list's items (slow — one tab per list) and bundles them with the local mc.* storage into a JSON file. Restore recreates each custom list on Amazon from that file (also slow — drives Add-to-List per item). Watch the status window for progress. Restore does not touch entitlement or overwrite storage."
+  },
+  "popup_debug_logs_title": {
+    "message": "Diagnostic logs"
+  },
+  "popup_debug_logs_copy": {
+    "message": "Copy diagnostic logs"
+  },
+  "popup_debug_logs_hint": {
+    "message": "Copies the extension version, current state, and recent logs from every context (service worker, content scripts, popup) to the clipboard. Keep Developer mode on, reproduce the issue, then copy and send the result to support."
+  },
+  "popup_settings_title": {
+    "message": "Settings"
+  },
+  "popup_settings_amazon_heading": {
+    "message": "Amazon"
+  },
+  "popup_settings_relabel_label": {
+    "message": "Rename Amazon lists to “carts”"
+  },
+  "popup_settings_relabel_sub": {
+    "message": "On relabels Amazon’s Lists page as “Your Styx Carts” and adds “Cart” to each of your list names (e.g. “Jared’s List” → “Jared’s List Cart”). Off leaves Amazon untouched."
+  },
+  "popup_settings_fab_heading": {
+    "message": "Floating button"
+  },
+  "popup_settings_fabpulse_label": {
+    "message": "Pulse the floating button"
+  },
+  "popup_settings_fabpulse_sub": {
+    "message": "The round Styx button glows orange on Amazon pages as a reminder to use it. Turn off for a static button."
+  },
+  "popup_settings_display_heading": {
+    "message": "Display"
+  },
+  "popup_settings_sidepanel_label": {
+    "message": "Open in side panel"
+  },
+  "popup_settings_sidepanel_sub": {
+    "message": "On docks Styx as a side panel (default). Off opens a compact popup from the toolbar instead."
+  },
+  "popup_settings_dev_heading": {
+    "message": "Developer"
+  },
+  "popup_settings_devmode_label": {
+    "message": "Developer mode"
+  },
+  "popup_settings_devmode_sub": {
+    "message": "Shows the debug panel at the bottom of the popup and enables verbose logs in the service worker console. Safe to leave off."
+  },
+  "popup_settings_affiliate_heading": {
+    "message": "Affiliate disclosure"
+  },
+  "popup_settings_affiliate_body": {
+    "message": "When you send a whole cart to Amazon, Styx uses Amazon’s bulk add-to-cart endpoint, which won’t add your items unless the link carries an Amazon Associates tag (tag=styxmcart-20). Styx supplies a placeholder tag only so bulk cart restore works — it is not a registered Associates account, and Styx earns no commission or referral fee from your purchases."
+  },
+  "popup_settings_affiliate_learnMore": {
+    "message": "Learn more"
+  },
+  "popup_settings_versionLabel": {
+    "message": "Styx Multi-Cart v{{1}}"
+  },
+  "popup_settings_version_ariaLabel": {
+    "message": "Version"
+  },
+  "popup_support_options_ariaLabel": {
+    "message": "Support options"
+  },
+  "popup_support_needHelp": {
+    "message": "Need help?"
+  },
+  "popup_support_reportBug": {
+    "message": "Report a bug"
+  },
+  "popup_support_reportBug_sub": {
+    "message": "Open a new GitHub issue"
+  },
+  "popup_support_howToReport": {
+    "message": "How to report"
+  },
+  "popup_support_howToReport_sub": {
+    "message": "Tips for a good report"
+  },
+  "popup_support_knownIssues": {
+    "message": "Known issues"
+  },
+  "popup_support_knownIssues_sub": {
+    "message": "Browse reported bugs"
+  },
+  "popup_support_toggle_ariaLabel": {
+    "message": "Support and bug report"
+  },
+  "popup_support_toggle_title": {
+    "message": "Support · Report a bug"
+  },
+  "popup_theme_switchToLight": {
+    "message": "Switch to light mode"
+  },
+  "popup_theme_switchToDark": {
+    "message": "Switch to dark mode"
+  },
+  "popup_defaultCartName": {
+    "message": "Cart · {{1}}, {{2}}"
+  },
+  "popup_toast_saved": {
+    "message": "Saved {{1}}"
+  },
+  "popup_err_saveCartFailed": {
+    "message": "Could not save cart"
+  },
+  "popup_thisItem": {
+    "message": "this item"
+  },
+  "popup_theseNItems": {
+    "message": "these {{1}} items"
+  },
+  "popup_theseItems": {
+    "message": "these items"
+  },
+  "popup_confirm_clear_title": {
+    "message": "Clear your Amazon cart?"
+  },
+  "popup_confirm_clear_message": {
+    "message": "Save {{1}} for a later checkout and they'll be waiting as a unique Styx cart in your Amazon Lists — or just clear it to shop for a different occasion."
+  },
+  "popup_confirm_clear_altLabel": {
+    "message": "Save & Clear"
+  },
+  "popup_confirm_clear_okLabel": {
+    "message": "Clear it!"
+  },
+  "popup_toast_savingThenClearing": {
+    "message": "Saving your cart to a new Amazon list, then clearing it…"
+  },
+  "popup_toast_cartAlreadyEmpty": {
+    "message": "Your Amazon cart is already empty."
+  },
+  "popup_toast_clearingCart": {
+    "message": "Clearing your cart — check the Amazon tab."
+  },
+  "popup_err_clearCartFailed": {
+    "message": "Could not clear cart"
+  },
+  "popup_toast_savingForLater": {
+    "message": "Saving {{1}} to a new cart — your Amazon cart stays as it is."
+  },
+  "popup_err_saveSettingFailed": {
+    "message": "Could not save setting"
+  },
+  "popup_toast_relabelOn": {
+    "message": "Amazon lists now show as your Styx carts."
+  },
+  "popup_toast_relabelOff": {
+    "message": "Amazon lists left as-is."
+  },
+  "popup_toast_fabPulseOn": {
+    "message": "Floating button will pulse."
+  },
+  "popup_toast_fabPulseOff": {
+    "message": "Floating button pulse off."
+  },
+  "popup_toast_surfaceSidepanel": {
+    "message": "Opens as side panel. Click the toolbar icon to reopen."
+  },
+  "popup_toast_surfacePopup": {
+    "message": "Opens as popup. Click the toolbar icon to reopen."
+  },
+  "popup_toast_devModeOn": {
+    "message": "Developer mode on"
+  },
+  "popup_toast_devModeOff": {
+    "message": "Developer mode off"
+  },
+  "popup_time_justNow": {
+    "message": "just now"
+  },
+  "popup_time_minAgo": {
+    "message": "{{1}} min ago"
+  },
+  "popup_time_hrAgo": {
+    "message": "{{1}} hr ago"
+  },
+  "popup_time_dayAgo": {
+    "message": "{{1}} days ago"
+  },
+  "popup_err_noSwResponse": {
+    "message": "No response from extension service worker."
+  },
+  "popup_err_unknownError": {
+    "message": "Unknown error"
+  },
+  "popup_err_premiumLimitReached": {
+    "message": "You've reached the cart limit. Delete or merge carts to free up space."
+  },
+  "popup_err_cartLocked": {
+    "message": "This cart is locked — renew Premium or delete others to free a slot."
+  },
+  "observer_close": {
+    "message": "Close"
+  },
+  "observer_closeImage": {
+    "message": "Close image"
+  },
+  "observer_screenshot": {
+    "message": "Screenshot"
+  },
+  "observer_back": {
+    "message": "← Back"
+  },
+  "observer_backToCarts": {
+    "message": "← Back to carts"
+  },
+  "observer_notNow": {
+    "message": "Not now"
+  },
+  "observer_tryAgain": {
+    "message": "Try again"
+  },
+  "observer_pleaseTryAgain": {
+    "message": "Please try again."
+  },
+  "observer_genericCart": {
+    "message": "Cart"
+  },
+  "observer_genericItem": {
+    "message": "(item)"
+  },
+  "observer_cartWord": {
+    "message": "Cart"
+  },
+  "observer_readOnly": {
+    "message": "Read-only"
+  },
+  "observer_lockedRenewTitle": {
+    "message": "Locked — click to renew Premium"
+  },
+  "observer_addToWhichCart": {
+    "message": "Add to which cart?"
+  },
+  "observer_createNewCartRow": {
+    "message": "+ Create new cart"
+  },
+  "observer_addToAmazonCart": {
+    "message": "Add to Amazon cart"
+  },
+  "observer_addToAmazonCartCaps": {
+    "message": "Add to Amazon Cart"
+  },
+  "observer_addDirectlyToAmazonCart": {
+    "message": "Add directly to Amazon cart"
+  },
+  "observer_noAmazonListsYet": {
+    "message": "No Amazon lists yet — create one below."
+  },
+  "observer_addingToCart": {
+    "message": "Adding to \"{{1}}\" — watch the status window…"
+  },
+  "observer_err_addItemFailed": {
+    "message": "Could not add item."
+  },
+  "observer_addedTo": {
+    "message": "Added to \"{{1}}\" ✓"
+  },
+  "observer_qtyBumpedIn": {
+    "message": "Quantity bumped in \"{{1}}\" ✓"
+  },
+  "observer_qtyLabel": {
+    "message": "Qty"
+  },
+  "observer_create_title": {
+    "message": "New cart for this item"
+  },
+  "observer_create_sub": {
+    "message": "Name it, and we'll add \"{{1}}\" right in."
+  },
+  "observer_create_submit": {
+    "message": "Create & add"
+  },
+  "observer_create_needName": {
+    "message": "Give it a name first."
+  },
+  "observer_create_creating": {
+    "message": "Creating your list — watch the status window…"
+  },
+  "observer_err_createListFailed": {
+    "message": "Could not create list."
+  },
+  "observer_upgrade_limitTitle": {
+    "message": "Cart Limit Reached"
+  },
+  "observer_upgrade_limitSub": {
+    "message": "You've reached the free limit of 3 carts. Upgrade to Premium to create unlimited carts and unlock full editing!"
+  },
+  "observer_upgrade_renewTitle": {
+    "message": "Renew Premium"
+  },
+  "observer_upgrade_renewSub": {
+    "message": "This cart is read-only on the free plan. Upgrade to Premium to add items to all your saved carts!"
+  },
+  "observer_upgrade_feature_unlimited": {
+    "message": "Unlimited carts"
+  },
+  "observer_upgrade_feature_fullEditing": {
+    "message": "Edit, restore, rename, merge — full functionality"
+  },
+  "observer_upgrade_feature_cancelAnytime": {
+    "message": "Cancel anytime; carts stay readable"
+  },
+  "observer_upgrade_premiumCartTitle": {
+    "message": "Premium cart"
+  },
+  "observer_upgrade_premiumCartSub": {
+    "message": "This cart is locked on the free plan. Upgrade to send it to your Amazon cart and unlock all your carts."
+  },
+  "observer_upgrade_feature_allCarts": {
+    "message": "Use all your Amazon-list carts"
+  },
+  "observer_upgrade_feature_sendAny": {
+    "message": "Send any cart to your Amazon cart"
+  },
+  "observer_yourStyxCarts": {
+    "message": "Your Styx Carts"
+  },
+  "observer_addToStyxCart": {
+    "message": "Add to Styx Cart"
+  },
+  "observer_viewYourStyxCart": {
+    "message": "View Your Styx Cart"
+  },
+  "observer_addToAStyxCart": {
+    "message": "Add to a Styx cart"
+  },
+  "observer_createStyxCartTitle": {
+    "message": "Create a new Styx Cart (Amazon list)"
+  },
+  "observer_styxCartNamePrefix": {
+    "message": "Styx Cart name"
+  },
+  "observer_sendAllToAmazonCart": {
+    "message": "Send All to Amazon Cart"
+  },
+  "observer_noItemsFound": {
+    "message": "No items found"
+  },
+  "observer_addingN": {
+    "message": "Adding {{1}}…"
+  },
+  "observer_sendingNToCart": {
+    "message": "Sending {{1}} to cart…"
+  },
+  "observer_buildingAmazonList": {
+    "message": "Building your Amazon list"
+  },
+  "observer_working": {
+    "message": "Working…"
+  },
+  "observer_cartSaved": {
+    "message": "Cart saved"
+  },
+  "observer_nameYourNewList": {
+    "message": "Name your new Amazon list (new Styx cart):"
+  },
+  "observer_saveCartHelp": {
+    "message": "After saving this cart, you can access it via your Amazon Lists or Styx Multi-Cart extension."
+  },
+  "observer_clearCartConfirmBody": {
+    "message": "Save these items to a new Styx cart for later, or clear them now to shop for a different occasion."
+  },
+  "observer_savingAndClearing": {
+    "message": "Saving & clearing…"
+  },
+  "observer_clearingCart": {
+    "message": "Clearing cart…"
+  },
+  "observer_savingThenClearing": {
+    "message": "Saving your cart, then clearing it…"
+  },
+  "observer_clearingAmazonCart": {
+    "message": "Clearing your Amazon cart…"
+  },
+  "observer_savingYourCart": {
+    "message": "Saving your cart"
+  },
+  "observer_clearingYourCart": {
+    "message": "Clearing your cart"
+  },
+  "observer_cartSavedAndCleared": {
+    "message": "Cart saved and cleared"
+  },
+  "observer_cartClearingStarted": {
+    "message": "Cart clearing started"
+  },
+  "observer_checkAmazonTab": {
+    "message": "Check the Amazon tab for progress."
+  },
+  "observer_couldntClearCart": {
+    "message": "Couldn't clear cart"
+  },
+  "observer_saveEverythingTitle": {
+    "message": "Save everything in this cart to a new Amazon list"
+  },
+  "observer_savingToAmazon": {
+    "message": "Saving to Amazon…"
+  },
+  "observer_openingAmazonTabs": {
+    "message": "Opening Amazon tabs to add each item — please keep this tab open."
+  },
+  "observer_listSaved": {
+    "message": "List saved"
+  },
+  "observer_savedPartialOpeningList": {
+    "message": "Saved {{1}}/{{2}} to \"{{3}}\". {{4}} need a manual add. Opening your list…"
+  },
+  "observer_savedOpeningList": {
+    "message": "Saved {{1}} to \"{{2}}\". Opening your list…"
+  },
+  "observer_extensionContextInvalid": {
+    "message": "Extension context invalid"
+  },
+  "observer_openStyxMultiCart": {
+    "message": "Open Styx Multi-Cart"
+  },
+  "observer_proceedToCheckout": {
+    "message": "Proceed to checkout"
+  },
+  "observer_guide_ariaLabel": {
+    "message": "Styx Multi-Cart quick start"
+  },
+  "observer_guide_kicker": {
+    "message": "Quick start"
+  },
+  "observer_guide_fabButtonAlt": {
+    "message": "The round Styx button"
+  },
+  "observer_guide_introText": {
+    "message": "Click the Styx button in the bottom-right of any Amazon page to open the panel."
+  },
+  "observer_guide_stepOf": {
+    "message": "Step {{1}} of {{2}}"
+  },
+  "observer_guideFinish": {
+    "message": "Finish"
+  },
+  "observer_startHere": {
+    "message": "Start here..."
+  },
+  "observer_guideNext": {
+    "message": "Next"
+  },
+  "observer_guide1_title": {
+    "message": "Clear your Amazon cart"
+  },
+  "observer_guide1_option1": {
+    "message": "Option 1 — in the Styx panel"
+  },
+  "observer_guide1_bullet1_text": {
+    "message": "Click {{1}} to empty the live cart, or {{2}} to keep a copy in a new Styx Cart first."
+  },
+  "observer_guide1_shot1_alt": {
+    "message": "Clear Amazon cart and Save Amazon cart for later buttons at the top of the Styx panel"
+  },
+  "observer_guide1_sublist1": {
+    "message": "Styx Carts are simply Amazon lists with added versatility."
+  },
+  "observer_guide1_option2": {
+    "message": "Option 2 — on your Amazon cart page"
+  },
+  "observer_guide1_bullet2_text": {
+    "message": "The same two buttons sit right under {{1}}."
+  },
+  "observer_guide1_shot2_alt": {
+    "message": "Clear Amazon cart and Save Amazon cart for later buttons below Proceed to checkout on the Amazon cart page"
+  },
+  "observer_guide2_title": {
+    "message": "Put items in different carts for separate purchases"
+  },
+  "observer_guide2_copy1": {
+    "message": "Want to organise your purchases as you shop?..."
+  },
+  "observer_guide2_copy2": {
+    "message": "Choose {{1}} on an item's page or 'add' button"
+  },
+  "observer_guide2_copy3": {
+    "message": "Then pick an existing cart or {{1}}."
+  },
+  "observer_guide2_shot1_alt": {
+    "message": "Add to a Styx cart button on an Amazon product page"
+  },
+  "observer_guide2_shot2_alt": {
+    "message": "The Styx cart picker listing your carts, with a Create new cart option"
+  },
+  "observer_guide2_bullet1": {
+    "message": "Use separate carts for trips, projects, or people."
+  },
+  "observer_guide2_bullet2": {
+    "message": "Adding an item directly to your Amazon cart or 'Buy now' are still available options."
+  },
+  "observer_guide3_title": {
+    "message": "Send a whole cart to Amazon"
+  },
+  "observer_guide3_copy": {
+    "message": "Ready to checkout with a specific cart? You can send it to your Amazon cart multiple ways..."
+  },
+  "observer_guide3_option1": {
+    "message": "Option 1 — at the top of a cart"
+  },
+  "observer_guide3_bullet1_text": {
+    "message": "On any Styx cart (Amazon list) page."
+  },
+  "observer_guide3_shot1_alt": {
+    "message": "Send All to Amazon Cart button at the top of a list page"
+  },
+  "observer_guide3_option2": {
+    "message": "Option 2 — docked while you scroll"
+  },
+  "observer_guide3_bullet2_text": {
+    "message": "Once you scroll past that button it docks in the bottom-right, so it is always in reach on long lists."
+  },
+  "observer_guide3_shot2_alt": {
+    "message": "Send All to Amazon Cart button docked beside the floating Styx button"
+  },
+  "observer_guide3_option3": {
+    "message": "Option 3 — in the Styx panel"
+  },
+  "observer_guide3_bullet3_text": {
+    "message": "Click the cart button on any cart's row in the extension panel"
+  },
+  "observer_guide3_shot3_alt": {
+    "message": "Add All to Amazon Cart button on a cart row in the Styx panel"
+  },
+  "observer_guide3_bullet4": {
+    "message": "Styx adds all the items to whatever is already in your Amazon cart, then reports the result when it is done."
+  },
+  "observer_guide3_bullet5": {
+    "message": "<strong>We've already loaded your Amazon lists</strong> so you can start using Styx carts right away. Click {{1}} to start a whole new way to shop on Amazon!"
+  },
+  "bg_done": {
+    "message": "Done"
+  },
+  "bg_doneCap": {
+    "message": "Done."
+  },
+  "bg_starting": {
+    "message": "Starting…"
+  },
+  "bg_thisItem": {
+    "message": "this item"
+  },
+  "bg_genericItemLowercase": {
+    "message": "item"
+  },
+  "bg_genericListName": {
+    "message": "list"
+  },
+  "bg_amazonCartFallbackName": {
+    "message": "Amazon cart"
+  },
+  "bg_styxCartFallbackName": {
+    "message": "Styx cart"
+  },
+  "bg_clearingCart": {
+    "message": "Clearing cart"
+  },
+  "bg_clearingCartEllipsis": {
+    "message": "Clearing cart…"
+  },
+  "bg_removedOfTotal": {
+    "message": "Removed {{1}} of {{2}}…"
+  },
+  "bg_removedSoFar": {
+    "message": "{{1}} removed so far…"
+  },
+  "bg_clearingCartRemovedOfTotal": {
+    "message": "Clearing cart — removed {{1}} of {{2}}…"
+  },
+  "bg_clearingCartRemovedSoFar": {
+    "message": "Clearing cart — {{1}} removed so far…"
+  },
+  "bg_couldNotClearCartRemaining": {
+    "message": "Could not clear cart — {{1}} still in cart"
+  },
+  "bg_cartClearedRemoved": {
+    "message": "Cart cleared — {{1}} removed"
+  },
+  "bg_restoringCart": {
+    "message": "Restoring {{1}}"
+  },
+  "bg_loadingFirstProduct": {
+    "message": "Loading first product…"
+  },
+  "bg_batchOf": {
+    "message": "batch {{1}}/{{2}} ({{3}} items)"
+  },
+  "bg_itemsInOneGo": {
+    "message": "{{1}} items in one go"
+  },
+  "bg_loadingBulkAddFor": {
+    "message": "Loading bulk add for {{1}}…"
+  },
+  "bg_loadingBulkAddBatch": {
+    "message": "Loading bulk add — batch {{1}} of {{2}} ({{3}} items)…"
+  },
+  "bg_loadingBulkAddForItems": {
+    "message": "Loading bulk add for {{1}}…"
+  },
+  "bg_bulkRejectedFallback": {
+    "message": "Amazon couldn't prepare these items in bulk — adding them one at a time…"
+  },
+  "bg_amazonRejectedBulkAdd": {
+    "message": "Amazon rejected the bulk-add items"
+  },
+  "bg_addToCartFallback": {
+    "message": "Add To Cart"
+  },
+  "bg_clickHighlightedBatch": {
+    "message": "Click the highlighted \"{{1}}\" to confirm batch {{2}} of {{3}} ({{4}} items)"
+  },
+  "bg_clickHighlightedItems": {
+    "message": "Click the highlighted \"{{1}}\" to add {{2}} to your Amazon cart"
+  },
+  "bg_waitingForConfirmation": {
+    "message": "Waiting for your confirmation…"
+  },
+  "bg_userDidNotConfirmBulkAdd": {
+    "message": "User did not confirm bulk add: {{1}}"
+  },
+  "bg_couldntFindConfirmButton": {
+    "message": "Couldn't find the confirm button — checking your cart…"
+  },
+  "bg_clickAddToCartManual": {
+    "message": "Click \"Add To Cart\" on the page when you're ready — restore continues automatically"
+  },
+  "bg_bulkRestorePartial": {
+    "message": "Bulk restore added {{1}} of {{2}} items — {{3}} skipped"
+  },
+  "bg_bulkRestoreZero": {
+    "message": "Bulk restore added 0 items — try again or restore one by one"
+  },
+  "bg_noProductsOnBulkPage": {
+    "message": "Amazon rendered no products on the bulk-add page"
+  },
+  "bg_confirmButtonNotFound": {
+    "message": "Confirm button not found within 10s"
+  },
+  "bg_savedCartHasNoItems": {
+    "message": "This saved cart has no items."
+  },
+  "bg_productUnavailable": {
+    "message": "Product is unavailable"
+  },
+  "bg_skippingUnavailableItem": {
+    "message": "Skipping unavailable item {{1}} of {{2}}: {{3}}"
+  },
+  "bg_unavailableSkipped": {
+    "message": "Unavailable — skipped {{1}}"
+  },
+  "bg_noFormatSelected": {
+    "message": "A purchasable format was not selected"
+  },
+  "bg_itemOf": {
+    "message": "Item {{1}} of {{2}}: {{3}}"
+  },
+  "bg_restoringCartAdding": {
+    "message": "Restoring cart — adding {{1}} of {{2}}: {{3}}"
+  },
+  "bg_atcButtonNotFound": {
+    "message": "ATC button not found"
+  },
+  "bg_ageEarlierToday": {
+    "message": "earlier today"
+  },
+  "bg_ageRecently": {
+    "message": "recently"
+  },
+  "bg_ageFromBefore": {
+    "message": "from before"
+  },
+  "bg_noCoverage": {
+    "message": "No coverage"
+  },
+  "bg_selectedOption": {
+    "message": "selected option"
+  },
+  "bg_applyingChoiceAge": {
+    "message": "Applying your choice {{1}}: {{2}}…"
+  },
+  "bg_applyingSavedChoice": {
+    "message": "Applying your saved choice: {{1}}"
+  },
+  "bg_cartRestoredPartial": {
+    "message": "Cart restored — {{1}} of {{2}} added ({{3}} failed)"
+  },
+  "bg_cartRestoredAll": {
+    "message": "Cart restored — {{1}} added"
+  },
+  "bg_addingWishlistToCart": {
+    "message": "Adding wishlist to cart"
+  },
+  "bg_addingItemsFromListPage": {
+    "message": "Adding {{1}} from the list page…"
+  },
+  "bg_addingItemsFromList": {
+    "message": "Adding {{1}} from the list…"
+  },
+  "bg_addedItemsToCart": {
+    "message": "Added {{1}} to your Amazon cart"
+  },
+  "bg_couldNotSaveCart": {
+    "message": "Could not save your cart."
+  },
+  "bg_couldntSaveLeftUntouched": {
+    "message": "Couldn't save — cart left untouched. {{1}}"
+  },
+  "bg_couldntSaveCartTitle": {
+    "message": "Couldn't save your cart"
+  },
+  "bg_cartLeftAsIs": {
+    "message": "Your Amazon cart was left as-is. {{1}}"
+  },
+  "bg_savedNOfTotal": {
+    "message": "Saved {{1}}/{{2}} items"
+  },
+  "bg_savedNItems": {
+    "message": "Saved {{1}}"
+  },
+  "bg_savedNoteToCartUntouched": {
+    "message": "{{1}} to \"{{2}}\" — your cart is untouched."
+  },
+  "bg_cartSavedForLater": {
+    "message": "Cart saved for later"
+  },
+  "bg_savedNoteToCartUntouchedDetail": {
+    "message": "{{1}} to \"{{2}}\". Your Amazon cart is untouched."
+  },
+  "bg_savedNoteNowClearing": {
+    "message": "{{1}} — now clearing your cart…"
+  },
+  "bg_savedAndCleared": {
+    "message": "Saved and cleared"
+  },
+  "bg_savedNoteToCartEmpty": {
+    "message": "{{1}} to \"{{2}}\". Your Amazon cart is empty."
+  },
+  "bg_savedButCouldntClear": {
+    "message": "Saved, but couldn't clear"
+  },
+  "bg_savedNoteCouldntClear": {
+    "message": "{{1}} to \"{{2}}\", but your Amazon cart couldn't be cleared. Try Clear Amazon cart again."
+  },
+  "bg_amazonNeedsFormatChoice": {
+    "message": "Amazon needs a format choice"
+  },
+  "bg_chooseCartableFormat": {
+    "message": "Choose a cartable format for \"{{1}}\" to continue adding the rest."
+  },
+  "bg_chooseFormatOnAmazon": {
+    "message": "Choose a format on Amazon"
+  },
+  "bg_savedFormatCannotBeAdded": {
+    "message": "The saved format of \"{{1}}\" cannot be added to the cart. Choose another format or edition on this page that offers Add to Cart. Styx will resume automatically."
+  },
+  "bg_choiceChooseFormat": {
+    "message": "Choose a format"
+  },
+  "bg_choiceSkipThisItem": {
+    "message": "Skip this item"
+  },
+  "bg_couldNotShowFormatPrompt": {
+    "message": "Could not show the format picker prompt"
+  },
+  "bg_skippedFormatUnavailable": {
+    "message": "Skipped because the saved format is unavailable"
+  },
+  "bg_chooseFormatShowsAtc": {
+    "message": "Choose a format for \"{{1}}\" that shows Add to Cart — Styx will resume automatically"
+  },
+  "bg_amazonTabWasClosed": {
+    "message": "Amazon tab was closed"
+  },
+  "bg_selectedFormatUnavailable": {
+    "message": "The selected format is unavailable"
+  },
+  "bg_noFormatSelectedTimeout": {
+    "message": "No cartable format was selected within 10 minutes"
+  },
+  "bg_savedFormatUnavailableChooseAnother": {
+    "message": "The saved format is unavailable; choose another format"
+  },
+  "bg_pageNoLongerExists": {
+    "message": "Product page no longer exists"
+  },
+  "bg_productCurrentlyUnavailable": {
+    "message": "Product is currently unavailable"
+  },
+  "bg_waitingOnYourChoice": {
+    "message": "Waiting on your choice"
+  },
+  "bg_pickProtectionOption": {
+    "message": "Pick a protection option for \"{{1}}\" on the Amazon page — restore resumes automatically."
+  },
+  "bg_amazonNeedsProtectionPlanChoice": {
+    "message": "Amazon needs your protection-plan choice for \"{{1}}\". Pick an option below — Styx will keep restoring the rest of your cart as soon as you choose."
+  },
+  "bg_addToListDropdownNotFound": {
+    "message": "Add-to-List dropdown not found on this page."
+  },
+  "bg_createEntryNotFound": {
+    "message": "Create-a-List entry not found in the chooser."
+  },
+  "bg_createListFormDidNotAppear": {
+    "message": "Create-list form did not appear."
+  },
+  "bg_createButtonNotFound": {
+    "message": "Create button not found in the create-list form."
+  },
+  "bg_noConfirmationAfterCreate": {
+    "message": "No confirmation after clicking Create."
+  },
+  "bg_noResultFromCreateList": {
+    "message": "no result from pageCreateListAndAdd"
+  },
+  "bg_listNotFoundInMenu": {
+    "message": "List __LISTID__ not found in the Add-to-List menu."
+  },
+  "bg_noResult": {
+    "message": "no result"
+  },
+  "bg_bulkIncomplete_title": {
+    "message": "Bulk add incomplete"
+  },
+  "bg_bulkIncomplete_stillMissing": {
+    "message": "Still missing:\n{{1}}"
+  },
+  "bg_bulkIncomplete_andNMore": {
+    "message": "…and {{1}} more"
+  },
+  "bg_bulkIncomplete_summaryPartial": {
+    "message": "Bulk add only got {{1}} of {{2}} items into your cart.\n\nWould you like to restore the remaining {{3}} one at a time? This is slower but more reliable."
+  },
+  "bg_bulkIncomplete_summaryNone": {
+    "message": "The bulk add didn't put any items in your cart — Amazon's batch endpoint may have silently dropped them (often because the associate tag isn't recognised).\n\nWould you like to restore all {{1}} items one at a time instead?"
+  },
+  "bg_bulkIncomplete_choiceManual": {
+    "message": "I'll click \"Add To Cart\" myself"
+  },
+  "bg_bulkIncomplete_choiceFallback": {
+    "message": "Restore one by one"
+  },
+  "bg_bulkIncomplete_choiceSkip": {
+    "message": "Skip missed items"
+  },
+  "bg_savingCart": {
+    "message": "Saving cart"
+  },
+  "bg_savingItemsToNewList": {
+    "message": "Saving {{1}} to a new Amazon list…"
+  },
+  "bg_addingToList": {
+    "message": "Adding to {{1}}"
+  },
+  "bg_openingProductPage": {
+    "message": "Opening the product page…"
+  },
+  "bg_addToListFailed": {
+    "message": "Add to list failed."
+  },
+  "bg_creatingList": {
+    "message": "Creating {{1}}"
+  },
+  "bg_settingUpYourList": {
+    "message": "Setting up your list…"
+  },
+  "bg_cartAppearsEmpty": {
+    "message": "Cart appears empty — nothing to save."
+  },
+  "bg_amazonCartLooksEmpty": {
+    "message": "Your Amazon cart looks empty — nothing to save."
+  },
+  "bg_missingListIdOrAsin": {
+    "message": "Missing list id or ASIN."
+  },
+  "bg_missingAsin": {
+    "message": "Missing ASIN."
+  },
+  "bg_missingListId": {
+    "message": "Missing list id."
+  },
+  "bg_paymentServiceNotAvailable": {
+    "message": "Payment service not available."
+  },
+  "bg_couldntOpenCheckout": {
+    "message": "Couldn't open checkout."
+  },
+  "bg_purchasesHandledInApp": {
+    "message": "Purchases are handled in the Styx Multi-Cart app."
+  },
+  "bg_noAvailableItemsOnWishlist": {
+    "message": "No available items were found on this wishlist."
+  },
+  "bg_cartLimitReachedUpgrade": {
+    "message": "Cart limit reached — upgrade to add more."
+  },
+  "bg_noResultPeriod": {
+    "message": "No result."
+  },
+  "bg_promoCodeInvalid": {
+    "message": "That code isn't valid."
+  },
+  "bg_promoCodeAlreadyUsed": {
+    "message": "This code has already been used on this device."
+  },
+  "bg_firstError": {
+    "message": "First error: {{1}}"
+  },
+  "bg_nothingWasAdded": {
+    "message": "Nothing was added."
+  },
+  "bg_cartHasNoItemsToSave": {
+    "message": "This cart has no items to save."
+  },
+  "bg_savingLabelToAmazon": {
+    "message": "Saving {{1}} to Amazon"
+  },
+  "bg_atcButtonNotFoundFull": {
+    "message": "Add to Cart button not found or not visible"
+  },
+  "bg_atcButtonStayedDisabled": {
+    "message": "Add to Cart button stayed disabled"
+  },
+  "promo_tagline1": {
+    "message": "Clear your Amazon cart."
+  },
+  "promo_tagline2": {
+    "message": "Or save it for later."
+  },
+  "promo_subtext": {
+    "message": "Free & unlimited · No tracking"
+  },
+  "popup_op_saving": {
+    "message": "Saving cart…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "Clearing cart…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "Working…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "Please wait for this to finish before starting another action.",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "Another Styx action is still running. Please wait for it to finish.",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "Save",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "Name this cart",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Saves everything in your Amazon cart as a new cart. Your Amazon cart stays as it is.",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
+  }
+}

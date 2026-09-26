@@ -23,11 +23,22 @@ import math
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "icons"))
 LOCALES_DIR = os.path.join(HERE, "..", "_locales")
 
-# Reuse the icon renderer so brand stays consistent.
-from _render import draw_icon, hex_rgba  # noqa: E402
+LOGO_PNG = os.path.join(HERE, "product-logo-2048.png")
+
+
+def hex_rgba(h, alpha=255):
+    h = h.lstrip("#")
+    return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
+
+
+def draw_icon(target_size):
+    """The product logo (rendered from product-logo.svg by
+    _render_logo_assets.mjs), resized so promos always match the brand."""
+    return Image.open(LOGO_PNG).convert("RGBA").resize(
+        (target_size, target_size), Image.LANCZOS
+    )
 
 SMALL_W, SMALL_H = 440, 280
 MARQUEE_W, MARQUEE_H = 1400, 560

@@ -64,6 +64,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 "expiresAt": 0,
                 "willAutoRenew": false,
                 "productId": "",
+                "revoked": false,
             ]
         }
         return stored

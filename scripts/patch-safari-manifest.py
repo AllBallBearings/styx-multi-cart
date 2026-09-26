@@ -24,9 +24,15 @@ def patch(path):
     manifest.setdefault("action", {})["default_popup"] = "popup.html"
     manifest.pop("side_panel", None)
 
-    permissions = manifest.get("permissions")
-    if permissions and "sidePanel" in permissions:
-        manifest["permissions"] = [p for p in permissions if p != "sidePanel"]
+    permissions = manifest.get("permissions", [])
+    permissions = [p for p in permissions if p != "sidePanel"]
+    # Safari requires "nativeMessaging" for browser.runtime.sendNativeMessage
+    # to reach SafariWebExtensionHandler (used for the App Store entitlement
+    # bridge in syncEntitlementFromNative). Chrome doesn't need it — this repo's
+    # root manifest.json stays Chrome-only, patched in here for Safari alone.
+    if "nativeMessaging" not in permissions:
+        permissions.append("nativeMessaging")
+    manifest["permissions"] = permissions
 
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
@@ -37,4 +43,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         sys.exit("usage: patch-safari-manifest.py <manifest.json>")
     patch(sys.argv[1])
-    print(f"patched {sys.argv[1]} for Safari (default_popup, removed side_panel)")
+    print(f"patched {sys.argv[1]} for Safari (default_popup, removed side_panel, added nativeMessaging)")
