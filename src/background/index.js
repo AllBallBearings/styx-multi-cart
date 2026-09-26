@@ -4470,23 +4470,57 @@ const amazonListReadCache = new Map();
 // list when the user interacts while the warm queue is still running.
 const amazonListReadInFlight = new Map();
 
+// Safari freezes requestAnimationFrame and CSS transitions in hidden tabs (measured:
+// 1 frame in 1.5 s hidden vs 86 visible, and transitions never finish). Amazon's
+// Add-to-List chooser is animated, so a helper opened with active:false never
+// finishes opening it and the save appears to hang until the user brings that tab
+// forward. Write flows therefore run their helper in the FOREGROUND on Safari.
+// Chrome doesn't throttle like that, so it keeps the silent background tab.
+let _fgHelperTabId = null;     // the foreground helper, so progress can show on it too
+let _lastListProgress = null;  // last MC_LIST_SAVE_PROGRESS payload of the running save
+
 /**
- * Open a silent background tab at `url`, wait for it to load, run `fn(tabId)`,
- * then close the tab (unless keepOpen). Mirrors the tab strategy in
- * scrapeCartInBackground but factored out for the list flows.
+ * Open a helper tab at `url`, wait for it to load, run `fn(tabId)`, then close the
+ * tab (unless keepOpen). Silent (background) by default; pass `foreground: true`
+ * for flows that need Amazon's animated UI to actually run — honoured on Safari
+ * only. Mirrors the tab strategy in scrapeCartInBackground but factored out for
+ * the list flows.
  */
-async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false } = {}) {
-  const tab = await chrome.tabs.create({ url, active: false });
+async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false, foreground = false } = {}) {
+  const front = foreground === true && IS_SAFARI;
+  // A foreground helper takes over the window, so remember which tab the user was
+  // on and put them back afterwards.
+  let restoreTabId = null;
+  if (front) {
+    try {
+      const [cur] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (cur && cur.id != null) restoreTabId = cur.id;
+    } catch (_e) { /* no tab to restore to */ }
+  }
+  const tab = await chrome.tabs.create({ url, active: front });
   try {
     // This tab was just created, so waiting for a *reload* can miss the
     // initial loading event and hold the tab open until the timeout. Waiting
     // for completion is sufficient and lets the finally block close the
     // helper as soon as its page is ready.
     await waitForTabComplete(tab.id, timeoutMs);
+    if (front) {
+      // The panel and toast live on the tab this just covered — show progress here.
+      _fgHelperTabId = tab.id;
+      if (_lastListProgress) {
+        notifyTab(tab.id, _lastListProgress);
+        // The page's content script can still be starting; send once more.
+        setTimeout(() => notifyTab(tab.id, _lastListProgress), 1200);
+      }
+    }
     return await fn(tab.id, tab);
   } finally {
+    if (front && _fgHelperTabId === tab.id) _fgHelperTabId = null;
     if (!keepOpen) {
       try { await chrome.tabs.remove(tab.id); } catch (_e) { /* already gone */ }
+      if (front && restoreTabId != null && restoreTabId !== tab.id) {
+        try { await chrome.tabs.update(restoreTabId, { active: true }); } catch (_e) { /* tab gone */ }
+      }
     }
   }
 }
@@ -4614,7 +4648,7 @@ async function createAmazonListFromPdp(host, name, firstAsin) {
       });
       return (r && r[0] && r[0].result) || { ok: false, error: t("bg_noResultFromCreateList") };
     },
-    { keepOpen: false, timeoutMs: 40000 }
+    { keepOpen: false, timeoutMs: 40000, foreground: true }
   );
   console.log("[Styx list-sync] createListFromPdp →", res);
   try {
@@ -4672,7 +4706,7 @@ async function addItemToList(host, listId, asin) {
       });
       return (r && r[0] && r[0].result) || { ok: false, error: t("bg_noResult") };
     },
-    { timeoutMs: 15000 }
+    { timeoutMs: 15000, foreground: true }
   );
 }
 
@@ -4695,7 +4729,7 @@ async function setListQuantities(host, listId, items) {
         args: [map],
       });
     },
-    { timeoutMs: 15000 }
+    { timeoutMs: 15000, foreground: true }
   );
 }
 
@@ -4712,6 +4746,7 @@ async function saveCartToAmazonList(cart, opts = {}) {
   try {
     return await saveCartToAmazonListImpl(cart, opts);
   } finally {
+    _lastListProgress = null;
     await setUiBusy(false);
   }
 }
@@ -4727,7 +4762,11 @@ async function saveCartToAmazonListImpl(cart, opts = {}) {
   const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
   const report = (detail, extra = {}) => {
     setOpStatus(t("bg_savingLabelToAmazon", [label]), detail);
-    notifyTab(progressTabId, { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra });
+    const payload = { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra };
+    _lastListProgress = payload;
+    notifyTab(progressTabId, payload);
+    // On Safari the helper tab is in front, hiding the tab that normally shows this.
+    if (_fgHelperTabId != null && _fgHelperTabId !== progressTabId) notifyTab(_fgHelperTabId, payload);
   };
   report("Preparing your list…");
 

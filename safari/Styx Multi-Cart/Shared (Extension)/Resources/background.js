@@ -3059,16 +3059,41 @@ importScripts("ExtPay.js");
   var AMAZON_LIST_READ_CACHE_MS = 5 * 60 * 1e3;
   var amazonListReadCache = /* @__PURE__ */ new Map();
   var amazonListReadInFlight = /* @__PURE__ */ new Map();
-  async function runInAmazonTab(url, fn, { timeoutMs = 2e4, keepOpen = false } = {}) {
-    const tab = await chrome.tabs.create({ url, active: false });
+  var _fgHelperTabId = null;
+  var _lastListProgress = null;
+  async function runInAmazonTab(url, fn, { timeoutMs = 2e4, keepOpen = false, foreground = false } = {}) {
+    const front = foreground === true && IS_SAFARI;
+    let restoreTabId = null;
+    if (front) {
+      try {
+        const [cur] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (cur && cur.id != null) restoreTabId = cur.id;
+      } catch (_e) {
+      }
+    }
+    const tab = await chrome.tabs.create({ url, active: front });
     try {
       await waitForTabComplete(tab.id, timeoutMs);
+      if (front) {
+        _fgHelperTabId = tab.id;
+        if (_lastListProgress) {
+          notifyTab(tab.id, _lastListProgress);
+          setTimeout(() => notifyTab(tab.id, _lastListProgress), 1200);
+        }
+      }
       return await fn(tab.id, tab);
     } finally {
+      if (front && _fgHelperTabId === tab.id) _fgHelperTabId = null;
       if (!keepOpen) {
         try {
           await chrome.tabs.remove(tab.id);
         } catch (_e) {
+        }
+        if (front && restoreTabId != null && restoreTabId !== tab.id) {
+          try {
+            await chrome.tabs.update(restoreTabId, { active: true });
+          } catch (_e) {
+          }
         }
       }
     }
@@ -3171,7 +3196,7 @@ importScripts("ExtPay.js");
         });
         return r && r[0] && r[0].result || { ok: false, error: t("bg_noResultFromCreateList") };
       },
-      { keepOpen: false, timeoutMs: 4e4 }
+      { keepOpen: false, timeoutMs: 4e4, foreground: true }
     );
     console.log("[Styx list-sync] createListFromPdp \u2192", res);
     try {
@@ -3224,7 +3249,7 @@ importScripts("ExtPay.js");
         });
         return r && r[0] && r[0].result || { ok: false, error: t("bg_noResult") };
       },
-      { timeoutMs: 15e3 }
+      { timeoutMs: 15e3, foreground: true }
     );
   }
   async function setListQuantities(host, listId, items) {
@@ -3245,7 +3270,7 @@ importScripts("ExtPay.js");
           args: [map]
         });
       },
-      { timeoutMs: 15e3 }
+      { timeoutMs: 15e3, foreground: true }
     );
   }
   async function saveCartToAmazonList(cart, opts = {}) {
@@ -3253,6 +3278,7 @@ importScripts("ExtPay.js");
     try {
       return await saveCartToAmazonListImpl(cart, opts);
     } finally {
+      _lastListProgress = null;
       await setUiBusy(false);
     }
   }
@@ -3264,7 +3290,10 @@ importScripts("ExtPay.js");
     const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
     const report = (detail, extra = {}) => {
       setOpStatus(t("bg_savingLabelToAmazon", [label]), detail);
-      notifyTab(progressTabId, { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra });
+      const payload = { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra };
+      _lastListProgress = payload;
+      notifyTab(progressTabId, payload);
+      if (_fgHelperTabId != null && _fgHelperTabId !== progressTabId) notifyTab(_fgHelperTabId, payload);
     };
     report("Preparing your list\u2026");
     const asins = items.map((it) => String(it.asin).toUpperCase());
