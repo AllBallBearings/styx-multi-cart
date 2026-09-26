@@ -1282,13 +1282,24 @@
   });
 
   // Save the live Amazon cart into a new cart WITHOUT clearing it — the
-  // same driver as "Save & Clear", minus the clear step.
+  // same driver as "Save & Clear", minus the clear step. Asks for a name first
+  // (pre-filled with a dated suggestion, so Enter still works as a one-tap
+  // save) and does nothing if the user backs out.
   if ($saveForLater) {
-    $saveForLater.addEventListener("click", () => {
+    $saveForLater.addEventListener("click", async () => {
+      const name = await promptDialog({
+        title: t("popup_prompt_saveForLater_title"),
+        message: t("popup_prompt_saveForLater_message"),
+        placeholder: t("popup_save_input_placeholder"),
+        initialValue: defaultName(),
+        okLabel: t("popup_action_save"),
+      });
+      if (name == null) return;
+
       runOp("save", async () => {
         const res = await send({
           type: "MC_SAVE_FOR_LATER",
-          name: defaultName(),
+          name,
         });
         if (res.ok) {
           toast(t("popup_toast_savingForLater", [itemCountText(res.saving)]));

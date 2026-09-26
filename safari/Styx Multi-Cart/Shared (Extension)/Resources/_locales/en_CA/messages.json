@@ -1530,5 +1530,17 @@
   "bg_alreadyRunning": {
     "message": "Another Styx action is still running. Please wait for it to finish.",
     "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "Save",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "Name this cart",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Saves everything in your Amazon cart as a new cart. Your Amazon cart stays as it is.",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
   }
 }

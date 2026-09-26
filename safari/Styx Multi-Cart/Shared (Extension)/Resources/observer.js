@@ -4061,7 +4061,9 @@
         z-index: 2147483640;
         width: 56px; height: 56px; padding: 0;
         border: none; border-radius: 50%;
-        background: #131a22; cursor: pointer;
+        /* The logo fills the whole disk (clipped to the circle), so there is no
+           separate background to mismatch it; #0a1f4f is the logo's own base. */
+        background: #0a1f4f; overflow: hidden; cursor: pointer;
         box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
         display: flex; align-items: center; justify-content: center;
         transition: transform .12s ease, box-shadow .12s ease;
@@ -4069,7 +4071,7 @@
       #${FAB_ID}:hover { transform: translateY(-2px);
         box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,153,0,0.5); }
       #${FAB_ID}:active { transform: translateY(0); }
-      #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
+      #${FAB_ID} img { width: 100%; height: 100%; pointer-events: none; display: block; }
       #${FAB_ID}[hidden] { display: none; }
 
       /* "Start here..." speech bubble shown after the guide's Finish, tail
@@ -4588,7 +4590,7 @@
     fab.type = "button";
     fab.setAttribute("aria-label", t("observer_openStyxMultiCart"));
     const icon = document.createElement("img");
-    try { icon.src = chrome.runtime.getURL("icons/icon48.png"); } catch (_e) { /* ignore */ }
+    try { icon.src = chrome.runtime.getURL("icons/icon128.png"); } catch (_e) { /* ignore */ }
     icon.alt = "";
     fab.appendChild(icon);
 

@@ -234,9 +234,8 @@ html[data-surface="sidepanel"] .mc-header-actions {
 }
 
 .mc-logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
 }
 

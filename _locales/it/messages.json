@@ -2197,5 +2197,17 @@
   "bg_alreadyRunning": {
     "message": "Un'altra azione di Styx è ancora in corso. Attendi che finisca.",
     "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "Salva",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "Dai un nome a questo carrello",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Salva tutto il contenuto del tuo carrello Amazon in un nuovo carrello. Il carrello Amazon resta invariato.",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
   }
 }
