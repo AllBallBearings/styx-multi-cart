@@ -1038,6 +1038,16 @@
   let _amazonListsCache = { fetchedAt: 0, host: null, lists: [] };
   let _storageHydrated = false;
   let _storageHydrationPromise = null;
+  // When the PDP's native Add-to-Cart button has been relabeled "Add directly
+  // to Amazon cart" (relabelAtcButton, next to our own "Add to a Styx cart"
+  // button), a click on it must go straight to the live Amazon cart — no
+  // picker. Amazon's own protection-plan/coverage upsell can fire a SECOND
+  // click that also matches ATC_SELECTORS (e.g. inside the coverage modal),
+  // which is a different DOM node than #add-to-cart-button, so a one-shot
+  // per-element flag can't cover it. This timestamp keeps the intercept
+  // stood down for a few seconds after the direct click so that follow-up
+  // click completes the add instead of re-opening the picker.
+  let _directAtcSuppressUntil = 0;
 
   /**
    * Two-group sort: editable lists alphabetically first, then read-only
@@ -1223,12 +1233,32 @@
           return;
         }
 
+        // "Add directly to Amazon cart" (relabelAtcButton) — the native ATC
+        // button sitting next to our own "Add to a Styx cart" button. Its
+        // whole purpose is to skip the picker, so never intercept it, and
+        // stand down for a few seconds afterward too: Amazon's protection-
+        // plan/coverage upsell can fire a second click elsewhere in the page
+        // (a different DOM node, so btn.dataset.styxDirectAtc won't be set on
+        // it) to actually complete the add. Without this window that second
+        // click re-triggered the picker, so the user had to dismiss it and
+        // click "Add to Amazon cart" a second time to finish.
+        if (btn.dataset.styxDirectAtc === "1" || Date.now() < _directAtcSuppressUntil) {
+          _directAtcSuppressUntil = Date.now() + 15000;
+          dlog("[Styx ATC] direct-to-cart button — letting click through, no picker");
+          return;
+        }
+
         // Escape-hatch path: the picker's "Add to Amazon cart" button
         // re-clicks the original ATC after setting this flag. We must let
         // that click pass through untouched so Amazon's handlers AND the
         // existing watchAtcClicks() listener (for upsell recording) run.
+        // Same grace window as the direct-to-cart button above: a protection-
+        // plan/coverage upsell can fire its own completing click on a
+        // different node, which must also pass through instead of
+        // re-opening the picker.
         if (btn.dataset.styxBypass === "1") {
           delete btn.dataset.styxBypass;
+          _directAtcSuppressUntil = Date.now() + 15000;
           dlog("[Styx ATC] bypass flag set — letting click through");
           return;
         }
@@ -3931,14 +3961,33 @@
   // is explicit next to our "Add to a Styx cart" button. Reversible via
   // relabelNode (revertStyxCarts restores it when the toggle is turned off).
   function relabelAtcButton() {
-    if (!relabelEnabled()) return;
     const atc = document.getElementById("add-to-cart-button");
     if (!atc) return;
+    if (!relabelEnabled()) {
+      // Toggle turned off: this button is Amazon's plain "Add to Cart" again,
+      // so it must go back through the normal picker intercept.
+      delete atc.dataset.styxDirectAtc;
+      return;
+    }
     const wrap = atc.closest(".a-button");
     const label =
       (wrap && wrap.querySelector(".a-button-text")) ||
       document.getElementById("submit.add-to-cart-announce");
-    if (label) relabelNode(label, () => t("observer_addDirectlyToAmazonCart"));
+    if (!label) {
+      // No label to relabel on this surface (no .a-button wrapper found) —
+      // the companion "Add to a Styx cart" button was never injected here
+      // either, so this is an ordinary ATC button, not the paired "direct"
+      // one. Must NOT mark it, or every plain Add-to-Cart click on a page
+      // where the rebrand toggle merely defaults on would silently skip the
+      // picker.
+      delete atc.dataset.styxDirectAtc;
+      return;
+    }
+    // Marks this exact button for installAtcIntercept: once genuinely
+    // relabeled, a click on it must go straight to Amazon, never through our
+    // cart picker.
+    atc.dataset.styxDirectAtc = "1";
+    relabelNode(label, () => t("observer_addDirectlyToAmazonCart"));
   }
 
   function injectPdpAddToListButton() {
