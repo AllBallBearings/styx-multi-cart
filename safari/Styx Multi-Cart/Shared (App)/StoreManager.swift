@@ -118,9 +118,25 @@ final class StoreManager {
         var hasLifetime = false
         var subActive = false
         var subExpiresMs: Double = 0
+        // True when we saw one of OUR product IDs with a revocationDate (e.g.
+        // a refund). Transaction.currentEntitlements only ever yields verified
+        // transactions Apple currently considers valid, so an ordinary lapsed/
+        // non-renewed subscription never appears here at all — it's simply
+        // absent, same as "never purchased". A refund is the one case where a
+        // transaction for our product surfaces WITH revocationDate set, distinct
+        // from "not entitled because nothing to see". That distinction is what
+        // lets the JS-side mapper cut access immediately instead of applying
+        // its usual not-entitled grace window (nativeEntitlementToPatch).
+        var revokedAny = false
 
         for await result in Transaction.currentEntitlements {
-            guard case .verified(let t) = result, t.revocationDate == nil else { continue }
+            guard case .verified(let t) = result else { continue }
+            guard t.revocationDate == nil else {
+                if t.productID == Self.lifetimeID || t.productID == Self.annualID {
+                    revokedAny = true
+                }
+                continue
+            }
             switch t.productID {
             case Self.lifetimeID:
                 hasLifetime = true
@@ -154,7 +170,8 @@ final class StoreManager {
             productType: productType,
             expiresAt: expiresAt,
             willAutoRenew: willAutoRenew,
-            productId: productId
+            productId: productId,
+            revoked: !entitled && revokedAny
         )
     }
 
@@ -177,7 +194,8 @@ final class StoreManager {
         productType: String,
         expiresAt: Double,
         willAutoRenew: Bool,
-        productId: String
+        productId: String,
+        revoked: Bool = false
     ) {
         guard let defaults = UserDefaults(suiteName: Self.appGroupID) else {
             NSLog("[Styx Multi-Cart] App Group \(Self.appGroupID) unavailable — entitlement not shared")
@@ -189,6 +207,7 @@ final class StoreManager {
             "expiresAt": expiresAt,
             "willAutoRenew": willAutoRenew,
             "productId": productId,
+            "revoked": revoked,
             "updatedAt": Date().timeIntervalSince1970 * 1000,
         ]
         defaults.set(payload, forKey: Self.entitlementKey)

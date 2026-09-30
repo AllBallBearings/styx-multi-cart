@@ -8,6 +8,43 @@
 (function () {
   "use strict";
 
+  // ---- i18n ---------------------------------------------------------------
+  // Chrome's chrome.i18n.getMessage() resolves _locales/<locale>/messages.json
+  // by the browser's UI language. `t()` is a thin convenience wrapper; `applyI18n`
+  // walks the DOM once (and again for any dynamically-inserted subtree) applying
+  // data-i18n (textContent) and data-i18n-attr (pipe-delimited attr:key pairs).
+  // The Safari bundle stores placeholders as {{N}} (scripts/safari-i18n-tokens.py)
+  // because Safari's getMessage drops `$N` after a non-space char; substitute
+  // them here. Chrome's files still use $N, so this is a no-op there.
+  function t(key, subs) {
+    try {
+      const msg = chrome.i18n.getMessage(key, subs);
+      if (!msg) return key;
+      const list = subs == null ? [] : Array.isArray(subs) ? subs : [subs];
+      return msg.replace(/\{\{(D|\d)\}\}/g, (m, n) =>
+        n === "D" ? "$" : list[n - 1] == null ? m : String(list[n - 1]));
+    } catch (_e) {
+      return key;
+    }
+  }
+
+  function applyI18n(root) {
+    const scope = root || document;
+    scope.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+    scope.querySelectorAll("[data-i18n-attr]").forEach((el) => {
+      const spec = el.getAttribute("data-i18n-attr") || "";
+      spec.split("|").forEach((pair) => {
+        const idx = pair.indexOf(":");
+        if (idx < 0) return;
+        const attr = pair.slice(0, idx).trim();
+        const key = pair.slice(idx + 1).trim();
+        if (attr && key) el.setAttribute(attr, t(key));
+      });
+    });
+  }
+
   // The native Chrome side panel loads this page with ?surface=sidepanel so
   // it can fill the panel's width/height instead of the fixed popup size.
   // ("panel" is the legacy in-page-iframe value, kept for safety.)
@@ -211,7 +248,7 @@
         done = true;
         resolve({
           ok: false,
-          error: "No response from extension service worker.",
+          error: t("popup_err_noSwResponse"),
         });
       }, timeoutMs);
 
@@ -222,11 +259,11 @@
         if (chrome.runtime.lastError) {
           resolve({
             ok: false,
-            error: chrome.runtime.lastError.message || "Unknown error",
+            error: chrome.runtime.lastError.message || t("popup_err_unknownError"),
           });
           return;
         }
-        resolve(response || { ok: false, error: "No response" });
+        resolve(response || { ok: false, error: t("popup_err_noSwResponse") });
       });
     });
   }
@@ -274,11 +311,11 @@
     // about yes/no still works, because "ok"/"alt" are truthy and cancel is
     // still false.
     const {
-      title = "Are you sure?",
+      title = t("popup_confirm_defaultTitle"),
       message = "",
       emphasis = null,
-      okLabel = "OK",
-      cancelLabel = "Cancel",
+      okLabel = t("popup_action_ok"),
+      cancelLabel = t("popup_action_cancel"),
       altLabel = null,
       destructive = false,
       variant = null,
@@ -382,12 +419,12 @@
 
   function promptDialog(opts) {
     const {
-      title = "Enter a value",
+      title = t("popup_prompt_defaultTitle"),
       message = "",
       placeholder = "",
       initialValue = "",
-      okLabel = "OK",
-      cancelLabel = "Cancel",
+      okLabel = t("popup_action_ok"),
+      cancelLabel = t("popup_action_cancel"),
       maxLength = 60,
       allowEmpty = false,
       trim = true,
@@ -486,6 +523,131 @@
     }
   }
 
+  // ---- Live operation status ---------------------------------------------
+  //
+  // Save / clear / restore / add-to-list run for many seconds in the service
+  // worker, which acknowledges the request immediately and keeps working. So a
+  // button's own await ends almost at once and, without this, the panel shows
+  // nothing while the on-page toast counts items. We poll MC_GET_STATUS, show
+  // what is happening (spinner + progressive label on the button that started
+  // it, plus a banner with the live step), and make the rest of the list block
+  // inert so a second operation can't be started on top of it. The service
+  // worker enforces the same rule with its own lock — this is the visible half.
+
+  const $listBlock = document.querySelector(".mc-list-block");
+  const $opStatus = document.getElementById("mc-op-status");
+  const $opTitle = document.getElementById("mc-op-title");
+  const $opDetail = document.getElementById("mc-op-detail");
+  const OP_BUTTONS = [
+    { kind: "save", el: $saveForLater, key: "popup_op_saving" },
+    { kind: "clear", el: $clear, key: "popup_op_clearing" },
+  ];
+  let opBusy = false;
+  let opKind = "other";
+  let listsVersionSeen = null;
+  let opOptimisticUntil = 0;
+  let opPollInFlight = false;
+  let opPollTimer = null;
+
+  function setOpButtonBusy(btn, busy, text) {
+    if (!btn) return;
+    const label =
+      btn.querySelector(".mc-cart-action-label") || btn.querySelector("[data-i18n]");
+    if (busy) {
+      if (label && label.dataset.idleText == null) label.dataset.idleText = label.textContent;
+      if (label) label.textContent = text;
+      btn.classList.add("mc-op-busy");
+      btn.setAttribute("aria-busy", "true");
+    } else {
+      if (label && label.dataset.idleText != null) {
+        label.textContent = label.dataset.idleText;
+        delete label.dataset.idleText;
+      }
+      btn.classList.remove("mc-op-busy");
+      btn.removeAttribute("aria-busy");
+    }
+  }
+
+  function applyOpStatus(status) {
+    const busy = !!(status && status.busy);
+    const kind = (status && status.kind) || "other";
+    opBusy = busy;
+    opKind = busy ? kind : "other";
+
+    document.documentElement.toggleAttribute("data-op-busy", busy);
+    if ($listBlock) $listBlock.inert = busy;
+    for (const b of OP_BUTTONS) setOpButtonBusy(b.el, busy && b.kind === kind, t(b.key));
+
+    if ($opStatus) {
+      $opStatus.hidden = !busy;
+      if (busy) {
+        $opTitle.textContent = (status && status.title) || t("popup_op_working");
+        const detail = (status && status.detail) || "";
+        $opDetail.textContent = detail;
+        $opDetail.hidden = !detail;
+      }
+    }
+
+  }
+
+  async function pollOpStatus() {
+    if (opPollInFlight) return;
+    opPollInFlight = true;
+    try {
+      const status = await send({ type: "MC_GET_STATUS" }, 3000);
+      // A transport failure comes back as {ok:false} with no `busy` — leave the
+      // UI as it is rather than flipping it on a dropped message.
+      if (!status || typeof status.busy !== "boolean") return;
+      // The service worker bumps this when a save / create-list finishes. Reload
+      // the cards (forced: refresh() is a no-op once the first load is done, and
+      // the worker serves a cached snapshot otherwise) so the new cart shows up,
+      // even if the panel wasn't visible while it was being built.
+      if (typeof status.listsVersion === "number") {
+        if (listsVersionSeen === null) {
+          listsVersionSeen = status.listsVersion;
+        } else if (status.listsVersion !== listsVersionSeen) {
+          listsVersionSeen = status.listsVersion;
+          loadAmazonLists(true);
+        }
+      }
+      // We just started something: the service worker may not have taken its
+      // lock yet, so don't let an "idle" answer cancel the optimistic state.
+      if (!status.busy && Date.now() < opOptimisticUntil) return;
+      applyOpStatus(status);
+    } finally {
+      opPollInFlight = false;
+    }
+  }
+
+  function scheduleOpPoll() {
+    clearTimeout(opPollTimer);
+    if (document.visibilityState === "hidden") return;
+    // Fast while something is running; slow when idle, just to notice work
+    // started from elsewhere (the on-page buttons, another tab).
+    opPollTimer = setTimeout(async () => {
+      await pollOpStatus();
+      scheduleOpPoll();
+    }, opBusy ? 500 : 2500);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pollOpStatus();
+    scheduleOpPoll();
+  });
+
+  /** Run a long operation's start request with the busy UI up immediately. */
+  async function runOp(kind, fn) {
+    opOptimisticUntil = Date.now() + 2500;
+    applyOpStatus({ busy: true, kind });
+    try {
+      return await fn();
+    } finally {
+      opOptimisticUntil = 0;
+      pollOpStatus();
+      scheduleOpPoll();
+    }
+  }
+
   // ---- Rendering ---------------------------------------------------------
 
   function formatRelative(iso) {
@@ -493,13 +655,13 @@
     if (Number.isNaN(then)) return "";
     const diff = Date.now() - then;
     const sec = Math.round(diff / 1000);
-    if (sec < 60) return "just now";
+    if (sec < 60) return t("popup_time_justNow");
     const min = Math.round(sec / 60);
-    if (min < 60) return `${min} min ago`;
+    if (min < 60) return t("popup_time_minAgo", [min]);
     const hr = Math.round(min / 60);
-    if (hr < 24) return `${hr} hr ago`;
+    if (hr < 24) return t("popup_time_hrAgo", [hr]);
     const day = Math.round(hr / 24);
-    if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
+    if (day < 30) return t("popup_time_dayAgo", [day]);
     return new Date(iso).toLocaleDateString();
   }
 
@@ -555,12 +717,12 @@
 
     if (item.unavailable === true) {
       tile.classList.add("mc-thumb-unavailable");
-      tile.title = `${item.title || item.asin || "Item"} — ${
-        item.unavailableReason || "unavailable"
+      tile.title = `${item.title || item.asin || t("popup_genericItem")} — ${
+        item.unavailableReason || t("popup_unavailable")
       }`;
       const badge = document.createElement("span");
       badge.className = "mc-thumb-unavailable-badge";
-      badge.textContent = "Unavailable";
+      badge.textContent = t("popup_unavailable");
       tile.appendChild(badge);
       return tile;
     }
@@ -580,15 +742,15 @@
     tile.tabIndex = 0;
     tile.setAttribute(
       "aria-label",
-      `${item.title || item.asin || "Item"} — click to move to another cart`
+      t("popup_thumb_moveAriaLabel", [item.title || item.asin || t("popup_genericItem")])
     );
 
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "mc-thumb-remove";
     remove.dataset.action = "thumb-remove";
-    remove.title = "Remove item";
-    remove.setAttribute("aria-label", `Remove ${item.title || item.asin || "item"}`);
+    remove.title = t("popup_thumb_removeTitle");
+    remove.setAttribute("aria-label", t("popup_thumb_removeAriaLabel", [item.title || item.asin || t("popup_genericItem")]));
     remove.textContent = "×";
     tile.appendChild(remove);
 
@@ -596,8 +758,8 @@
     qty.type = "button";
     qty.className = "mc-thumb-qty";
     qty.dataset.action = "thumb-qty";
-    qty.title = "Change quantity";
-    qty.setAttribute("aria-label", `Quantity ${item.quantity || 1}, click to change`);
+    qty.title = t("popup_thumb_qtyTitle");
+    qty.setAttribute("aria-label", t("popup_thumb_qtyAriaLabel", [item.quantity || 1]));
     qty.textContent = String(item.quantity || 1);
     tile.appendChild(qty);
 
@@ -623,11 +785,11 @@
       more.className = "mc-item-thumb-more";
       more.dataset.action = "thumb-more";
       if (expanded) {
-        more.textContent = "Show less";
-        more.setAttribute("aria-label", "Show fewer items");
+        more.textContent = t("popup_thumb_showLess");
+        more.setAttribute("aria-label", t("popup_thumb_showFewerAriaLabel"));
       } else {
         more.textContent = `+${items.length - THUMB_CAP}`;
-        more.setAttribute("aria-label", `Show ${items.length - THUMB_CAP} more items`);
+        more.setAttribute("aria-label", t("popup_thumb_showMoreAriaLabel", [items.length - THUMB_CAP]));
       }
       thumbs.appendChild(more);
     }
@@ -650,8 +812,8 @@
       lockPill.type = "button";
       lockPill.className = "mc-item-lock-pill";
       lockPill.dataset.action = "lock-upgrade";
-      lockPill.title = "Renew Premium to edit this cart";
-      lockPill.textContent = "Read-Only — Go Premium?";
+      lockPill.title = t("popup_lockPill_title");
+      lockPill.textContent = t("popup_lockPill_label");
       node.prepend(lockPill);
     }
 
@@ -659,7 +821,7 @@
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.className = "mc-select-checkbox";
-      cb.setAttribute("aria-label", `Select cart "${cart.name}" to combine`);
+      cb.setAttribute("aria-label", t("popup_combine_selectAriaLabel", [cart.name]));
       cb.checked = combineState.selected.includes(cart.id);
       node.classList.toggle("mc-item-selected", cb.checked);
       node.prepend(cb);
@@ -670,7 +832,7 @@
     if (isLocked) {
       // Strip rename affordance — CSS handles visuals, this kills the action.
       nameBtn.setAttribute("disabled", "");
-      nameBtn.setAttribute("title", "Locked — renew Premium to rename");
+      nameBtn.setAttribute("title", t("popup_locked_renameTitle"));
       nameBtn.dataset.action = "rename-locked";
     }
 
@@ -678,13 +840,12 @@
       (n, it) => n + (it.quantity || 1),
       0
     );
-    const itemWord = cart.items.length === 1 ? "item" : "items";
     node.querySelector(".mc-item-count").textContent =
-      `${cart.items.length} ${itemWord} · ${totalQty} qty`;
+      t("popup_item_countQty", [itemCountText(cart.items.length), totalQty]);
 
     const host = (cart.host || "www.amazon.com").replace(/^www\./, "");
     node.querySelector(".mc-item-meta").textContent =
-      `${host} · saved ${formatRelative(cart.savedAt)}`;
+      t("popup_item_hostSaved", [host, formatRelative(cart.savedAt)]);
 
     // Amazon-list sync state. When linked, show a "Synced · View list" line
     // and relabel the save button to make re-syncing obvious.
@@ -695,14 +856,14 @@
       syncEl.innerHTML = "";
       const tick = document.createElement("span");
       tick.className = "mc-sync-ok";
-      tick.textContent = `✓ Synced ${formatRelative(cart.syncedAt)}`;
+      tick.textContent = t("popup_sync_synced", [formatRelative(cart.syncedAt)]);
       syncEl.appendChild(tick);
       if (cart.amazonListUrl) {
         syncEl.appendChild(document.createTextNode(" · "));
         const a = document.createElement("a");
         a.className = "mc-sync-link";
         a.href = cart.amazonListUrl;
-        a.textContent = "View list";
+        a.textContent = t("popup_sync_viewList");
         // Navigate the existing Amazon tab in place (same as the per-list
         // "View on Amazon" link) rather than opening a new tab.
         a.addEventListener("click", (e) => {
@@ -711,7 +872,7 @@
         });
         syncEl.appendChild(a);
       }
-      if (saveBtn) saveBtn.textContent = "Update Amazon List";
+      if (saveBtn) saveBtn.textContent = t("popup_sync_updateAmazonList");
     } else if (syncEl) {
       syncEl.hidden = true;
     }
@@ -728,7 +889,7 @@
       );
       lockedBtns.forEach((btn) => {
         btn.setAttribute("disabled", "");
-        btn.setAttribute("title", "Locked — renew Premium to use this cart");
+        btn.setAttribute("title", t("popup_locked_useTitle"));
       });
     }
 
@@ -802,11 +963,10 @@
     }
     $tierStrip.hidden = false;
 
-    $tierBadge.textContent = "Free";
+    $tierBadge.textContent = t("popup_tier_free");
     $tierBadge.dataset.tier = "free";
 
-    const cartWord = limit === 1 ? "cart" : "carts";
-    $tierUsage.textContent = `${count} / ${limit} saved ${cartWord}`;
+    $tierUsage.textContent = t("popup_tier_usage", [count, limit]);
 
     $tierUpgrade.hidden = false;
   }
@@ -830,16 +990,17 @@
     }
     $lapsedBanner.hidden = false;
     $lapsedCount.textContent = String(locked);
-    $lapsedSuffix.textContent = locked === 1 ? " cart is read-only" : " carts are read-only";
+    $lapsedSuffix.textContent = t(
+      locked === 1 ? "popup_lapsed_suffix_one" : "popup_lapsed_suffix_other"
+    );
   }
 
   // ---- Item tile helpers -------------------------------------------------
 
   function updateRowSummary(li, cart) {
     const totalQty = (cart.items || []).reduce((n, it) => n + (it.quantity || 1), 0);
-    const itemWord = cart.items.length === 1 ? "item" : "items";
     li.querySelector(".mc-item-count").textContent =
-      `${cart.items.length} ${itemWord} · ${totalQty} qty`;
+      t("popup_item_countQty", [itemCountText(cart.items.length), totalQty]);
   }
 
   async function refresh() {
@@ -859,7 +1020,7 @@
     if (!res.ok) {
       // Revert and notify if the write failed.
       $interceptToggle.checked = !enabled;
-      toast(res.error || "Could not save setting", "error");
+      toast(res.error || t("popup_err_saveSettingFailed"), "error");
     }
   });
 
@@ -877,13 +1038,13 @@
       const res = await send({ type: "MC_SET_RELABEL", enabled });
       if (!res || !res.ok) {
         $relabelToggle.checked = !enabled; // revert on failure
-        toast((res && res.error) || "Could not save setting", "error");
+        toast((res && res.error) || t("popup_err_saveSettingFailed"), "error");
         return;
       }
       toast(
         enabled
-          ? "Amazon lists now show as your Styx carts."
-          : "Amazon lists left as-is."
+          ? t("popup_toast_relabelOn")
+          : t("popup_toast_relabelOff")
       );
     });
   }
@@ -900,10 +1061,10 @@
       const res = await send({ type: "MC_SET_FAB_PULSE", enabled });
       if (!res || !res.ok) {
         $fabpulseToggle.checked = !enabled; // revert on failure
-        toast((res && res.error) || "Could not save setting", "error");
+        toast((res && res.error) || t("popup_err_saveSettingFailed"), "error");
         return;
       }
-      toast(enabled ? "Floating button will pulse." : "Floating button pulse off.");
+      toast(enabled ? t("popup_toast_fabPulseOn") : t("popup_toast_fabPulseOff"));
     });
   }
 
@@ -932,16 +1093,20 @@
   // than spawning a new tab. (A plain <a> can't do this: inside the floating
   // iframe a same-tab link would try to load Amazon INTO the iframe, which
   // Amazon blocks, and target=_blank always forks a new tab.)
+  //
+  // Routed through the service worker rather than calling chrome.tabs.*
+  // directly: on Safari this code also runs inside the floating in-page
+  // modal, which is popup.html loaded as an iframe INSIDE the Amazon page's
+  // own document. Safari restricts chrome.tabs access from that nested
+  // context differently than Chrome does — direct calls silently fail there.
+  // The background page is always a first-class extension context on every
+  // platform.
   async function openInActiveTab(url) {
     if (!url || url === "#") return;
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.id != null) {
-        await chrome.tabs.update(tab.id, { url });
-        return;
-      }
-    } catch (_e) { /* fall through to a new tab */ }
-    try { await chrome.tabs.create({ url }); } catch (_e) { /* give up quietly */ }
+    const res = await send({ type: "MC_OPEN_IN_ACTIVE_TAB", url });
+    if (!res || !res.ok) {
+      toast((res && res.error) || "Couldn't open that on Amazon.", "error");
+    }
   }
 
   // ---- Settings: open as side panel vs popup (Chrome only) ---------------
@@ -963,13 +1128,13 @@
       if (!res || !res.ok) {
         // Revert and notify if the write failed.
         $sidepanelToggle.checked = surface !== "sidepanel";
-        toast((res && res.error) || "Could not save setting", "error");
+        toast((res && res.error) || t("popup_err_saveSettingFailed"), "error");
         return;
       }
       toast(
         surface === "sidepanel"
-          ? "Opens as side panel. Click the toolbar icon to reopen."
-          : "Opens as popup. Click the toolbar icon to reopen."
+          ? t("popup_toast_surfaceSidepanel")
+          : t("popup_toast_surfacePopup")
       );
     });
   }
@@ -1004,13 +1169,11 @@
       theme === "dark" ||
       (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches);
     $themeToggle.innerHTML = resolvedDark ? SUN_SVG : MOON_SVG;
-    $themeToggle.title = resolvedDark
-      ? "Switch to light mode"
-      : "Switch to dark mode";
-    $themeToggle.setAttribute(
-      "aria-label",
-      resolvedDark ? "Switch to light mode" : "Switch to dark mode"
+    const themeLabel = t(
+      resolvedDark ? "popup_theme_switchToLight" : "popup_theme_switchToDark"
     );
+    $themeToggle.title = themeLabel;
+    $themeToggle.setAttribute("aria-label", themeLabel);
   }
 
   async function loadThemeSetting() {
@@ -1047,7 +1210,11 @@
       hour: "numeric",
       minute: "2-digit",
     });
-    return `Cart · ${day}, ${time}`;
+    return t("popup_defaultCartName", [day, time]);
+  }
+
+  function itemCountText(n) {
+    return n === 1 ? t("popup_count_item_one", [n]) : t("popup_count_item_other", [n]);
   }
 
   $save.addEventListener("click", () => {
@@ -1055,11 +1222,11 @@
     withLoading($save, async () => {
       const res = await send({ type: "MC_SAVE_CURRENT", name });
       if (res.ok) {
-        toast(`Saved ${res.count} item${res.count === 1 ? "" : "s"}`);
+        toast(t("popup_toast_saved", [itemCountText(res.count)]));
         $name.value = "";
         await refresh();
       } else if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not save cart", "error");
+        toast(res.error || t("popup_err_saveCartFailed"), "error");
       }
     });
   });
@@ -1076,71 +1243,77 @@
     const these =
       count && count > 0
         ? count === 1
-          ? "this item"
-          : `these ${count} items`
-        : "these items";
+          ? t("popup_thisItem")
+          : t("popup_theseNItems", [count])
+        : t("popup_theseItems");
 
     const choice = await confirmDialog({
-      title: "Clear your Amazon cart?",
-      message:
-        `Save ${these} for a later checkout and they'll be waiting ` +
-        `as a unique Styx cart in your Amazon Lists — or just clear ` +
-        `it to shop for a different occasion.`,
-      altLabel: "Save & Clear",
-      okLabel: "Clear it!",
-      cancelLabel: "Cancel",
+      title: t("popup_confirm_clear_title"),
+      message: t("popup_confirm_clear_message", [these]),
+      altLabel: t("popup_confirm_clear_altLabel"),
+      okLabel: t("popup_confirm_clear_okLabel"),
+      cancelLabel: t("popup_action_cancel"),
       destructive: true,
       variant: "cart",
     });
     if (!choice) return;
 
     if (choice === "alt") {
-      withLoading($clear, async () => {
+      runOp("clear", async () => {
         const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
         if (res.ok) {
-          toast("Saving your cart to a new Amazon list, then clearing it…");
+          toast(t("popup_toast_savingThenClearing"));
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
         } else if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not save cart", "error");
+          toast(res.error || t("popup_err_saveCartFailed"), "error");
         }
       });
       return;
     }
 
-    withLoading($clear, async () => {
+    runOp("clear", async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
         toast(
           res.alreadyEmpty
-            ? "Your Amazon cart is already empty."
-            : "Clearing your cart — check the Amazon tab."
+            ? t("popup_toast_cartAlreadyEmpty")
+            : t("popup_toast_clearingCart")
         );
         // Get out of the way: progress continues as a toast on the page,
         // which this popover would otherwise cover.
         if (!res.alreadyEmpty && !IS_PANEL_SURFACE)
           setTimeout(() => window.close(), 1200);
       } else {
-        toast(res.error || "Could not clear cart", "error");
+        toast(res.error || t("popup_err_clearCartFailed"), "error");
       }
     });
   });
 
   // Save the live Amazon cart into a new cart WITHOUT clearing it — the
-  // same driver as "Save & Clear", minus the clear step.
+  // same driver as "Save & Clear", minus the clear step. Asks for a name first
+  // (pre-filled with a dated suggestion, so Enter still works as a one-tap
+  // save) and does nothing if the user backs out.
   if ($saveForLater) {
-    $saveForLater.addEventListener("click", () => {
-      withLoading($saveForLater, async () => {
+    $saveForLater.addEventListener("click", async () => {
+      const name = await promptDialog({
+        title: t("popup_prompt_saveForLater_title"),
+        message: t("popup_prompt_saveForLater_message"),
+        placeholder: t("popup_save_input_placeholder"),
+        initialValue: defaultName(),
+        okLabel: t("popup_action_save"),
+      });
+      if (name == null) return;
+
+      runOp("save", async () => {
         const res = await send({
           type: "MC_SAVE_FOR_LATER",
-          name: defaultName(),
+          name,
         });
         if (res.ok) {
-          toast(
-            `Saving ${res.saving} item${res.saving === 1 ? "" : "s"} to a new cart — your Amazon cart stays as it is.`
-          );
+          toast(t("popup_toast_savingForLater", [itemCountText(res.saving)]));
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
         } else if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not save cart", "error");
+          toast(res.error || t("popup_err_saveCartFailed"), "error");
         }
       });
     });
@@ -1158,7 +1331,7 @@
     combineState.selected = [];
     document.body.classList.toggle("mc-combine-active", on);
     $combineBar.hidden = !on;
-    $combineBtn.textContent = on ? "Done" : "Merge Carts";
+    $combineBtn.textContent = on ? t("popup_action_done") : t("popup_combine_mergeCarts");
     $combineBtn.classList.toggle("mc-btn-active", on);
     updateCombineStatus();
     // Force a re-render so checkboxes appear/disappear and any prior
@@ -1170,11 +1343,11 @@
     if (!combineState.active) return;
     const n = combineState.selected.length;
     if (n === 0) {
-      $combineStatus.textContent = "Pick 2 carts to combine.";
+      $combineStatus.textContent = t("popup_combine_pickTwo");
     } else if (n === 1) {
-      $combineStatus.textContent = "Pick 1 more.";
+      $combineStatus.textContent = t("popup_combine_pickOneMore");
     } else {
-      $combineStatus.textContent = "Ready to merge?";
+      $combineStatus.textContent = t("popup_combine_readyToMerge");
     }
     $combineContinue.disabled = n !== 2;
   }
@@ -1208,13 +1381,13 @@
     const cartA = cartCache.get(idA);
     const cartB = cartCache.get(idB);
     if (!cartA || !cartB) {
-      toast("Could not load both carts.", "error");
+      toast(t("popup_err_loadBothCartsFailed"), "error");
       return;
     }
     // Cross-region guard — fail fast before showing the modal.
     if (!hostsMatch(cartA.host, cartB.host)) {
       toast(
-        `Can't merge: "${cartA.name}" is on ${cartA.host} but "${cartB.name}" is on ${cartB.host}.`,
+        t("popup_err_crossRegionMerge", [cartA.name, cartA.host, cartB.name, cartB.host]),
         "error"
       );
       return;
@@ -1266,16 +1439,20 @@
     });
     if (!res.ok) {
       if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not combine carts.", "error");
+        toast(res.error || t("popup_err_combineCartsFailed"), "error");
       }
       return;
     }
     const bits = [];
-    if (res.added) bits.push(`${res.added} item${res.added === 1 ? "" : "s"} added`);
-    if (res.qtyBumped) bits.push(`${res.qtyBumped} qty bumped`);
+    if (res.added) bits.push(t("popup_combine_itemsAdded", [itemCountText(res.added)]));
+    if (res.qtyBumped) bits.push(t("popup_combine_qtyBumped", [res.qtyBumped]));
     const detail = bits.length ? ` (${bits.join(", ")})` : "";
     toast(
-      `Merged "${(cartA && cartA.name) || res.sourceName}" into "${(cartB && cartB.name) || res.targetName}"${detail}.`
+      t("popup_combine_merged", [
+        (cartA && cartA.name) || res.sourceName,
+        (cartB && cartB.name) || res.targetName,
+        detail,
+      ])
     );
     closeCombineModal();
     setCombineMode(false);
@@ -1322,7 +1499,7 @@
       $moveThumb.removeAttribute("src");
       $moveThumb.style.visibility = "hidden";
     }
-    $moveItemName.textContent = item.title || item.asin || "(untitled)";
+    $moveItemName.textContent = item.title || item.asin || t("popup_untitled");
 
     // Build the cart list.
     $moveList.innerHTML = "";
@@ -1330,8 +1507,7 @@
     if (candidates.length === 0) {
       const empty = document.createElement("li");
       empty.className = "mc-move-empty";
-      empty.textContent =
-        "No other carts to move into yet.";
+      empty.textContent = t("popup_move_noOtherCarts");
       $moveList.appendChild(empty);
     } else {
       candidates.forEach((cart) => {
@@ -1348,7 +1524,7 @@
         name.textContent = cart.name;
         const meta = document.createElement("span");
         meta.className = "mc-move-option-meta";
-        meta.textContent = `${count} item${count === 1 ? "" : "s"}${host ? ` · ${host}` : ""}`;
+        meta.textContent = `${itemCountText(count)}${host ? ` · ${host}` : ""}`;
         btn.append(name, meta);
         li2.appendChild(btn);
         $moveList.appendChild(li2);
@@ -1383,14 +1559,14 @@
     });
     if (!res.ok) {
       if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not move item.", "error");
+        toast(res.error || t("popup_err_moveItemFailed"), "error");
       }
       return;
     }
     closeMoveModal();
     closeQtyPop();
-    const where = (target && target.name) || res.targetName || "cart";
-    toast(`Moved "${res.itemTitle}" to "${where}".`);
+    const where = (target && target.name) || res.targetName || t("popup_genericCart");
+    toast(t("popup_toast_moved", [res.itemTitle, where]));
     // Refresh so both the source and destination carts reflect the move.
     await refresh();
   }
@@ -1400,7 +1576,7 @@
     const asin = $moveModal.dataset.asin;
     const source = sourceId ? cartCache.get(sourceId) : null;
     if (!sourceId || !asin || !source) {
-      toast("Could not create a destination for this item.", "error");
+      toast(t("popup_err_createDestinationFailed"), "error");
       return;
     }
 
@@ -1408,9 +1584,9 @@
     // the visual context behind it.
     $moveModal.setAttribute("inert", "");
     const name = await promptDialog({
-      title: "Create destination cart",
-      placeholder: "e.g. Birthday gifts",
-      okLabel: "Create",
+      title: t("popup_prompt_createDestination_title"),
+      placeholder: t("popup_save_input_placeholder"),
+      okLabel: t("popup_action_create"),
     });
     if (!$moveModal.hidden) $moveModal.removeAttribute("inert");
     if (name == null) return;
@@ -1423,13 +1599,13 @@
       });
       if (!res.ok) {
         if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not create cart.", "error");
+          toast(res.error || t("popup_err_createCartFailed"), "error");
         }
         return;
       }
       const targetId = res.cart && res.cart.id;
       if (!targetId) {
-        toast("Created the cart, but could not move the item.", "error");
+        toast(t("popup_err_createdButNotMoved"), "error");
         await refresh();
         return;
       }
@@ -1469,7 +1645,7 @@
       updateRowSummary(li, cart);
       updateQtyBadge(li, asin, prev);
       if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not update quantity", "error");
+        toast(res.error || t("popup_err_updateQtyFailed"), "error");
       }
     }
   }
@@ -1486,13 +1662,13 @@
     const isLast = (cart.items || []).length <= 1;
     if (isLast) {
       const ok = await confirmDialog({
-        title: "Remove last item?",
+        title: t("popup_confirm_removeLast_title"),
         emphasis: {
-          before: "Removing ",
+          before: t("popup_confirm_removeLast_before"),
           text: itemName,
-          after: " empties and deletes this cart.",
+          after: t("popup_confirm_removeLast_after"),
         },
-        okLabel: "Remove & delete",
+        okLabel: t("popup_confirm_removeLast_okLabel"),
         destructive: true,
       });
       if (!ok) return;
@@ -1501,12 +1677,12 @@
     const res = await send({ type: "MC_REMOVE_ITEM_FROM_CART", id, asin });
     if (!res.ok) {
       if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not remove item", "error");
+        toast(res.error || t("popup_err_removeItemFailed"), "error");
       }
       return;
     }
     if (res.cartDeleted) {
-      toast("Cart emptied — removing from list");
+      toast(t("popup_toast_cartEmptiedRemoved"));
       await refresh();
       return;
     }
@@ -1651,11 +1827,11 @@
 
     if (action === "restore") {
       const cartName =
-        li.querySelector(".mc-item-name").textContent.trim() || "this";
+        li.querySelector(".mc-item-name").textContent.trim() || t("popup_thisFallback");
       const ok = await confirmDialog({
-        title: "Switch to this cart?",
-        message: `This will replace your current Amazon cart with the contents of "${cartName}".`,
-        okLabel: "Switch",
+        title: t("popup_confirm_switch_title"),
+        message: t("popup_confirm_switch_message", [cartName]),
+        okLabel: t("popup_action_switch"),
       });
       if (!ok) return;
 
@@ -1663,51 +1839,49 @@
         const res = await send({ type: "MC_RESTORE_CART", id });
         if (res.ok) {
           const total = res.total || 0;
-          toast(
-            `Switching carts — loading ${total} item${total === 1 ? "" : "s"}. If Amazon shows an upsell, choose an option there to continue.`
-          );
+          toast(t("popup_toast_switchingCarts", [itemCountText(total)]));
           // Get out of the way: progress continues as a toast on the page,
           // which this popover would otherwise cover.
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
         } else if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not switch carts", "error");
+          toast(res.error || t("popup_err_switchCartsFailed"), "error");
         }
       });
     } else if (action === "save-to-list") {
       const cartName =
-        li.querySelector(".mc-item-name").textContent.trim() || "this cart";
+        li.querySelector(".mc-item-name").textContent.trim() || t("popup_thisCartFallback");
       const cart = cartCache.get(id);
       const isUpdate = !!(cart && cart.amazonListId && cart.syncedAt);
       const ok = await confirmDialog({
-        title: isUpdate ? "Update Amazon list?" : "Save to Amazon list?",
+        title: isUpdate ? t("popup_confirm_updateList_title") : t("popup_confirm_saveToList_title"),
         message: isUpdate
-          ? `Re-sync "${cartName}" to its Amazon list. Styx opens Amazon tabs to add the items — keep them open until it finishes.`
-          : `Create a private Amazon list named "${cartName}" and add its items. Styx opens Amazon tabs to do it — keep them open until it finishes. You must be signed in to Amazon.`,
-        okLabel: isUpdate ? "Update" : "Save to Amazon",
+          ? t("popup_confirm_updateList_message", [cartName])
+          : t("popup_confirm_saveToList_message", [cartName]),
+        okLabel: isUpdate ? t("popup_action_update") : t("popup_action_saveToAmazon"),
       });
       if (!ok) return;
       withLoading(button, async () => {
-        toast("Saving to your Amazon list — Styx is opening Amazon tabs. This can take a moment…");
+        toast(t("popup_toast_savingToAmazonList"));
         // Long timeout: the save creates a list + opens a product tab and only
         // returns when done. Result carries added/failed/reason for display.
         const res = await send({ type: "MC_SAVE_CART_TO_LIST", cartId: id }, 120000);
         if (res.ok) {
           const msg = res.failed
-            ? `Saved ${res.added}/${res.total}. ${res.failed} couldn't be added.`
-            : `Saved ${res.added} item${res.added === 1 ? "" : "s"} to your Amazon list.`;
+            ? t("popup_toast_savedPartial", [res.added, res.total, res.failed])
+            : t("popup_toast_savedToAmazonList", [itemCountText(res.added)]);
           toast(msg);
           await refresh();
         } else if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not save to Amazon", "error");
+          toast(res.error || t("popup_err_saveToAmazonFailed"), "error");
         }
       });
     } else if (action === "rename") {
       const current = li.querySelector(".mc-item-name").textContent;
       const next = await promptDialog({
-        title: "Rename cart",
-        placeholder: "Cart name",
+        title: t("popup_prompt_renameCart_title"),
+        placeholder: t("popup_prompt_renameCart_placeholder"),
         initialValue: current,
-        okLabel: "Rename",
+        okLabel: t("popup_action_rename"),
       });
       if (next == null) return;
       if (next === current) return;
@@ -1720,25 +1894,25 @@
         if (res.ok) {
           await refresh();
         } else if (!handleEntitlementError(res)) {
-          toast(res.error || "Could not rename", "error");
+          toast(res.error || t("popup_err_renameFailed"), "error");
         }
       });
     } else if (action === "delete") {
       const current = li.querySelector(".mc-item-name").textContent;
       const ok = await confirmDialog({
-        title: "Delete saved cart?",
-        message: `"${current}" will be permanently removed.`,
-        okLabel: "Delete",
+        title: t("popup_confirm_deleteCart_title"),
+        message: t("popup_confirm_deleteCart_message", [current]),
+        okLabel: t("popup_action_delete"),
         destructive: true,
       });
       if (!ok) return;
       withLoading(button, async () => {
         const res = await send({ type: "MC_DELETE_CART", id });
         if (res.ok) {
-          toast("Deleted");
+          toast(t("popup_toast_deleted"));
           await refresh();
         } else {
-          toast(res.error || "Could not delete", "error");
+          toast(res.error || t("popup_err_deleteFailed"), "error");
         }
       });
     }
@@ -1775,9 +1949,9 @@
     const totalQty = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
     const count = card.querySelector(".mc-item-count");
     count.textContent =
-      `${items.length} item${items.length === 1 ? "" : "s"} · ${totalQty} qty` +
+      t("popup_item_countQty", [itemCountText(items.length), totalQty]) +
       (unavailableCount
-        ? ` · ${unavailableCount} unavailable`
+        ? t("popup_amazonList_unavailableSuffix", [unavailableCount])
         : "");
     card.dataset.countKnown = "1"; // real count is in — the poll can skip it
     const status = card.querySelector(".mc-amazon-list-load-status");
@@ -1789,9 +1963,9 @@
     addAll.disabled = availableItems.length === 0;
     addAll.title = availableItems.length
       ? unavailableCount
-        ? `Add ${availableItems.length} available item${availableItems.length === 1 ? "" : "s"} to your Amazon cart`
-        : "Add All to Amazon Cart"
-      : "This list has no available items";
+        ? t("popup_amazonList_addAvailable_title", [itemCountText(availableItems.length)])
+        : t("popup_amazonList_addAll_title")
+      : t("popup_amazonList_noAvailableItems");
   }
 
   async function ensureAmazonListItems(card, forceRefresh = false) {
@@ -1802,7 +1976,7 @@
 
     const status = card.querySelector(".mc-amazon-list-load-status");
     status.hidden = false;
-    status.textContent = "Loading items from Amazon…";
+    status.textContent = t("popup_amazonList_loadingItems");
     const res = await send(
       {
         type: "MC_GET_AMAZON_LIST",
@@ -1813,7 +1987,7 @@
       30000
     );
     if (!res.ok || !res.list) {
-      status.textContent = res.error || "Could not load this Amazon list.";
+      status.textContent = res.error || t("popup_err_loadAmazonListFailed");
       status.classList.add("mc-amazon-list-load-error");
       return null;
     }
@@ -1831,6 +2005,33 @@
     return list;
   }
 
+  // Warm list contents after the cards are on screen. This is deliberately
+  // fire-and-forget: the panel paints labels immediately, while the service
+  // worker reads up to three list pages at a time in helper tabs. Locked lists
+  // are skipped because their contents are not usable on the current tier.
+  function scheduleAmazonListPrefetch(lists, forceRefresh = false) {
+    const warmable = (Array.isArray(lists) ? lists : [])
+      .filter((list) => list && list.listId && list.access !== "locked")
+      .map((list) => ({ listId: list.listId }));
+    if (!warmable.length) return;
+    const host = listHostname(
+      (lists.find((list) => list && list.url) || {}).url || ""
+    );
+    const run = () => {
+      void send({
+        type: "MC_PREFETCH_AMAZON_LISTS",
+        host,
+        lists: warmable,
+        forceRefresh: forceRefresh === true,
+      }).catch(() => {});
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(run, { timeout: 1000 });
+    } else {
+      setTimeout(run, 0);
+    }
+  }
+
   function renderAmazonListCard(list, forceItems = false) {
     const node = $amazonListTemplate.content.firstElementChild.cloneNode(true);
     const fullHost = listHostname(list.url);
@@ -1838,14 +2039,14 @@
     node.dataset.host = fullHost;
     if (forceItems) node.dataset.forceRefresh = "1";
     const nameEl = node.querySelector(".mc-amazon-list-name");
-    nameEl.textContent = list.name || "Amazon list";
+    nameEl.textContent = list.name || t("popup_amazonList_genericName");
     const metaEl = node.querySelector(".mc-amazon-list-meta");
     const open = node.querySelector(".mc-amazon-list-open");
     open.href = list.url || "#";
     // Show the item count when we already know it. It's often unknown at first
     // paint (the wishlist index page prints no reliable count), so fall back to
-    // the "View items" affordance and let the background count backfill fill it
-    // in latently (pollListCounts). `data-count-known` marks cards the poll can
+    // the "View items" affordance and let background prefetch fill it in
+    // latently (pollListCounts). `data-count-known` marks cards the poll can
     // skip. updateAmazonListCard replaces this with "N items · M qty" on expand.
     const countEl = node.querySelector(".mc-item-count");
     // Guard null/"" explicitly — Number(null) and Number("") are both 0, which
@@ -1853,10 +2054,10 @@
     const listCount =
       list.count == null || list.count === "" ? NaN : Number(list.count);
     if (Number.isFinite(listCount) && listCount >= 0) {
-      countEl.textContent = `${listCount} item${listCount === 1 ? "" : "s"}`;
+      countEl.textContent = itemCountText(listCount);
       node.dataset.countKnown = "1";
     } else {
-      countEl.textContent = "View items";
+      countEl.textContent = t("popup_amazonList_viewItems");
     }
     if (list.access === "locked") {
       // Free-tier cart beyond the limit: gray it out, drop the add-all action,
@@ -1866,14 +2067,14 @@
       const addAll = node.querySelector(".mc-amazon-list-addall");
       if (addAll) addAll.remove();
       // The only meta worth showing: why the cart is grayed out.
-      metaEl.textContent = "Premium cart — upgrade to use";
+      metaEl.textContent = t("popup_amazonList_premiumUpgradeToUse");
       metaEl.hidden = false;
-      nameEl.setAttribute("aria-label", `Unlock ${list.name || "this cart"} with Premium`);
+      nameEl.setAttribute("aria-label", t("popup_amazonList_unlockAriaLabel", [list.name || t("popup_genericCart")]));
     } else {
       // "host · Amazon list" told the user nothing — drop it entirely.
       metaEl.textContent = "";
       metaEl.hidden = true;
-      nameEl.setAttribute("aria-label", `Show items in ${list.name || "Amazon list"}`);
+      nameEl.setAttribute("aria-label", t("popup_amazonList_showItemsAriaLabel", [list.name || t("popup_amazonList_genericName")]));
     }
     amazonListCache.set(list.listId, Object.assign({}, list));
     return node;
@@ -1886,12 +2087,15 @@
 
     amazonListsLoadPromise = (async () => {
       $amazonListsStatus.hidden = false;
-      $amazonListsStatus.textContent = "Loading your Amazon lists…";
+      $amazonListsStatus.textContent = t("popup_lists_loading");
       $amazonLists.innerHTML = "";
-      const res = await send({ type: "MC_LIST_AMAZON_LISTS" });
+      const res = await send({
+        type: "MC_LIST_AMAZON_LISTS",
+        forceRefresh: forceRefresh === true,
+      });
       if (!res.ok) {
         $amazonListsStatus.textContent =
-          res.error || "Couldn't load your Amazon lists.";
+          res.error || t("popup_err_loadAmazonListsFailed");
         $empty.hidden = true;
         return;
       }
@@ -1914,10 +2118,12 @@
         $amazonLists.appendChild(renderAmazonListCard(list, forceRefresh))
       );
       amazonListsLoaded = true;
-      // Labels are up. The service worker fills missing counts in the
-      // background (invisible tabs); poll the cheap counts map and drop each
-      // number in as it lands, so the user never waits on a spinner.
+      // Labels are up. The service worker fills missing counts in its
+      // background prefetch queue (invisible tabs); poll the cheap counts map
+      // and drop each number in as it lands, so the user never waits on a
+      // spinner.
       pollListCounts();
+      scheduleAmazonListPrefetch(lists, forceRefresh);
     })();
 
     try {
@@ -1954,7 +2160,7 @@
       const n = counts[id];
       if (typeof n === "number") {
         const el = card.querySelector(".mc-item-count");
-        if (el) el.textContent = `${n} item${n === 1 ? "" : "s"}`;
+        if (el) el.textContent = itemCountText(n);
         card.dataset.countKnown = "1";
       }
     });
@@ -2030,18 +2236,18 @@
       const availableItems = list.items.filter((item) => item.unavailable !== true);
       const unavailableCount = list.items.length - availableItems.length;
       if (!availableItems.length) {
-        toast("This list has no available items to add.", "error");
+        toast(t("popup_err_noAvailableItemsToAdd"), "error");
         return;
       }
       const name = li.querySelector(".mc-amazon-list-name").textContent.trim();
       const ok = await confirmDialog({
-        title: "Send these items to your Amazon cart?",
+        title: t("popup_confirm_sendToCart_title"),
         message:
-          `Add ${availableItems.length} available item${availableItems.length === 1 ? "" : "s"} from "${name}" to your active Amazon cart? Existing cart items will stay.` +
+          t("popup_confirm_sendToCart_message", [itemCountText(availableItems.length), name]) +
           (unavailableCount
-            ? ` ${unavailableCount} unavailable item${unavailableCount === 1 ? "" : "s"} will be skipped.`
+            ? " " + t("popup_confirm_sendToCart_unavailableNote", [itemCountText(unavailableCount)])
             : ""),
-        okLabel: "Add all",
+        okLabel: t("popup_action_addAll"),
       });
       if (!ok) return;
       await withLoading(btn, async () => {
@@ -2052,10 +2258,10 @@
           listId: li.dataset.listId,
         });
         if (res.ok) {
-          toast(`Adding ${availableItems.length} item${availableItems.length === 1 ? "" : "s"} to your Amazon cart…`);
+          toast(t("popup_toast_addingToCart", [itemCountText(availableItems.length)]));
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
         } else {
-          toast(res.error || "Could not add this list to your cart.", "error");
+          toast(res.error || t("popup_err_addListToCartFailed"), "error");
         }
       });
     });
@@ -2069,18 +2275,18 @@
     if (combineState.active) setCombineMode(false);
 
     const name = await promptDialog({
-      title: "Create a new cart",
-      placeholder: "e.g. Birthday gifts",
-      okLabel: "Create",
+      title: t("popup_prompt_createNewCart_title"),
+      placeholder: t("popup_save_input_placeholder"),
+      okLabel: t("popup_action_create"),
     });
     if (name == null) return; // user cancelled
     withLoading($createNew, async () => {
       const res = await send({ type: "MC_CREATE_EMPTY_CART", name });
       if (res.ok) {
-        toast(`Created "${name}".`);
+        toast(t("popup_toast_created", [name]));
         await refresh();
       } else if (!handleEntitlementError(res)) {
-        toast(res.error || "Could not create cart.", "error");
+        toast(res.error || t("popup_err_createCartFailed"), "error");
       }
     });
   });
@@ -2212,44 +2418,6 @@
   // preset or the flip hotkey forces a tier; cleared by "Unlock (use real)".
   const DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
 
-  /* MC_DEBUG_ENT_START */
-  const DAY_MS = 86400000;
-
-  function entPresets(now) {
-    return {
-      premium: {
-        tier: "premium",
-        premiumUntil: now + 365 * DAY_MS,
-        autoRenew: true,
-        source: "dev",
-        lastChecked: now,
-      },
-      "premium-warn": {
-        // Premium, 5 days from expiry, auto-renew off → triggers warning paths.
-        tier: "premium",
-        premiumUntil: now + 5 * DAY_MS,
-        autoRenew: false,
-        source: "dev",
-        lastChecked: now,
-      },
-      lapsed: {
-        // Was premium, expired yesterday → top-N editable, rest read-only.
-        tier: "premium",
-        premiumUntil: now - 1 * DAY_MS,
-        autoRenew: false,
-        source: "dev",
-        lastChecked: now,
-      },
-      free: {
-        tier: "free",
-        premiumUntil: null,
-        autoRenew: false,
-        source: null,
-        lastChecked: now,
-      },
-    };
-  }
-  /* MC_DEBUG_ENT_END */
 
   function formatEntForDisplay(ent) {
     if (!ent) return "(none)";
@@ -2350,96 +2518,6 @@
     });
   })();
 
-  /* MC_DEBUG_ENT_START */
-  // Button delegation inside the debug entitlement section. (Stripped from
-  // production builds along with the buttons in popup.html.)
-  if ($debugPanel) {
-    $debugPanel.addEventListener("click", async (e) => {
-      const btn = e.target.closest("[data-debug-ent]");
-      if (!btn) return;
-      const action = btn.dataset.debugEnt;
-      const now = Date.now();
-      if (action === "reset-dismiss") {
-        try {
-          await chrome.storage.local.remove(DISMISS_KEY);
-          uiDismissed = { tierStrip: null, lapsedBanner: null };
-          toast("Dismissed flags cleared", "ok");
-          await refresh();
-        } catch (err) {
-          toast(`Reset failed: ${err.message}`, "error");
-        }
-        return;
-      }
-      if (action === "unlock") {
-        try {
-          await chrome.storage.local.remove(DEV_ENT_LOCK_KEY);
-          // Snap the stored entitlement back to the real account.
-          await send({ type: "MC_DEV_SYNC_ENTITLEMENT" });
-          await refreshDebugEntDisplay();
-          await refresh();
-          toast("Entitlement unlocked — using real account", "ok");
-        } catch (err) {
-          toast(`Unlock failed: ${err.message}`, "error");
-        }
-        return;
-      }
-      const presets = entPresets(now);
-      const next = presets[action];
-      if (!next) return;
-      try {
-        // Pin it so the SW's real-account sync doesn't overwrite the forced
-        // state — the whole point for screenshots/video.
-        await chrome.storage.local.set({
-          [ENT_KEY]: next,
-          [DEV_ENT_LOCK_KEY]: true,
-        });
-        // Reset dismissed UI on entitlement state change so banners come back.
-        uiDismissed = { tierStrip: null, lapsedBanner: null };
-        await chrome.storage.local.set({
-          [DISMISS_KEY]: uiDismissed,
-        });
-        await refreshDebugEntDisplay();
-        await refresh();
-        toast(`Entitlement → ${action} (locked)`, "ok");
-      } catch (err) {
-        toast(`Failed: ${err.message}`, "error");
-      }
-    });
-  }
-
-  // Secret fast toggle: Ctrl/Cmd+Alt+P flips Premium ⇄ Free instantly and
-  // pins it (lock on), without opening the debug panel — so screenshots and
-  // video stay clean. Same dev-mode gate as Ctrl+Alt+D; e.code keeps it
-  // working regardless of macOS Option-key remapping.
-  document.addEventListener("keydown", async (e) => {
-    if (!devModeEnabled) return;
-    const isFlip =
-      (e.ctrlKey || e.metaKey) && e.altKey && e.code === "KeyP";
-    if (!isFlip) return;
-    e.preventDefault();
-    try {
-      const got = await chrome.storage.local.get(ENT_KEY);
-      const cur = got[ENT_KEY];
-      const premiumNow =
-        cur &&
-        cur.tier === "premium" &&
-        (cur.premiumUntil == null || cur.premiumUntil > Date.now());
-      const target = premiumNow ? "free" : "premium";
-      const next = entPresets(Date.now())[target];
-      await chrome.storage.local.set({
-        [ENT_KEY]: next,
-        [DEV_ENT_LOCK_KEY]: true,
-      });
-      uiDismissed = { tierStrip: null, lapsedBanner: null };
-      await chrome.storage.local.set({ [DISMISS_KEY]: uiDismissed });
-      await refreshDebugEntDisplay();
-      await refresh();
-      toast(`Entitlement → ${target} (locked)`, "ok");
-    } catch (err) {
-      toast(`Flip failed: ${err.message}`, "error");
-    }
-  });
-  /* MC_DEBUG_ENT_END */
 
   // ---- Dev backup / restore ----------------------------------------------
   // Not inside the entitlement strip markers: this ships (dev-gated behind the
@@ -2674,17 +2752,14 @@
       // Derive from the entitlement rather than hard-coding — a changed
       // FREE_CART_LIMIT must not leave this headline quietly lying.
       const freeLimit = (currentEntitlement && currentEntitlement.limit) || 3;
-      $paywallTitle.textContent = `You've used all ${freeLimit} free carts`;
-      $paywallSub.textContent =
-        "Upgrade to Premium to save more — your existing carts stay exactly as they are.";
+      $paywallTitle.textContent = t("popup_paywall_limitTitle", [freeLimit]);
+      $paywallSub.textContent = t("popup_paywall_limitSub");
     } else if (trigger === "renew") {
-      $paywallTitle.textContent = "Welcome back";
-      $paywallSub.textContent =
-        "Renew Premium to unlock your read-only carts. Everything you saved is still here, waiting.";
+      $paywallTitle.textContent = t("popup_paywall_renewTitle");
+      $paywallSub.textContent = t("popup_paywall_renewSub");
     } else {
-      $paywallTitle.textContent = "Upgrade to Premium";
-      $paywallSub.textContent =
-        "Save more of how you actually shop — gift lists, restocks, occasions, side-by-side comparisons.";
+      $paywallTitle.textContent = t("popup_paywall_title");
+      $paywallSub.textContent = t("popup_paywall_ctaSub");
     }
     // ExtensionPay is wired; each plan button deep-links its own checkout.
     resetPaywallButtons();
@@ -2718,6 +2793,9 @@
     for (const b of $paywallPlanBtns) {
       b.disabled = false;
       b.innerHTML = paywallBtnOriginalHtml.get(b);
+      // The cached markup was captured before applyI18n ran, so its label and
+      // price spans are empty — re-translate or the buttons render blank.
+      applyI18n(b);
     }
   }
 
@@ -2747,11 +2825,11 @@
       // entitlement automatically. Disable BOTH buttons during the call so a
       // double-tap can't open two checkout tabs.
       for (const b of $paywallPlanBtns) b.disabled = true;
-      btn.textContent = "Opening checkout…";
+      btn.textContent = t("popup_paywall_openingCheckout");
       const res = await send({ type: "MC_OPEN_PAYMENT_PAGE", plan });
       if (!res || !res.ok) {
         resetPaywallButtons();
-        toast((res && res.error) || "Couldn't open checkout.", "err");
+        toast((res && res.error) || t("popup_err_openCheckoutFailed"), "err");
         return;
       }
       closePaywall();
@@ -2780,16 +2858,16 @@
       e.preventDefault();
       const code = ($promoInput.value || "").trim();
       if (!code) {
-        setPromoMsg("Enter a code.", "err");
+        setPromoMsg(t("popup_promo_enterCode"), "err");
         return;
       }
       $promoSubmit.disabled = true;
-      setPromoMsg("Checking…");
+      setPromoMsg(t("popup_promo_checking"));
       const res = await send({ type: "MC_REDEEM_PROMO", code });
       $promoSubmit.disabled = false;
       if (!res || !res.ok) {
         setPromoMsg(
-          (res && res.error) || "Something went wrong. Try again.",
+          (res && res.error) || t("popup_promo_genericError"),
           "err",
         );
         return;
@@ -2797,8 +2875,8 @@
       // Success — clear the field, surface a toast, refresh entitlement-driven
       // UI, and close the paywall after a beat so the user reads the message.
       $promoInput.value = "";
-      setPromoMsg("Premium unlocked for 90 days!", "ok");
-      toast("Premium unlocked — enjoy!", "ok");
+      setPromoMsg(t("popup_promo_unlocked90"), "ok");
+      toast(t("popup_promo_unlockedToast"), "ok");
       try {
         await refresh();
       } catch (_) {}
@@ -2840,7 +2918,7 @@
     if ($settingsVersion) {
       try {
         const v = chrome.runtime.getManifest().version;
-        $settingsVersion.textContent = `Styx Multi-Cart v${v}`;
+        $settingsVersion.textContent = t("popup_settings_versionLabel", [v]);
       } catch (_) {
         $settingsVersion.textContent = "";
       }
@@ -2880,7 +2958,7 @@
       setSettingsDevSectionVisible(want);
       // The toast confirms the side-effect since the debug panel itself is
       // below the fold of a 600px popup and easy to miss appearing.
-      toast(want ? "Developer mode on" : "Developer mode off", "ok");
+      toast(want ? t("popup_toast_devModeOn") : t("popup_toast_devModeOff"), "ok");
     });
   }
 
@@ -3082,15 +3160,14 @@
       // Only reachable via the legacy local-cart path (Amazon-list carts are
       // uncapped on Premium), so don't quote a number the lists path contradicts.
       toast(
-        res.error || `You've reached the cart limit. Delete or merge carts to free up space.`,
+        res.error || t("popup_err_premiumLimitReached"),
         "error"
       );
       return true;
     }
     if (res.code === "CART_LOCKED") {
       toast(
-        res.error ||
-          "This cart is locked — renew Premium or delete others to free a slot.",
+        res.error || t("popup_err_cartLocked"),
         "error"
       );
       return true;
@@ -3101,10 +3178,29 @@
   // ---- Boot --------------------------------------------------------------
 
   async function boot() {
-    loadThemeSetting();
-    await loadDismissed();
-    loadDebugPanelVisibility();
+    applyI18n(document);
+    // <template> content lives in a detached DocumentFragment, so the main
+    // applyI18n(document) walk above never reaches it — translate each
+    // template's content once here; every future .cloneNode() then carries
+    // the resolved text.
+    if ($template) applyI18n($template.content);
+    if ($amazonListTemplate) applyI18n($amazonListTemplate.content);
+    // Tell the in-page modal (observer.js) we actually loaded; it shows an
+    // error panel if this never arrives.
+    if (IS_FLOATING_SURFACE) {
+      try { window.parent.postMessage({ styxPopupReady: true }, "*"); } catch (_e) {}
+    }
+    // Start the cart load first so a slow/hung storage read (seen in embedded
+    // Safari contexts) can never keep the list from loading.
     refresh();
+    pollOpStatus();
+    scheduleOpPoll();
+    loadThemeSetting();
+    await Promise.race([
+      loadDismissed(),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+    loadDebugPanelVisibility();
     loadInterceptSetting();
     loadRelabelSetting();
     loadFabPulseSetting();

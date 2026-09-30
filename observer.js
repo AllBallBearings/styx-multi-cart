@@ -20,10 +20,15 @@
   // chrome.i18n is available in content-script contexts, so on-page injected
   // UI (buttons, modals, toasts) resolves _locales/<locale>/messages.json the
   // same way the popup does. `t()` mirrors popup.js's helper.
+  // Safari bundle stores placeholders as {{N}} (see scripts/safari-i18n-tokens.py);
+  // substitute here. Chrome's files still use $N, so this is a no-op there.
   function t(key, subs) {
     try {
       const msg = chrome.i18n.getMessage(key, subs);
-      return msg || key;
+      if (!msg) return key;
+      const list = subs == null ? [] : Array.isArray(subs) ? subs : [subs];
+      return msg.replace(/\{\{(D|\d)\}\}/g, (m, n) =>
+        n === "D" ? "$" : list[n - 1] == null ? m : String(list[n - 1]));
     } catch (_e) {
       return key;
     }
@@ -1033,6 +1038,16 @@
   let _amazonListsCache = { fetchedAt: 0, host: null, lists: [] };
   let _storageHydrated = false;
   let _storageHydrationPromise = null;
+  // When the PDP's native Add-to-Cart button has been relabeled "Add directly
+  // to Amazon cart" (relabelAtcButton, next to our own "Add to a Styx cart"
+  // button), a click on it must go straight to the live Amazon cart — no
+  // picker. Amazon's own protection-plan/coverage upsell can fire a SECOND
+  // click that also matches ATC_SELECTORS (e.g. inside the coverage modal),
+  // which is a different DOM node than #add-to-cart-button, so a one-shot
+  // per-element flag can't cover it. This timestamp keeps the intercept
+  // stood down for a few seconds after the direct click so that follow-up
+  // click completes the add instead of re-opening the picker.
+  let _directAtcSuppressUntil = 0;
 
   /**
    * Two-group sort: editable lists alphabetically first, then read-only
@@ -1218,12 +1233,32 @@
           return;
         }
 
+        // "Add directly to Amazon cart" (relabelAtcButton) — the native ATC
+        // button sitting next to our own "Add to a Styx cart" button. Its
+        // whole purpose is to skip the picker, so never intercept it, and
+        // stand down for a few seconds afterward too: Amazon's protection-
+        // plan/coverage upsell can fire a second click elsewhere in the page
+        // (a different DOM node, so btn.dataset.styxDirectAtc won't be set on
+        // it) to actually complete the add. Without this window that second
+        // click re-triggered the picker, so the user had to dismiss it and
+        // click "Add to Amazon cart" a second time to finish.
+        if (btn.dataset.styxDirectAtc === "1" || Date.now() < _directAtcSuppressUntil) {
+          _directAtcSuppressUntil = Date.now() + 15000;
+          dlog("[Styx ATC] direct-to-cart button — letting click through, no picker");
+          return;
+        }
+
         // Escape-hatch path: the picker's "Add to Amazon cart" button
         // re-clicks the original ATC after setting this flag. We must let
         // that click pass through untouched so Amazon's handlers AND the
         // existing watchAtcClicks() listener (for upsell recording) run.
+        // Same grace window as the direct-to-cart button above: a protection-
+        // plan/coverage upsell can fire its own completing click on a
+        // different node, which must also pass through instead of
+        // re-opening the picker.
         if (btn.dataset.styxBypass === "1") {
           delete btn.dataset.styxBypass;
+          _directAtcSuppressUntil = Date.now() + 15000;
           dlog("[Styx ATC] bypass flag set — letting click through");
           return;
         }
@@ -3926,14 +3961,33 @@
   // is explicit next to our "Add to a Styx cart" button. Reversible via
   // relabelNode (revertStyxCarts restores it when the toggle is turned off).
   function relabelAtcButton() {
-    if (!relabelEnabled()) return;
     const atc = document.getElementById("add-to-cart-button");
     if (!atc) return;
+    if (!relabelEnabled()) {
+      // Toggle turned off: this button is Amazon's plain "Add to Cart" again,
+      // so it must go back through the normal picker intercept.
+      delete atc.dataset.styxDirectAtc;
+      return;
+    }
     const wrap = atc.closest(".a-button");
     const label =
       (wrap && wrap.querySelector(".a-button-text")) ||
       document.getElementById("submit.add-to-cart-announce");
-    if (label) relabelNode(label, () => t("observer_addDirectlyToAmazonCart"));
+    if (!label) {
+      // No label to relabel on this surface (no .a-button wrapper found) —
+      // the companion "Add to a Styx cart" button was never injected here
+      // either, so this is an ordinary ATC button, not the paired "direct"
+      // one. Must NOT mark it, or every plain Add-to-Cart click on a page
+      // where the rebrand toggle merely defaults on would silently skip the
+      // picker.
+      delete atc.dataset.styxDirectAtc;
+      return;
+    }
+    // Marks this exact button for installAtcIntercept: once genuinely
+    // relabeled, a click on it must go straight to Amazon, never through our
+    // cart picker.
+    atc.dataset.styxDirectAtc = "1";
+    relabelNode(label, () => t("observer_addDirectlyToAmazonCart"));
   }
 
   function injectPdpAddToListButton() {
@@ -4056,7 +4110,9 @@
         z-index: 2147483640;
         width: 56px; height: 56px; padding: 0;
         border: none; border-radius: 50%;
-        background: #131a22; cursor: pointer;
+        /* The logo fills the whole disk (clipped to the circle), so there is no
+           separate background to mismatch it; #0a1f4f is the logo's own base. */
+        background: #0a1f4f; overflow: hidden; cursor: pointer;
         box-shadow: 0 6px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
         display: flex; align-items: center; justify-content: center;
         transition: transform .12s ease, box-shadow .12s ease;
@@ -4064,7 +4120,7 @@
       #${FAB_ID}:hover { transform: translateY(-2px);
         box-shadow: 0 10px 26px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,153,0,0.5); }
       #${FAB_ID}:active { transform: translateY(0); }
-      #${FAB_ID} img { width: 34px; height: 34px; pointer-events: none; display: block; }
+      #${FAB_ID} img { width: 100%; height: 100%; pointer-events: none; display: block; }
       #${FAB_ID}[hidden] { display: none; }
 
       /* "Start here..." speech bubble shown after the guide's Finish, tail
@@ -4427,6 +4483,26 @@
           "Helvetica Neue", Arial, sans-serif;
       }
       #${FAB_MODAL_ID}[hidden] { display: none; }
+      /* Follow the same light/dark resolution as the popup (saved theme, else
+         system) so the panel chrome never disagrees with what's inside it. */
+      #${FAB_MODAL_ID}[data-theme="light"] { background: #ffffff;
+        box-shadow: 0 18px 50px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.1); }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar { background: #f7f3ec;
+        border-bottom-color: rgba(0,0,0,0.08); }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar-title { color: #131a22; }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar-close { color: #4a5360; }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-bar-close:hover { background: rgba(0,0,0,0.07); color: #000; }
+      #${FAB_MODAL_ID} .styx-fab-fail {
+        flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
+        justify-content: center; gap: 12px; padding: 24px; text-align: center;
+        font-size: 13px; line-height: 1.45; color: #f3efe6;
+      }
+      #${FAB_MODAL_ID}[data-theme="light"] .styx-fab-fail { color: #131a22; }
+      #${FAB_MODAL_ID} .styx-fab-fail[hidden] { display: none; }
+      #${FAB_MODAL_ID} .styx-fab-fail button {
+        border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px;
+        font-weight: 600; background: #ff9900; color: #1a1209; cursor: pointer;
+      }
       #${FAB_MODAL_ID} .styx-fab-bar {
         display: flex; align-items: center; gap: 8px;
         height: 36px; flex: 0 0 36px; padding: 0 6px 0 12px;
@@ -4445,7 +4521,7 @@
       }
       #${FAB_MODAL_ID} .styx-fab-bar-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
       #${FAB_MODAL_ID} .styx-fab-frame {
-        flex: 1 1 auto; width: 100%; border: none; background: #131a22;
+        flex: 1 1 auto; width: 100%; border: none; background: transparent;
       }
       #${FAB_MODAL_ID}.styx-fab-dragging { user-select: none; }
       #${FAB_MODAL_ID}.styx-fab-dragging .styx-fab-frame { pointer-events: none; }
@@ -4563,7 +4639,7 @@
     fab.type = "button";
     fab.setAttribute("aria-label", t("observer_openStyxMultiCart"));
     const icon = document.createElement("img");
-    try { icon.src = chrome.runtime.getURL("icons/icon48.png"); } catch (_e) { /* ignore */ }
+    try { icon.src = chrome.runtime.getURL("icons/icon128.png"); } catch (_e) { /* ignore */ }
     icon.alt = "";
     fab.appendChild(icon);
 
@@ -4711,8 +4787,23 @@
       catch (_e) { return ""; }
     })();
 
+    // Shown instead of a silent blank panel when popup.html never reports in
+    // (e.g. Safari refusing to load the extension page into the Amazon tab).
+    const fail = document.createElement("div");
+    fail.className = "styx-fab-fail";
+    fail.hidden = true;
+    const failMsg = document.createElement("div");
+    failMsg.textContent =
+      "Styx Multi-Cart couldn't load here. In Safari, check Settings › Extensions › Styx Multi-Cart › Edit Websites and set amazon.com to Allow, then try again.";
+    const failRetry = document.createElement("button");
+    failRetry.type = "button";
+    failRetry.textContent = "Try again";
+    fail.appendChild(failMsg);
+    fail.appendChild(failRetry);
+
     modal.appendChild(bar);
     modal.appendChild(frame);
+    modal.appendChild(fail);
     const hint = document.createElement("div");
     hint.id = FAB_HINT_ID;
     hint.hidden = true;
@@ -4806,10 +4897,38 @@
       hint.hidden = true;
       writeStartHintPending(false);
     }
+    // popup.js posts {styxPopupReady} once it boots. No ping within the window
+    // means the extension page never loaded, so say so instead of showing a
+    // blank panel.
+    let frameReady = false;
+    let frameWatchdog = null;
+    function loadFrame() {
+      frameReady = false;
+      fail.hidden = true;
+      frame.hidden = false;
+      frame.src = frame.dataset.src;
+      clearTimeout(frameWatchdog);
+      frameWatchdog = setTimeout(() => {
+        if (frameReady) return;
+        frame.hidden = true;
+        fail.hidden = false;
+      }, 4000);
+    }
+    window.addEventListener("message", (e) => {
+      if (!e.data || e.data.styxPopupReady !== true) return;
+      if (e.source !== frame.contentWindow) return;
+      frameReady = true;
+      clearTimeout(frameWatchdog);
+    });
+    failRetry.addEventListener("click", () => {
+      frame.removeAttribute("src");
+      loadFrame();
+    });
     function openModal() {
       hideGuide();
       clearStartHint();
-      if (!frame.src && frame.dataset.src) frame.src = frame.dataset.src;
+      modal.dataset.theme = resolvePickerTheme();
+      if (!frame.src && frame.dataset.src) loadFrame();
       modal.hidden = false;
       fab.hidden = true;
       notifyFabVis();

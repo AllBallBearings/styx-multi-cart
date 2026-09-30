@@ -16,7 +16,7 @@ Only the runtime files: `manifest.json`, the JS/HTML/CSS, the `icons/` PNGs, and
 
 ### What's excluded
 
-`docs/`, `store-assets/`, `safari/`, `scripts/`, `dist/`, `AGENT_HANDOFF.md`, `README.md`, `generate_icons.html`, `icons/_render.py`, `.git/`, `.claude/`.
+`docs/`, `store-assets/`, `safari/`, `scripts/`, `dist/`, `AGENT_HANDOFF.md`, `README.md`, `.git/`, `.claude/`.
 
 ## Uploading to the Chrome Web Store
 

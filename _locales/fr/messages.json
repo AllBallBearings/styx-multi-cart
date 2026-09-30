@@ -3,7 +3,7 @@
     "message": "Styx Multi-Cart"
   },
   "manifest_description": {
-    "message": "Videz votre panier Amazon, enregistrez-le pour plus tard et gérez plusieurs paniers grâce à des listes Amazon réutilisables."
+    "message": "Videz votre panier Amazon, gardez-le pour plus tard et gérez plusieurs paniers avec des listes Amazon."
   },
   "manifest_actionTitle": {
     "message": "Styx Multi-Cart"
@@ -2177,5 +2177,37 @@
   },
   "promo_subtext": {
     "message": "Gratuit & illimité · Sans pistage"
+  },
+  "popup_op_saving": {
+    "message": "Enregistrement…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "Vidage…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "En cours…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "Veuillez patienter jusqu'à la fin avant de lancer une autre action.",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "Une autre action Styx est encore en cours. Veuillez patienter jusqu'à sa fin.",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "Enregistrer",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "Nommer ce panier",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Enregistre le contenu de votre panier Amazon dans un nouveau panier. Votre panier Amazon reste inchangé.",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
   }
 }

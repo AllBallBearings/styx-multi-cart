@@ -25,10 +25,15 @@ import { evaluateClearStep } from "../../lib/clear-cart.js";
 // injected into the Amazon page's own JS world with zero extension API
 // access, so any text they need must be resolved here and passed in via
 // `args`/parameters, never called from inside a page* function itself.
+// Safari bundle stores placeholders as {{N}} (see scripts/safari-i18n-tokens.py);
+// substitute here. Chrome's files still use $N, so this is a no-op there.
 function t(key, subs) {
   try {
     const msg = chrome.i18n.getMessage(key, subs);
-    return msg || key;
+    if (!msg) return key;
+    const list = subs == null ? [] : Array.isArray(subs) ? subs : [subs];
+    return msg.replace(/\{\{(D|\d)\}\}/g, (m, n) =>
+      n === "D" ? "$" : list[n - 1] == null ? m : String(list[n - 1]));
   } catch (_e) {
     return key;
   }
@@ -1093,11 +1098,76 @@ function pageApplyUpsellChoice(recorded) {
 // _opStatus is still the single source of truth for operation state and is
 // surfaced through MC_GET_STATUS.
 
-let _opStatus = null;        // { active, title, detail } | null
+let _opStatus = null;        // { active, title, detail, kind } | null
 
-/** Set the current in-progress status, queryable via MC_GET_STATUS. */
-function setOpStatus(title, detail = "") {
-  _opStatus = { active: true, title, detail };
+// ---- Exclusive operation lock ---------------------------------------------
+//
+// Save / clear / restore / add-to-list all drive Amazon tabs on the user's
+// behalf, so two running at once would fight over the same tabs and could
+// corrupt each other (a second "Save" mid-save creates a duplicate list, a
+// "Clear" mid-save wipes the cart before it is captured). The popup greys its
+// controls while an operation runs, but that can't cover a popup that was
+// closed and reopened, a second tab, or the on-page picker, so the service
+// worker enforces it too.
+//
+// The lock is taken when a long operation is accepted and is ALWAYS released:
+// by runLocked() when fire-and-forget background work ends, or by the
+// listener's finally when the handler never handed the work off (early
+// error, thrown exception). A stale-lock timeout is a last-resort backstop.
+const OP_LOCK_STALE_MS = 10 * 60 * 1000;
+const OP_LOCK_KIND_BY_MESSAGE = {
+  MC_SAVE_FOR_LATER: "save",
+  MC_SAVE_AND_CLEAR: "clear",
+  MC_CLEAR_CURRENT: "clear",
+  MC_SAVE_LIVE_CART_TO_LIST: "save",
+  MC_WISHLIST_ADD_ALL: "restore",
+  MC_ADD_ITEM_TO_AMAZON_LIST: "list",
+  MC_CREATE_AMAZON_LIST_WITH_ITEM: "list",
+};
+let _opLock = null;          // { kind, since } | null
+
+// Bumped whenever an operation that can change the user's set of carts (save,
+// create-list) finishes. The panel compares it on every status poll and reloads
+// its list when it changes, so a new cart appears even if the panel was hidden
+// or closed while the operation ran.
+let _listsVersion = 0;
+
+function isOpLocked() {
+  if (_opLock && Date.now() - _opLock.since > OP_LOCK_STALE_MS) _opLock = null;
+  return !!_opLock;
+}
+function acquireOpLock(kind) {
+  if (isOpLocked()) return false;
+  _opLock = { kind, since: Date.now() };
+  return true;
+}
+function releaseOpLock() {
+  if (_opLock && (_opLock.kind === "save" || _opLock.kind === "list")) _listsVersion++;
+  _opLock = null;
+}
+/** Run fire-and-forget background work, releasing the lock however it ends. */
+async function runLocked(fn) {
+  try {
+    return await fn();
+  } finally {
+    releaseOpLock();
+  }
+}
+
+/**
+ * Set the current in-progress status, queryable via MC_GET_STATUS. `kind`
+ * ("save" | "clear" | "restore" | "list" | "other") tells the popup which
+ * control to animate; it defaults to the kind of the operation that holds the
+ * lock, so the many status call sites don't each need to pass it.
+ */
+function setOpStatus(title, detail = "", kind) {
+  const prev = _opStatus && _opStatus.active ? _opStatus : null;
+  _opStatus = {
+    active: true,
+    title,
+    detail,
+    kind: kind || (_opLock && _opLock.kind) || (prev && prev.kind) || "other",
+  };
 }
 
 /**
@@ -4400,23 +4470,57 @@ const amazonListReadCache = new Map();
 // list when the user interacts while the warm queue is still running.
 const amazonListReadInFlight = new Map();
 
+// Safari freezes requestAnimationFrame and CSS transitions in hidden tabs (measured:
+// 1 frame in 1.5 s hidden vs 86 visible, and transitions never finish). Amazon's
+// Add-to-List chooser is animated, so a helper opened with active:false never
+// finishes opening it and the save appears to hang until the user brings that tab
+// forward. Write flows therefore run their helper in the FOREGROUND on Safari.
+// Chrome doesn't throttle like that, so it keeps the silent background tab.
+let _fgHelperTabId = null;     // the foreground helper, so progress can show on it too
+let _lastListProgress = null;  // last MC_LIST_SAVE_PROGRESS payload of the running save
+
 /**
- * Open a silent background tab at `url`, wait for it to load, run `fn(tabId)`,
- * then close the tab (unless keepOpen). Mirrors the tab strategy in
- * scrapeCartInBackground but factored out for the list flows.
+ * Open a helper tab at `url`, wait for it to load, run `fn(tabId)`, then close the
+ * tab (unless keepOpen). Silent (background) by default; pass `foreground: true`
+ * for flows that need Amazon's animated UI to actually run — honoured on Safari
+ * only. Mirrors the tab strategy in scrapeCartInBackground but factored out for
+ * the list flows.
  */
-async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false } = {}) {
-  const tab = await chrome.tabs.create({ url, active: false });
+async function runInAmazonTab(url, fn, { timeoutMs = 20000, keepOpen = false, foreground = false } = {}) {
+  const front = foreground === true && IS_SAFARI;
+  // A foreground helper takes over the window, so remember which tab the user was
+  // on and put them back afterwards.
+  let restoreTabId = null;
+  if (front) {
+    try {
+      const [cur] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (cur && cur.id != null) restoreTabId = cur.id;
+    } catch (_e) { /* no tab to restore to */ }
+  }
+  const tab = await chrome.tabs.create({ url, active: front });
   try {
     // This tab was just created, so waiting for a *reload* can miss the
     // initial loading event and hold the tab open until the timeout. Waiting
     // for completion is sufficient and lets the finally block close the
     // helper as soon as its page is ready.
     await waitForTabComplete(tab.id, timeoutMs);
+    if (front) {
+      // The panel and toast live on the tab this just covered — show progress here.
+      _fgHelperTabId = tab.id;
+      if (_lastListProgress) {
+        notifyTab(tab.id, _lastListProgress);
+        // The page's content script can still be starting; send once more.
+        setTimeout(() => notifyTab(tab.id, _lastListProgress), 1200);
+      }
+    }
     return await fn(tab.id, tab);
   } finally {
+    if (front && _fgHelperTabId === tab.id) _fgHelperTabId = null;
     if (!keepOpen) {
       try { await chrome.tabs.remove(tab.id); } catch (_e) { /* already gone */ }
+      if (front && restoreTabId != null && restoreTabId !== tab.id) {
+        try { await chrome.tabs.update(restoreTabId, { active: true }); } catch (_e) { /* tab gone */ }
+      }
     }
   }
 }
@@ -4544,7 +4648,7 @@ async function createAmazonListFromPdp(host, name, firstAsin) {
       });
       return (r && r[0] && r[0].result) || { ok: false, error: t("bg_noResultFromCreateList") };
     },
-    { keepOpen: false, timeoutMs: 40000 }
+    { keepOpen: false, timeoutMs: 40000, foreground: true }
   );
   console.log("[Styx list-sync] createListFromPdp →", res);
   try {
@@ -4602,7 +4706,7 @@ async function addItemToList(host, listId, asin) {
       });
       return (r && r[0] && r[0].result) || { ok: false, error: t("bg_noResult") };
     },
-    { timeoutMs: 15000 }
+    { timeoutMs: 15000, foreground: true }
   );
 }
 
@@ -4625,7 +4729,7 @@ async function setListQuantities(host, listId, items) {
         args: [map],
       });
     },
-    { timeoutMs: 15000 }
+    { timeoutMs: 15000, foreground: true }
   );
 }
 
@@ -4642,6 +4746,7 @@ async function saveCartToAmazonList(cart, opts = {}) {
   try {
     return await saveCartToAmazonListImpl(cart, opts);
   } finally {
+    _lastListProgress = null;
     await setUiBusy(false);
   }
 }
@@ -4657,7 +4762,11 @@ async function saveCartToAmazonListImpl(cart, opts = {}) {
   const progressTabId = opts.progressTabId != null ? opts.progressTabId : null;
   const report = (detail, extra = {}) => {
     setOpStatus(t("bg_savingLabelToAmazon", [label]), detail);
-    notifyTab(progressTabId, { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra });
+    const payload = { type: "MC_LIST_SAVE_PROGRESS", detail, ...extra };
+    _lastListProgress = payload;
+    notifyTab(progressTabId, payload);
+    // On Safari the helper tab is in front, hiding the tab that normally shows this.
+    if (_fgHelperTabId != null && _fgHelperTabId !== progressTabId) notifyTab(_fgHelperTabId, payload);
   };
   report("Preparing your list…");
 
@@ -5146,10 +5255,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") return false;
 
   (async () => {
+    let lockHeld = false;
+    let lockHandedOff = false;
     try {
+      const lockKind = OP_LOCK_KIND_BY_MESSAGE[msg.type];
+      if (lockKind) {
+        if (!acquireOpLock(lockKind)) {
+          sendResponse({ ok: false, busy: true, error: t("bg_alreadyRunning") });
+          return;
+        }
+        lockHeld = true;
+      }
       switch (msg.type) {
         case "MC_GET_STATUS": {
-          sendResponse(_opStatus || { active: false, title: "", detail: "" });
+          const base = _opStatus || { active: false, title: "", detail: "", kind: "other" };
+          const locked = isOpLocked();
+          sendResponse({
+            // Busy is defined by the lock alone: it is guaranteed to release,
+            // whereas a status left "active" by an error path would otherwise
+            // strand the popup in a permanent working state.
+            busy: locked,
+            listsVersion: _listsVersion,
+            kind: locked ? (base.active ? base.kind : _opLock.kind) : "other",
+            title: locked && base.active ? base.title : "",
+            detail: locked && base.active ? base.detail : "",
+          });
           break;
         }
 
@@ -5356,6 +5486,49 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break;
         }
 
+        case "MC_OPEN_IN_ACTIVE_TAB": {
+          // Navigate the sender's active tab to `msg.url`. Routed through the
+          // service worker (rather than calling chrome.tabs.* from popup.js
+          // directly) because on Safari the floating in-page modal is
+          // popup.html loaded as an iframe INSIDE the Amazon page's own
+          // document — Safari restricts chrome.tabs access from that nested
+          // context differently than Chrome does, silently failing there and
+          // falling back to opening (and then losing) a stray new tab. The
+          // background page is always a first-class extension context on
+          // every platform, so it can always do this reliably.
+          const url = typeof msg.url === "string" ? msg.url : null;
+          if (!url) {
+            sendResponse({ ok: false, error: "Missing url" });
+            break;
+          }
+          try {
+            // The floating modal is popup.html in an iframe INSIDE the Amazon
+            // page, so the request already tells us which tab to move: the one
+            // it came from. Prefer that over guessing via an active-tab query.
+            // The toolbar popup and side panel aren't tabs, so sender.tab is
+            // undefined there and we fall back to the active tab.
+            let tabId = _sender && _sender.tab && _sender.tab.id;
+            if (tabId == null) {
+              const [tab] = await chrome.tabs.query({
+                active: true,
+                currentWindow: true,
+              });
+              tabId = tab && tab.id != null ? tab.id : null;
+            }
+            dlog("[Styx Multi-Cart] MC_OPEN_IN_ACTIVE_TAB", { url, tabId });
+            if (tabId == null) {
+              sendResponse({ ok: false, error: "No tab to navigate." });
+              break;
+            }
+            await chrome.tabs.update(tabId, { url });
+            sendResponse({ ok: true });
+          } catch (err) {
+            dwarn("[Styx Multi-Cart] MC_OPEN_IN_ACTIVE_TAB failed:", err);
+            sendResponse({ ok: false, error: "Couldn't navigate the tab." });
+          }
+          break;
+        }
+
         case "MC_REFRESH_ENTITLEMENT": {
           // Lets the popup ask for a fresh entitlement check from the active
           // payment source (e.g. user returns from the checkout tab on Chrome,
@@ -5399,7 +5572,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // on the user's confirmation, which can outlive the message channel.
           sendResponse({ ok: true, started: true, total: items.length });
           setOpStatus(t("bg_addingWishlistToCart"), t("bg_starting"));
-          setTimeout(() => wishlistAddAllToCart(items, msg.host, msg.listId), 0);
+          lockHandedOff = true;
+          setTimeout(() => runLocked(() => wishlistAddAllToCart(items, msg.host, msg.listId)), 0);
           break;
         }
 
@@ -5415,7 +5589,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // the response and leave the button spinner stuck forever.
           sendResponse({ ok: true, started: true });
           setOpStatus(t("bg_clearingCart"), t("bg_starting"));
-          setTimeout(clearCurrentCartInBackground, 0);
+          lockHandedOff = true;
+          setTimeout(() => runLocked(clearCurrentCartInBackground), 0);
           break;
         }
 
@@ -5473,7 +5648,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           const savedCount = scCart.items.length;
           sendResponse({ ok: true, started: true, saving: savedCount });
           setOpStatus(t("bg_savingCart"), t("bg_savingItemsToNewList", [itemCountTextBg(savedCount)]));
-          setTimeout(() => saveThenClearInBackground(
+          lockHandedOff = true;
+          setTimeout(() => runLocked(() => saveThenClearInBackground(
             {
               // No cart.id → saveCartToAmazonList always creates a new list.
               host: scCart.host,
@@ -5485,7 +5661,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               originUrl: scOriginUrl,
               clearAfter: scClearAfter,
             }
-          ), 0);
+          )), 0);
           break;
         }
 
@@ -5609,7 +5785,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
               }
             }
           } else {
-            setOpStatus(t("popup_err_saveToAmazonFailed"), (liveSaveRes && liveSaveRes.error) || t("observer_tryAgain"));
+            clearOpStatus(t("popup_err_saveToAmazonFailed"));
           }
           sendResponse(liveSaveRes || { ok: false, error: t("bg_noResultPeriod") });
           break;
@@ -5986,6 +6162,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } catch (err) {
       console.error("[Styx Multi-Cart] background error", err);
       sendResponse({ ok: false, error: (err && err.message) || String(err) });
+    } finally {
+      // Handlers that run inline (add-to-list, create-list, save-to-list)
+      // finish here; ones that hand off to background work release via
+      // runLocked() instead.
+      if (lockHeld && !lockHandedOff) releaseOpLock();
     }
   })();
 

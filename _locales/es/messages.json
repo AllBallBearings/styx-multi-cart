@@ -3,7 +3,7 @@
     "message": "Styx Multi-Cart"
   },
   "manifest_description": {
-    "message": "Vacía tu carrito de Amazon, guárdalo para más tarde y gestiona varios carritos con Listas de Amazon reutilizables."
+    "message": "Vacía tu carrito de Amazon, guárdalo para luego y gestiona varios carritos con Listas de Amazon reutilizables."
   },
   "manifest_actionTitle": {
     "message": "Styx Multi-Cart"
@@ -2177,5 +2177,37 @@
   },
   "promo_subtext": {
     "message": "Gratis e ilimitado · Sin rastreo"
+  },
+  "popup_op_saving": {
+    "message": "Guardando…",
+    "description": "Label on the Save Amazon cart for later button while a save is running. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_clearing": {
+    "message": "Vaciando…",
+    "description": "Label on the Clear Amazon cart button while the cart is being emptied. Keep it short: the button is narrow and does not wrap."
+  },
+  "popup_op_working": {
+    "message": "En curso…",
+    "description": "Fallback title of the in-panel progress banner when an operation is running but has not reported a step yet."
+  },
+  "popup_op_wait": {
+    "message": "Espera a que termine antes de iniciar otra acción.",
+    "description": "Small hint under the progress banner explaining why the panel's buttons are disabled until the operation finishes."
+  },
+  "bg_alreadyRunning": {
+    "message": "Otra acción de Styx sigue en curso. Espera a que termine.",
+    "description": "Error shown when the user starts an action while another Styx action is still running."
+  },
+  "popup_action_save": {
+    "message": "Guardar",
+    "description": "Confirm button label for saving (used by the name-your-cart prompt)."
+  },
+  "popup_prompt_saveForLater_title": {
+    "message": "Ponle nombre a este carrito",
+    "description": "Title of the prompt that asks the user to name the new cart before Save Amazon cart for later runs."
+  },
+  "popup_prompt_saveForLater_message": {
+    "message": "Guarda todo lo de tu carrito de Amazon como un carrito nuevo. Tu carrito de Amazon no cambia.",
+    "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
   }
 }

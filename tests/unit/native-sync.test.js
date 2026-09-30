@@ -80,6 +80,21 @@ describe("nativeEntitlementToPatch", () => {
     expect(patch).toEqual({ lastChecked: NOW });
   });
 
+  it("revoked (refund) while premiumUntil is still future → drops to free immediately", () => {
+    const current = {
+      tier: "premium",
+      premiumUntil: NOW + 300 * DAY,
+      source: "appstore",
+    };
+    const native = { ok: true, entitled: false, revoked: true };
+    const patch = nativeEntitlementToPatch(native, current, NOW);
+    expect(patch.tier).toBe("free");
+    expect(patch.premiumUntil).toBe(null);
+    expect(patch.autoRenew).toBe(false);
+    expect(patch.source).toBe(null);
+    expect(patch.lastChecked).toBe(NOW);
+  });
+
   it("not entitled + no active window → free", () => {
     const current = { tier: "premium", premiumUntil: NOW - DAY };
     const native = { ok: true, entitled: false };
