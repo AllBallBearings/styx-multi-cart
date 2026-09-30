@@ -86,6 +86,29 @@
     frame.src = url;
     document.body.appendChild(frame);
     setTimeout(() => frame.remove(), 1500);
+    pollForPurchaseCompletion();
+  }
+
+  // The host app's StoreKit purchase sheet runs outside the extension, so
+  // there's no push channel telling the popup a purchase just completed
+  // (SafariWebExtensionHandler only answers when asked — see its header
+  // comment). Poll a few times after launching checkout so premium unlocks
+  // without the user having to close/reopen the surface or reload the page.
+  // Cheap: MC_REFRESH_ENTITLEMENT is a local UserDefaults read, no network.
+  let purchasePollTimer = null;
+  function pollForPurchaseCompletion() {
+    clearTimeout(purchasePollTimer);
+    let attempts = 0;
+    const tick = async () => {
+      attempts++;
+      const res = await send({ type: "MC_REFRESH_ENTITLEMENT" });
+      if (res && res.ok) refresh();
+      const ent = await send({ type: "MC_GET_ENTITLEMENT" });
+      const premium = ent && ent.ok && ent.entitlement && ent.entitlement.tier === "premium";
+      if (premium || attempts >= 15) return;
+      purchasePollTimer = setTimeout(tick, 4000);
+    };
+    purchasePollTimer = setTimeout(tick, 3000);
   }
 
   // ---- DOM refs ----------------------------------------------------------
@@ -2829,12 +2852,18 @@
     });
   }
 
-  // Keep display in sync if entitlement is mutated externally (e.g. SW console).
+  // Keep display in sync if entitlement is mutated externally (e.g. SW console,
+  // a completed StoreKit/ExtPay purchase, or a refund). Without this, an
+  // already-open popup surface (most importantly the floating in-page modal,
+  // whose iframe is created once per page load and never remounted on
+  // open/close) would keep showing the entitlement it had at load time until
+  // the page was reloaded — so premium wouldn't visibly unlock until the next
+  // navigation, easily mistaken for "needs a Safari restart".
   if (chrome.storage && chrome.storage.onChanged) {
     let cartsRefreshTimer = null;
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
-      if (changes["mc.carts.v1"]) {
+      if (changes["mc.carts.v1"] || changes[ENT_KEY]) {
         clearTimeout(cartsRefreshTimer);
         cartsRefreshTimer = setTimeout(() => {
           refresh();
