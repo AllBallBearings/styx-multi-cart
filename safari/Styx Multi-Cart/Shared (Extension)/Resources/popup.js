@@ -77,7 +77,8 @@
   // Launch the native host app's StoreKit purchase via its custom URL scheme.
   // A custom-scheme navigation in the extension popup would tear the popup
   // down, so we fire it through a throwaway hidden iframe instead — the app
-  // comes forward and presents the system purchase sheet; the popup stays put.
+  // comes forward showing the plans (price, terms, legal links) and the user
+  // taps a plan to open the system purchase sheet; the popup stays put.
   function launchHostAppPurchase(plan) {
     const known = plan === "lifetime" ? "lifetime" : "annual";
     const url = "styxmulticart://purchase?plan=" + encodeURIComponent(known);
@@ -105,7 +106,7 @@
       if (res && res.ok) refresh();
       const ent = await send({ type: "MC_GET_ENTITLEMENT" });
       const premium = ent && ent.ok && ent.entitlement && ent.entitlement.tier === "premium";
-      if (premium || attempts >= 15) return;
+      if (premium || attempts >= 45) return;
       purchasePollTimer = setTimeout(tick, 4000);
     };
     purchasePollTimer = setTimeout(tick, 3000);

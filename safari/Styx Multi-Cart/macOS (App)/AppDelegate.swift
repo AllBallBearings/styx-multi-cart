@@ -20,17 +20,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // The extension popup hands off premium purchases by opening
-    // styxmulticart://purchase?plan=annual|lifetime (a custom URL scheme
-    // registered in Info.plist). macOS routes that here, bringing the app
-    // forward; we kick off the matching StoreKit purchase.
+    // styxmulticart://purchase (a custom URL scheme registered in Info.plist).
+    // macOS routes that here and we only bring the app window forward. The
+    // purchase itself starts when the user taps a plan button, so the plan
+    // title, length, price and the Privacy Policy / Terms of Use links stay
+    // readable instead of being covered by the system purchase sheet at once
+    // (App Store Guideline 3.1.2(c)).
     func application(_ application: NSApplication, open urls: [URL]) {
-        guard #available(macOS 12.0, *) else { return }
-        for url in urls where url.scheme == "styxmulticart" {
-            guard url.host == "purchase" else { continue }
-            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            let plan = comps?.queryItems?.first(where: { $0.name == "plan" })?.value ?? "annual"
+        for url in urls where url.scheme == "styxmulticart" && url.host == "purchase" {
+            NSApp.unhide(nil)
             NSApp.activate(ignoringOtherApps: true)
-            Task { await StoreManager.shared.purchase(planNickname: plan) }
+            if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
+                if window.isMiniaturized { window.deminiaturize(nil) }
+                window.makeKeyAndOrderFront(nil)
+            }
         }
     }
 
