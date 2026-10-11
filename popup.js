@@ -13,10 +13,16 @@
   // by the browser's UI language. `t()` is a thin convenience wrapper; `applyI18n`
   // walks the DOM once (and again for any dynamically-inserted subtree) applying
   // data-i18n (textContent) and data-i18n-attr (pipe-delimited attr:key pairs).
+  // The Safari bundle stores placeholders as {{N}} (scripts/safari-i18n-tokens.py)
+  // because Safari's getMessage drops `$N` after a non-space char; substitute
+  // them here. Chrome's files still use $N, so this is a no-op there.
   function t(key, subs) {
     try {
       const msg = chrome.i18n.getMessage(key, subs);
-      return msg || key;
+      if (!msg) return key;
+      const list = subs == null ? [] : Array.isArray(subs) ? subs : [subs];
+      return msg.replace(/\{\{(D|\d)\}\}/g, (m, n) =>
+        n === "D" ? "$" : list[n - 1] == null ? m : String(list[n - 1]));
     } catch (_e) {
       return key;
     }
@@ -71,7 +77,8 @@
   // Launch the native host app's StoreKit purchase via its custom URL scheme.
   // A custom-scheme navigation in the extension popup would tear the popup
   // down, so we fire it through a throwaway hidden iframe instead — the app
-  // comes forward and presents the system purchase sheet; the popup stays put.
+  // comes forward showing the plans (price, terms, legal links) and the user
+  // taps a plan to open the system purchase sheet; the popup stays put.
   function launchHostAppPurchase(plan) {
     const known = plan === "lifetime" ? "lifetime" : "annual";
     const url = "styxmulticart://purchase?plan=" + encodeURIComponent(known);
@@ -80,6 +87,29 @@
     frame.src = url;
     document.body.appendChild(frame);
     setTimeout(() => frame.remove(), 1500);
+    pollForPurchaseCompletion();
+  }
+
+  // The host app's StoreKit purchase sheet runs outside the extension, so
+  // there's no push channel telling the popup a purchase just completed
+  // (SafariWebExtensionHandler only answers when asked — see its header
+  // comment). Poll a few times after launching checkout so premium unlocks
+  // without the user having to close/reopen the surface or reload the page.
+  // Cheap: MC_REFRESH_ENTITLEMENT is a local UserDefaults read, no network.
+  let purchasePollTimer = null;
+  function pollForPurchaseCompletion() {
+    clearTimeout(purchasePollTimer);
+    let attempts = 0;
+    const tick = async () => {
+      attempts++;
+      const res = await send({ type: "MC_REFRESH_ENTITLEMENT" });
+      if (res && res.ok) refresh();
+      const ent = await send({ type: "MC_GET_ENTITLEMENT" });
+      const premium = ent && ent.ok && ent.entitlement && ent.entitlement.tier === "premium";
+      if (premium || attempts >= 45) return;
+      purchasePollTimer = setTimeout(tick, 4000);
+    };
+    purchasePollTimer = setTimeout(tick, 3000);
   }
 
   // ---- DOM refs ----------------------------------------------------------
@@ -514,6 +544,131 @@
     } finally {
       button.classList.remove("mc-loading");
       button.disabled = false;
+    }
+  }
+
+  // ---- Live operation status ---------------------------------------------
+  //
+  // Save / clear / restore / add-to-list run for many seconds in the service
+  // worker, which acknowledges the request immediately and keeps working. So a
+  // button's own await ends almost at once and, without this, the panel shows
+  // nothing while the on-page toast counts items. We poll MC_GET_STATUS, show
+  // what is happening (spinner + progressive label on the button that started
+  // it, plus a banner with the live step), and make the rest of the list block
+  // inert so a second operation can't be started on top of it. The service
+  // worker enforces the same rule with its own lock — this is the visible half.
+
+  const $listBlock = document.querySelector(".mc-list-block");
+  const $opStatus = document.getElementById("mc-op-status");
+  const $opTitle = document.getElementById("mc-op-title");
+  const $opDetail = document.getElementById("mc-op-detail");
+  const OP_BUTTONS = [
+    { kind: "save", el: $saveForLater, key: "popup_op_saving" },
+    { kind: "clear", el: $clear, key: "popup_op_clearing" },
+  ];
+  let opBusy = false;
+  let opKind = "other";
+  let listsVersionSeen = null;
+  let opOptimisticUntil = 0;
+  let opPollInFlight = false;
+  let opPollTimer = null;
+
+  function setOpButtonBusy(btn, busy, text) {
+    if (!btn) return;
+    const label =
+      btn.querySelector(".mc-cart-action-label") || btn.querySelector("[data-i18n]");
+    if (busy) {
+      if (label && label.dataset.idleText == null) label.dataset.idleText = label.textContent;
+      if (label) label.textContent = text;
+      btn.classList.add("mc-op-busy");
+      btn.setAttribute("aria-busy", "true");
+    } else {
+      if (label && label.dataset.idleText != null) {
+        label.textContent = label.dataset.idleText;
+        delete label.dataset.idleText;
+      }
+      btn.classList.remove("mc-op-busy");
+      btn.removeAttribute("aria-busy");
+    }
+  }
+
+  function applyOpStatus(status) {
+    const busy = !!(status && status.busy);
+    const kind = (status && status.kind) || "other";
+    opBusy = busy;
+    opKind = busy ? kind : "other";
+
+    document.documentElement.toggleAttribute("data-op-busy", busy);
+    if ($listBlock) $listBlock.inert = busy;
+    for (const b of OP_BUTTONS) setOpButtonBusy(b.el, busy && b.kind === kind, t(b.key));
+
+    if ($opStatus) {
+      $opStatus.hidden = !busy;
+      if (busy) {
+        $opTitle.textContent = (status && status.title) || t("popup_op_working");
+        const detail = (status && status.detail) || "";
+        $opDetail.textContent = detail;
+        $opDetail.hidden = !detail;
+      }
+    }
+
+  }
+
+  async function pollOpStatus() {
+    if (opPollInFlight) return;
+    opPollInFlight = true;
+    try {
+      const status = await send({ type: "MC_GET_STATUS" }, 3000);
+      // A transport failure comes back as {ok:false} with no `busy` — leave the
+      // UI as it is rather than flipping it on a dropped message.
+      if (!status || typeof status.busy !== "boolean") return;
+      // The service worker bumps this when a save / create-list finishes. Reload
+      // the cards (forced: refresh() is a no-op once the first load is done, and
+      // the worker serves a cached snapshot otherwise) so the new cart shows up,
+      // even if the panel wasn't visible while it was being built.
+      if (typeof status.listsVersion === "number") {
+        if (listsVersionSeen === null) {
+          listsVersionSeen = status.listsVersion;
+        } else if (status.listsVersion !== listsVersionSeen) {
+          listsVersionSeen = status.listsVersion;
+          loadAmazonLists(true);
+        }
+      }
+      // We just started something: the service worker may not have taken its
+      // lock yet, so don't let an "idle" answer cancel the optimistic state.
+      if (!status.busy && Date.now() < opOptimisticUntil) return;
+      applyOpStatus(status);
+    } finally {
+      opPollInFlight = false;
+    }
+  }
+
+  function scheduleOpPoll() {
+    clearTimeout(opPollTimer);
+    if (document.visibilityState === "hidden") return;
+    // Fast while something is running; slow when idle, just to notice work
+    // started from elsewhere (the on-page buttons, another tab).
+    opPollTimer = setTimeout(async () => {
+      await pollOpStatus();
+      scheduleOpPoll();
+    }, opBusy ? 500 : 2500);
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pollOpStatus();
+    scheduleOpPoll();
+  });
+
+  /** Run a long operation's start request with the busy UI up immediately. */
+  async function runOp(kind, fn) {
+    opOptimisticUntil = Date.now() + 2500;
+    applyOpStatus({ busy: true, kind });
+    try {
+      return await fn();
+    } finally {
+      opOptimisticUntil = 0;
+      pollOpStatus();
+      scheduleOpPoll();
     }
   }
 
@@ -962,16 +1117,20 @@
   // than spawning a new tab. (A plain <a> can't do this: inside the floating
   // iframe a same-tab link would try to load Amazon INTO the iframe, which
   // Amazon blocks, and target=_blank always forks a new tab.)
+  //
+  // Routed through the service worker rather than calling chrome.tabs.*
+  // directly: on Safari this code also runs inside the floating in-page
+  // modal, which is popup.html loaded as an iframe INSIDE the Amazon page's
+  // own document. Safari restricts chrome.tabs access from that nested
+  // context differently than Chrome does — direct calls silently fail there.
+  // The background page is always a first-class extension context on every
+  // platform.
   async function openInActiveTab(url) {
     if (!url || url === "#") return;
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.id != null) {
-        await chrome.tabs.update(tab.id, { url });
-        return;
-      }
-    } catch (_e) { /* fall through to a new tab */ }
-    try { await chrome.tabs.create({ url }); } catch (_e) { /* give up quietly */ }
+    const res = await send({ type: "MC_OPEN_IN_ACTIVE_TAB", url });
+    if (!res || !res.ok) {
+      toast((res && res.error) || "Couldn't open that on Amazon.", "error");
+    }
   }
 
   // ---- Settings: open as side panel vs popup (Chrome only) ---------------
@@ -1124,7 +1283,7 @@
     if (!choice) return;
 
     if (choice === "alt") {
-      withLoading($clear, async () => {
+      runOp("clear", async () => {
         const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
         if (res.ok) {
           toast(t("popup_toast_savingThenClearing"));
@@ -1136,7 +1295,7 @@
       return;
     }
 
-    withLoading($clear, async () => {
+    runOp("clear", async () => {
       const res = await send({ type: "MC_CLEAR_CURRENT" });
       if (res.ok) {
         toast(
@@ -1155,13 +1314,24 @@
   });
 
   // Save the live Amazon cart into a new cart WITHOUT clearing it — the
-  // same driver as "Save & Clear", minus the clear step.
+  // same driver as "Save & Clear", minus the clear step. Asks for a name first
+  // (pre-filled with a dated suggestion, so Enter still works as a one-tap
+  // save) and does nothing if the user backs out.
   if ($saveForLater) {
-    $saveForLater.addEventListener("click", () => {
-      withLoading($saveForLater, async () => {
+    $saveForLater.addEventListener("click", async () => {
+      const name = await promptDialog({
+        title: t("popup_prompt_saveForLater_title"),
+        message: t("popup_prompt_saveForLater_message"),
+        placeholder: t("popup_save_input_placeholder"),
+        initialValue: defaultName(),
+        okLabel: t("popup_action_save"),
+      });
+      if (name == null) return;
+
+      runOp("save", async () => {
         const res = await send({
           type: "MC_SAVE_FOR_LATER",
-          name: defaultName(),
+          name,
         });
         if (res.ok) {
           toast(t("popup_toast_savingForLater", [itemCountText(res.saving)]));
@@ -2683,12 +2853,18 @@
     });
   }
 
-  // Keep display in sync if entitlement is mutated externally (e.g. SW console).
+  // Keep display in sync if entitlement is mutated externally (e.g. SW console,
+  // a completed StoreKit/ExtPay purchase, or a refund). Without this, an
+  // already-open popup surface (most importantly the floating in-page modal,
+  // whose iframe is created once per page load and never remounted on
+  // open/close) would keep showing the entitlement it had at load time until
+  // the page was reloaded — so premium wouldn't visibly unlock until the next
+  // navigation, easily mistaken for "needs a Safari restart".
   if (chrome.storage && chrome.storage.onChanged) {
     let cartsRefreshTimer = null;
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
-      if (changes["mc.carts.v1"]) {
+      if (changes["mc.carts.v1"] || changes[ENT_KEY]) {
         clearTimeout(cartsRefreshTimer);
         cartsRefreshTimer = setTimeout(() => {
           refresh();
@@ -3167,10 +3343,22 @@
     // the resolved text.
     if ($template) applyI18n($template.content);
     if ($amazonListTemplate) applyI18n($amazonListTemplate.content);
-    loadThemeSetting();
-    await loadDismissed();
-    loadDebugPanelVisibility();
+    // Tell the in-page modal (observer.js) we actually loaded; it shows an
+    // error panel if this never arrives.
+    if (IS_FLOATING_SURFACE) {
+      try { window.parent.postMessage({ styxPopupReady: true }, "*"); } catch (_e) {}
+    }
+    // Start the cart load first so a slow/hung storage read (seen in embedded
+    // Safari contexts) can never keep the list from loading.
     refresh();
+    pollOpStatus();
+    scheduleOpPoll();
+    loadThemeSetting();
+    await Promise.race([
+      loadDismissed(),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+    loadDebugPanelVisibility();
     loadInterceptSetting();
     loadRelabelSetting();
     loadFabPulseSetting();

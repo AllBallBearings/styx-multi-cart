@@ -42,6 +42,15 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #elseif os(macOS)
         webView.evaluateJavaScript("show('mac')")
 
+        if #available(macOS 12.0, *) {
+            Task {
+                let json = await StoreManager.shared.productInfoJSON()
+                await MainActor.run {
+                    webView.evaluateJavaScript("showProducts(\(json))")
+                }
+            }
+        }
+
         SFSafariExtensionManager.getStateOfSafariExtension(withIdentifier: extensionBundleIdentifier) { (state, error) in
             guard let state = state, error == nil else {
                 // Insert code to inform the user that something went wrong.
@@ -82,6 +91,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
                 let plan = (body == "buy-lifetime") ? "lifetime" : "annual"
                 Task { await StoreManager.shared.purchase(planNickname: plan) }
             }
+
+        case "open-privacy":
+            NSWorkspace.shared.open(URL(string: "https://allballbearings.github.io/styx-multi-cart/privacy.html")!)
+
+        case "open-terms":
+            NSWorkspace.shared.open(URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
 
         case "restore":
             if #available(macOS 12.0, *) {

@@ -3,7 +3,7 @@
   "nonRenewingSubscriptions" : [],
   "products" : [
     {
-      "displayPrice" : "14.99",
+      "displayPrice" : "19.99",
       "familyShareable" : false,
       "internalID" : "STYX0002",
       "localizations" : [
@@ -36,7 +36,7 @@
         {
           "adHocOffers" : [],
           "codeOffers" : [],
-          "displayPrice" : "4.99",
+          "displayPrice" : "9.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "STYX0001",

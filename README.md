@@ -132,17 +132,19 @@ You'll need to be signed in to Amazon — the extension never handles your crede
 | `content.js`                            | Runs on Amazon cart pages — scrapes items and clears the cart                                    |
 | `observer.js`                           | Runs on Amazon product/list/cart pages — the floating button and panel, page buttons, relabeling |
 | `popup.html` / `popup.css` / `popup.js` | The panel UI, loaded inside the in-page floating modal                                           |
-| `generate_icons.html`                   | Optional one-time helper to generate toolbar icon PNGs                                           |
+| `icons/` + `store-assets/_build_logo.py` | Toolbar icons; the logo SVG master and its render scripts live in `store-assets/`                |
 
-## Adding custom toolbar icons (optional)
+## Updating the logo / icons
 
-The extension works fine with Chrome's default puzzle-piece icon. If you'd like a real icon:
+The logo is defined once, in `store-assets/_build_logo.py`, which writes the SVG masters. Every PNG (toolbar icons, store and website logos, favicon, Apple AppIcon set, host-app icon) is rendered from them:
 
-1. Open `generate_icons.html` in your browser.
-2. Click **Download all 4 PNGs**.
-3. Make a folder called `icons/` next to `manifest.json` and drop the four PNGs in.
-4. Open `manifest.json` and paste the `default_icon` and `icons` blocks shown on the generator page back in.
-5. Reload the extension at `chrome://extensions`.
+```bash
+python3 store-assets/_build_logo.py          # regenerate the SVG masters
+node    store-assets/_render_logo_assets.mjs # render every PNG size
+python3 store-assets/_render_promo.py --all  # refresh the promo tiles
+npm run sync:safari -- --prod                # copy into the Safari project
+```
+
 
 ## Troubleshooting
 

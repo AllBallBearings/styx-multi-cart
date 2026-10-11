@@ -39,3 +39,26 @@ document.querySelector("button.buy-lifetime")?.addEventListener("click", functio
 document.querySelector("button.restore")?.addEventListener("click", function () {
     sendController("restore");
 });
+document.querySelector("a.open-privacy")?.addEventListener("click", function (e) {
+    e.preventDefault();
+    sendController("open-privacy");
+});
+document.querySelector("a.open-terms")?.addEventListener("click", function (e) {
+    e.preventDefault();
+    sendController("open-terms");
+});
+
+// Fills in each plan's StoreKit title / length / price (called by the native
+// ViewController once products load). Guideline 3.1.2(c): the app itself must
+// show the subscription's title, length and price.
+function showProducts(products) {
+    products.forEach(function (p) {
+        var isAnnual = p.id.endsWith(".annual");
+        var plan = document.querySelector(isAnnual ? ".annual-detail" : ".lifetime-detail");
+        if (!plan) return;
+        plan.parentElement.querySelector(".plan-title").textContent = p.name;
+        plan.textContent = isAnnual
+            ? "Auto-renewing subscription · " + p.length + " · " + p.price + " per " + p.length.replace(/^1 /, "")
+            : "One-time purchase · " + p.price + " · no renewal";
+    });
+}

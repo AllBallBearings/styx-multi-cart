@@ -60,6 +60,36 @@ final class StoreManager {
         }
     }
 
+    /// Title, price and length for each product, as JSON for the host-app page.
+    /// Guideline 3.1.2(c) requires the subscription's title, length and price
+    /// to be shown in the app itself, so this reads them from StoreKit (the
+    /// price is localized and always matches the purchase sheet).
+    func productInfoJSON() async -> String {
+        if products.isEmpty { await loadProducts() }
+        let rows: [[String: String]] = products.map { p in
+            var length = ""
+            if let period = p.subscription?.subscriptionPeriod {
+                let unit: String
+                switch period.unit {
+                case .day: unit = "day"
+                case .week: unit = "week"
+                case .month: unit = "month"
+                case .year: unit = "year"
+                @unknown default: unit = ""
+                }
+                length = period.value == 1 ? "1 \(unit)" : "\(period.value) \(unit)s"
+            }
+            return [
+                "id": p.id,
+                "name": p.displayName,
+                "price": p.displayPrice,
+                "length": length,
+            ]
+        }
+        let data = try? JSONSerialization.data(withJSONObject: rows)
+        return data.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    }
+
     /// Begin a purchase for the given plan nickname ("annual" | "lifetime").
     /// Drives the system purchase sheet; on success we finish the transaction
     /// and refresh the shared entitlement.
@@ -118,9 +148,25 @@ final class StoreManager {
         var hasLifetime = false
         var subActive = false
         var subExpiresMs: Double = 0
+        // True when we saw one of OUR product IDs with a revocationDate (e.g.
+        // a refund). Transaction.currentEntitlements only ever yields verified
+        // transactions Apple currently considers valid, so an ordinary lapsed/
+        // non-renewed subscription never appears here at all — it's simply
+        // absent, same as "never purchased". A refund is the one case where a
+        // transaction for our product surfaces WITH revocationDate set, distinct
+        // from "not entitled because nothing to see". That distinction is what
+        // lets the JS-side mapper cut access immediately instead of applying
+        // its usual not-entitled grace window (nativeEntitlementToPatch).
+        var revokedAny = false
 
         for await result in Transaction.currentEntitlements {
-            guard case .verified(let t) = result, t.revocationDate == nil else { continue }
+            guard case .verified(let t) = result else { continue }
+            guard t.revocationDate == nil else {
+                if t.productID == Self.lifetimeID || t.productID == Self.annualID {
+                    revokedAny = true
+                }
+                continue
+            }
             switch t.productID {
             case Self.lifetimeID:
                 hasLifetime = true
@@ -154,7 +200,8 @@ final class StoreManager {
             productType: productType,
             expiresAt: expiresAt,
             willAutoRenew: willAutoRenew,
-            productId: productId
+            productId: productId,
+            revoked: !entitled && revokedAny
         )
     }
 
@@ -177,7 +224,8 @@ final class StoreManager {
         productType: String,
         expiresAt: Double,
         willAutoRenew: Bool,
-        productId: String
+        productId: String,
+        revoked: Bool = false
     ) {
         guard let defaults = UserDefaults(suiteName: Self.appGroupID) else {
             NSLog("[Styx Multi-Cart] App Group \(Self.appGroupID) unavailable — entitlement not shared")
@@ -189,6 +237,7 @@ final class StoreManager {
             "expiresAt": expiresAt,
             "willAutoRenew": willAutoRenew,
             "productId": productId,
+            "revoked": revoked,
             "updatedAt": Date().timeIntervalSince1970 * 1000,
         ]
         defaults.set(payload, forKey: Self.entitlementKey)
