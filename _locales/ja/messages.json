@@ -1072,7 +1072,7 @@
     "message": "Amazonリストがまだありません — 下から作成してください。"
   },
   "observer_addingToCart": {
-    "message": "「$1」に追加しています — ステータスウィンドウをご確認ください…",
+    "message": "「$1」に追加しています… 少々お待ちください。",
     "placeholders": {
       "1": {
         "content": "$1"

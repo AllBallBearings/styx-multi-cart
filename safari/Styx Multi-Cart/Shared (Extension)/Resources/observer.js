@@ -1558,6 +1558,24 @@
       }
       #${PICKER_ID} .styx-pk-sub { font-size: 11px; color: #8a93a0; font-variant-numeric: tabular-nums; }
       #${PICKER_ID} .styx-pk-sub b { color: #ff9900; font-weight: 600; }
+      #${PICKER_ID} .styx-pk-operation[hidden] { display: none; }
+      #${PICKER_ID} .styx-pk-operation {
+        display: flex; align-items: center; gap: 9px;
+        margin: 10px 14px 0; padding: 10px 12px;
+        border: 1px solid #8a5700; border-radius: 8px;
+        background: #30230d; color: #ffe2a8;
+        font-size: 12px; font-weight: 600;
+      }
+      #${PICKER_ID} .styx-pk-operation-error {
+        border-color: #a43838; background: #351e1e; color: #ffb5aa;
+      }
+      #${PICKER_ID} .styx-pk-spinner {
+        display: inline-block; width: 15px; height: 15px; flex: none;
+        border: 2px solid rgba(255, 153, 0, 0.28);
+        border-top-color: #ff9900; border-radius: 50%;
+        animation: styx-pk-spin 0.7s linear infinite;
+      }
+      #${PICKER_ID} .styx-pk-operation-error .styx-pk-spinner { display: none; }
       #${PICKER_ID} .styx-pk-prompt {
         padding: 10px 14px 6px; font-size: 11px;
         text-transform: uppercase; letter-spacing: 0.06em;
@@ -1604,6 +1622,10 @@
         opacity: 0.6; cursor: not-allowed; transform: none;
         border-color: #2a3038; box-shadow: none;
       }
+      #${PICKER_ID} .styx-pk-row.styx-pk-active[disabled] {
+        opacity: 1; border-color: #ff9900;
+        box-shadow: 0 0 0 1px rgba(255, 153, 0, 0.35);
+      }
       #${PICKER_ID} .styx-pk-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
       #${PICKER_ID} .styx-pk-row-name { font-size: 13px; font-weight: 600; color: #f3efe6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #${PICKER_ID} .styx-pk-row-count {
@@ -1643,6 +1665,8 @@
         font-family: inherit; cursor: pointer;
       }
       #${PICKER_ID} .styx-pk-escape:hover { background: #f7ca00; }
+      #${PICKER_ID} .styx-pk-escape:disabled,
+      #${PICKER_ID} .styx-pk-create-row:disabled { opacity: 0.55; cursor: not-allowed; }
       #${PICKER_ID} .styx-pk-confirm {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
@@ -1834,6 +1858,15 @@
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row[disabled] {
         border-color: #e0d9cc;
       }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-operation {
+        background: #fff5df; color: #704600; border-color: #e7b75a;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-operation-error {
+        background: #fff0ed; color: #a22c24; border-color: #e4a9a3;
+      }
+      #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row.styx-pk-active[disabled] {
+        border-color: #ff9900;
+      }
       #${PICKER_ID}[data-styx-theme="light"] .styx-pk-row-readonly {
         background: #fff3cd;
         color: #7a4b00;
@@ -1864,6 +1897,9 @@
         user-select: text !important;
         -webkit-user-select: text !important;
         pointer-events: auto !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #${PICKER_ID} .styx-pk-spinner { animation-duration: 1.8s; }
       }
     `;
     const style = document.createElement("style");
@@ -2304,6 +2340,10 @@
             <div class="styx-pk-sub">${priceBit}${escapeHtml(t("observer_qtyLabel"))} <b>${qty}</b></div>
           </div>
         </div>
+        <div class="styx-pk-operation" role="status" aria-live="polite" hidden>
+          <span class="styx-pk-spinner" aria-hidden="true"></span>
+          <span class="styx-pk-operation-text"></span>
+        </div>
         <div class="styx-pk-prompt">${t("observer_addToWhichCart")}</div>
         <ul class="styx-pk-list">${cartsHtml}</ul>
         <button type="button" class="styx-pk-create-row" data-styx-action="create-new">${t("observer_createNewCartRow")}</button>
@@ -2333,6 +2373,7 @@
       }
       const modal = root.querySelector(".styx-pk-modal");
       if (modal && modal.dataset.styxOriginalHtml) return; // on a sub-screen
+      if (root.dataset.styxAdding === "true") return; // keep the selected row visible
       const ul = root.querySelector(".styx-pk-list");
       if (!ul) return;
       ctx = buildPickerTargets();
@@ -2344,6 +2385,10 @@
 
     root.addEventListener("click", async (e) => {
       const action = e.target.closest("[data-styx-action]");
+      if (root.dataset.styxAdding === "true") {
+        if (action && action.dataset.styxAction === "cancel") dismissPicker();
+        return;
+      }
       if (action) {
         if (action.dataset.styxAction === "cancel") {
           dismissPicker();
@@ -2412,13 +2457,23 @@
       const cartName = row.dataset.cartName || t("popup_genericCart");
       const listId = row.dataset.listId || null;
 
-      // Every row is an Amazon list. The Add-to-List flow is slow (helper tab),
-      // so reflect that in the header before the round-trip.
-      const sub = root.querySelector(".styx-pk-sub");
-      if (sub) {
-        sub.textContent = t("observer_addingToCart", [cartName]);
-        sub.style.color = "";
-      }
+      // Keep progress on the picker while Amazon's helper tab does the work.
+      root.dataset.styxAdding = "true";
+      const modal = root.querySelector(".styx-pk-modal");
+      const list = root.querySelector(".styx-pk-list");
+      list.setAttribute("aria-busy", "true");
+      const operation = root.querySelector(".styx-pk-operation");
+      operation.hidden = false;
+      operation.classList.remove("styx-pk-operation-error");
+      operation.querySelector(".styx-pk-operation-text").textContent =
+        t("observer_addingToCart", [cartName]);
+      row.classList.add("styx-pk-active");
+      const rowSpinner = document.createElement("span");
+      rowSpinner.className = "styx-pk-spinner";
+      rowSpinner.setAttribute("aria-hidden", "true");
+      row.appendChild(rowSpinner);
+      root.querySelector(".styx-pk-create-row").disabled = true;
+      root.querySelector(".styx-pk-escape").disabled = true;
 
       const res = await sendRequest({
         type: "MC_ADD_ITEM_TO_AMAZON_LIST",
@@ -2428,6 +2483,11 @@
         quantity: qty,
         name: cartName,
       });
+      if (document.getElementById(PICKER_ID) !== root) return;
+      delete root.dataset.styxAdding;
+      list.removeAttribute("aria-busy");
+      row.classList.remove("styx-pk-active");
+      rowSpinner.remove();
 
       if (!res || !res.ok) {
         // Restore only the rows that were editable before the click — leave
@@ -2435,15 +2495,16 @@
         pickerRows.forEach((r) => {
           if (!preLocked.has(r.dataset.cartId)) r.removeAttribute("disabled");
         });
-        const sub = root.querySelector(".styx-pk-sub");
-        if (sub) {
-          sub.textContent = (res && res.error) || t("observer_err_addItemFailed");
-          sub.style.color = "#ff8d80";
-        }
+        operation.classList.add("styx-pk-operation-error");
+        operation.querySelector(".styx-pk-operation-text").textContent =
+          (res && res.error) || t("observer_err_addItemFailed");
+        root.querySelector(".styx-pk-create-row").disabled = false;
+        root.querySelector(".styx-pk-escape").disabled = false;
         return;
       }
 
-      const modal = root.querySelector(".styx-pk-modal");
+      operation.querySelector(".styx-pk-operation-text").textContent =
+        t("observer_addedTo", [cartName]);
       const confirm = document.createElement("div");
       confirm.className = "styx-pk-confirm";
       confirm.textContent = t(
@@ -3480,7 +3541,7 @@
     if (dialog) dialog.remove();
   }
 
-  function promptSaveCartName(defaultName) {
+  function promptSaveCartName(defaultName, { helpKey = null, actionKey = "popup_action_ok" } = {}) {
     dismissSaveCartPrompt();
     return new Promise((resolve) => {
       const dialog = document.createElement("div");
@@ -3494,10 +3555,10 @@
           <form class="styx-save-cart-prompt-form" autocomplete="off">
             <label id="styx-save-cart-prompt-title" class="styx-save-cart-prompt-title" for="styx-save-cart-prompt-input">${t("observer_nameYourNewList")}</label>
             <input id="styx-save-cart-prompt-input" class="styx-save-cart-prompt-input" type="text" maxlength="60" autocomplete="off" />
-            <p class="styx-save-cart-prompt-help">${t("observer_saveCartHelp")}</p>
+            <p class="styx-save-cart-prompt-help">${helpKey ? t(helpKey) : t("observer_saveCartHelp")}</p>
             <div class="styx-save-cart-prompt-actions">
               <button type="button" data-styx-save-prompt-choice="cancel">${t("popup_action_cancel")}</button>
-              <button type="submit" data-styx-save-prompt-choice="ok">${t("popup_action_ok")}</button>
+              <button type="submit" data-styx-save-prompt-choice="ok">${t(actionKey)}</button>
             </div>
           </form>
         </div>
@@ -3561,12 +3622,23 @@
       if (!choice) return;
       if (choice === "cancel") { close(); return; }
 
-      const actionButton = e.target;
-      actionButton.disabled = true;
-      dialog.querySelectorAll("button").forEach((el) => { el.disabled = true; });
-      btn.disabled = true;
-      setClearCartLabel(btn, choice === "save" ? t("observer_savingAndClearing") : t("observer_clearingCart"));
       close();
+      btn.disabled = true;
+      let name;
+      if (choice === "save") {
+        const defaultName = `${t("observer_cartWord")} ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        const raw = await promptSaveCartName(defaultName, {
+          helpKey: "popup_prompt_saveAndClear_message",
+          actionKey: "popup_confirm_clear_altLabel",
+        });
+        if (raw === null) {
+          btn.disabled = false;
+          return;
+        }
+        name = raw.trim() || defaultName;
+      }
+
+      setClearCartLabel(btn, choice === "save" ? t("observer_savingAndClearing") : t("observer_clearingCart"));
       showStyxToast(
         choice === "save" ? t("observer_savingThenClearing") : t("observer_clearingAmazonCart"),
         choice === "save" ? t("observer_savingYourCart") : t("observer_clearingYourCart")
@@ -3574,7 +3646,7 @@
 
       const res = await sendRequest({
         type: choice === "save" ? "MC_SAVE_AND_CLEAR" : "MC_CLEAR_CURRENT",
-        ...(choice === "save" ? { name: `${t("observer_cartWord")} ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}` } : {})
+        ...(choice === "save" ? { name } : {})
       });
       if (res && res.ok) {
         finishStyxToast(

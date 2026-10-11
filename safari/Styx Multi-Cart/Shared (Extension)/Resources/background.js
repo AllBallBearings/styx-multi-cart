@@ -289,6 +289,23 @@ importScripts("ExtPay.js");
       await rememberListItemCount(listId, Math.max(0, counts[key] + delta));
     }
   }
+  async function bumpCachedAmazonListCount(listId, delta) {
+    if (!listId || !Number.isFinite(delta)) return;
+    try {
+      const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+      const snap = got[AMAZON_LISTS_CACHE_KEY];
+      if (!snap || !Array.isArray(snap.lists)) return;
+      const key = String(listId).toUpperCase();
+      const index = snap.lists.findIndex((l) => String(l.listId || "").toUpperCase() === key);
+      if (index < 0) return;
+      const count = snap.lists[index].count;
+      if (count == null || count === "" || !Number.isFinite(Number(count))) return;
+      const lists = snap.lists.slice();
+      lists[index] = { ...lists[index], count: Math.max(0, Number(lists[index].count) + delta) };
+      await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: { ...snap, lists } });
+    } catch (_e) {
+    }
+  }
   var AMAZON_LIST_PREFETCH_CONCURRENCY = 3;
   var _listPrefetchQueue = [];
   var _listPrefetchQueued = /* @__PURE__ */ new Map();
@@ -3587,9 +3604,16 @@ importScripts("ExtPay.js");
     return (async () => {
       const sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
       const rowSel = "#atwl-list-name-" + listId;
+      const visible = (el) => !!(el && el.getBoundingClientRect().width > 0 && el.closest('[aria-hidden="true"]') == null);
       const findRow = () => {
-        const el = document.querySelector(rowSel);
-        return el && el.getBoundingClientRect().width > 0 ? el : null;
+        return [...document.querySelectorAll(rowSel)].find(visible) || null;
+      };
+      const findMoreLists = () => {
+        const menu = [...document.querySelectorAll("#atwl-popover-inner")].find(visible);
+        if (!menu) return null;
+        return [...menu.querySelectorAll("button, a, [role=button], [id*='more']")].find(
+          (el) => visible(el) && (/(?:show|view|see) more lists/i.test(el.textContent || "") || /atwl.*(?:more|show-all)/i.test(el.id || ""))
+        ) || null;
       };
       try {
         let row = findRow();
@@ -3601,7 +3625,17 @@ importScripts("ExtPay.js");
             return { ok: false, error: i18nStrings.dropdownNotFound };
           }
           caret.click();
-          for (let i = 0; i < 20 && !(row = findRow()); i++) await sleep2(250);
+          let expansions = 0;
+          let nextExpansionAt = 0;
+          for (let i = 0; i < 20 && !(row = findRow()); i++) {
+            const more = findMoreLists();
+            if (more && expansions < 5 && i >= nextExpansionAt) {
+              more.click();
+              expansions++;
+              nextExpansionAt = i + 4;
+            }
+            await sleep2(250);
+          }
         }
         if (!row) {
           return {
@@ -4141,10 +4175,7 @@ importScripts("ExtPay.js");
                   }
                 }
                 await bumpRememberedListItemCount(listId, 1);
-                try {
-                  await listAmazonListsWithAccessCached(host);
-                } catch (_e) {
-                }
+                await bumpCachedAmazonListCount(listId, 1);
                 setOpStatus(t("bg_addingToList", [listName]), t("bg_doneCap"));
                 sendResponse({ ok: true, listId, asin });
               } else {

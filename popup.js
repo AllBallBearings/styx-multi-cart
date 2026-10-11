@@ -1283,8 +1283,17 @@
     if (!choice) return;
 
     if (choice === "alt") {
+      const name = await promptDialog({
+        title: t("popup_prompt_saveForLater_title"),
+        message: t("popup_prompt_saveAndClear_message"),
+        placeholder: t("popup_save_input_placeholder"),
+        initialValue: defaultName(),
+        okLabel: t("popup_confirm_clear_altLabel"),
+      });
+      if (name == null) return;
+
       runOp("clear", async () => {
-        const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
+        const res = await send({ type: "MC_SAVE_AND_CLEAR", name });
         if (res.ok) {
           toast(t("popup_toast_savingThenClearing"));
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);

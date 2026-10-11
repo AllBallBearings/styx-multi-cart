@@ -1104,8 +1104,8 @@
     "description": "Empty-state row in the on-page cart picker when the user has no Amazon lists."
   },
   "observer_addingToCart": {
-    "message": "Adding to \"{{1}}\" — watch the status window…",
-    "description": "Status text shown in the on-page cart picker header while an item is being added to a cart. $1 is the cart name."
+    "message": "Adding to \"{{1}}\"… This may take a moment.",
+    "description": "Status text shown in the on-page cart picker while an item is being added to a cart. $1 is the cart name."
   },
   "observer_err_addItemFailed": {
     "message": "Could not add item.",
@@ -2046,6 +2046,10 @@
   "popup_prompt_saveForLater_message": {
     "message": "Saves everything in your Amazon cart as a new cart. Your Amazon cart stays as it is.",
     "description": "Explains under the prompt title that saving copies the Amazon cart into a new cart and leaves the Amazon cart untouched."
+  },
+  "popup_prompt_saveAndClear_message": {
+    "message": "Saves everything in your Amazon cart as a new cart, then clears your Amazon cart.",
+    "description": "Explains the Save & Clear action in the cart-name prompt."
   },
   "popup_paywall_renewalNote": {
     "message": "The annual plan renews automatically each year unless cancelled at least 24 hours before the period ends. Manage or cancel in your account settings.",

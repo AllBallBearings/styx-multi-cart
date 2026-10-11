@@ -292,6 +292,26 @@ async function bumpRememberedListItemCount(listId, delta) {
   }
 }
 
+// The picker already has this list in its cached snapshot. Update its visible
+// count locally after a successful add; re-scraping the entire Lists index here
+// would hold the success response behind another Amazon page load.
+async function bumpCachedAmazonListCount(listId, delta) {
+  if (!listId || !Number.isFinite(delta)) return;
+  try {
+    const got = await chrome.storage.local.get(AMAZON_LISTS_CACHE_KEY);
+    const snap = got[AMAZON_LISTS_CACHE_KEY];
+    if (!snap || !Array.isArray(snap.lists)) return;
+    const key = String(listId).toUpperCase();
+    const index = snap.lists.findIndex((l) => String(l.listId || "").toUpperCase() === key);
+    if (index < 0) return;
+    const count = snap.lists[index].count;
+    if (count == null || count === "" || !Number.isFinite(Number(count))) return;
+    const lists = snap.lists.slice();
+    lists[index] = { ...lists[index], count: Math.max(0, Number(lists[index].count) + delta) };
+    await chrome.storage.local.set({ [AMAZON_LISTS_CACHE_KEY]: { ...snap, lists } });
+  } catch (_e) { /* count is a display hint; leave it unknown on storage failure */ }
+}
+
 // --- Background list-content prefetch -----------------------------------
 // The lists index is cheap enough to load for the panel, but each list page
 // can be expensive and Amazon lazy-loads its rows while scrolling. Keep the
@@ -5168,9 +5188,20 @@ function pageAddToList(listId, i18n) {
   return (async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const rowSel = "#atwl-list-name-" + listId;
+    const visible = (el) => !!(el && el.getBoundingClientRect().width > 0 &&
+      el.closest('[aria-hidden="true"]') == null);
     const findRow = () => {
-      const el = document.querySelector(rowSel);
-      return el && el.getBoundingClientRect().width > 0 ? el : null;
+      // Amazon can leave a hidden, stale copy of the chooser in the DOM.
+      // querySelector would stop at that copy even when the live one has the row.
+      return [...document.querySelectorAll(rowSel)].find(visible) || null;
+    };
+    const findMoreLists = () => {
+      const menu = [...document.querySelectorAll("#atwl-popover-inner")].find(visible);
+      if (!menu) return null;
+      return [...menu.querySelectorAll("button, a, [role=button], [id*='more']")].find((el) =>
+        visible(el) && (/(?:show|view|see) more lists/i.test(el.textContent || "") ||
+          /atwl.*(?:more|show-all)/i.test(el.id || ""))
+      ) || null;
     };
     try {
       // The chooser may already be open (e.g. a retry on the same tab).
@@ -5186,7 +5217,19 @@ function pageAddToList(listId, i18n) {
           return { ok: false, error: i18nStrings.dropdownNotFound };
         }
         caret.click();
-        for (let i = 0; i < 20 && !(row = findRow()); i++) await sleep(250);
+        // Expand a shortened menu as soon as its control appears. The old
+        // flow waited a full five seconds before even trying "more lists".
+        let expansions = 0;
+        let nextExpansionAt = 0;
+        for (let i = 0; i < 20 && !(row = findRow()); i++) {
+          const more = findMoreLists();
+          if (more && expansions < 5 && i >= nextExpansionAt) {
+            more.click();
+            expansions++;
+            nextExpansionAt = i + 4; // let each expansion render before retrying
+          }
+          await sleep(250);
+        }
       }
       if (!row) {
         return {
@@ -5903,9 +5946,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
                   await setListQuantities(host, listId, [{ asin, quantity: qty }]);
                 } catch (_e) { /* qty is best-effort */ }
               }
-              // Keep the shown count right, then refresh the cached snapshot.
+              // Keep the shown count right without loading the Lists index
+              // again before the picker can report success.
               await bumpRememberedListItemCount(listId, 1);
-              try { await listAmazonListsWithAccessCached(host); } catch (_e) {}
+              await bumpCachedAmazonListCount(listId, 1);
               setOpStatus(t("bg_addingToList", [listName]), t("bg_doneCap"));
               sendResponse({ ok: true, listId, asin });
             } else {

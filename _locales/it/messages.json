@@ -1072,7 +1072,7 @@
     "message": "Ancora nessuna lista Amazon — creane una qui sotto."
   },
   "observer_addingToCart": {
-    "message": "Aggiunta a «$1» — osserva la finestra di stato…",
+    "message": "Aggiunta a «$1»… Potrebbe richiedere qualche istante.",
     "placeholders": {
       "1": {
         "content": "$1"

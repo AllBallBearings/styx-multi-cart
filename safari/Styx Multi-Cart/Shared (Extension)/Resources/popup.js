@@ -1283,8 +1283,17 @@
     if (!choice) return;
 
     if (choice === "alt") {
+      const name = await promptDialog({
+        title: t("popup_prompt_saveForLater_title"),
+        message: t("popup_prompt_saveAndClear_message"),
+        placeholder: t("popup_save_input_placeholder"),
+        initialValue: defaultName(),
+        okLabel: t("popup_confirm_clear_altLabel"),
+      });
+      if (name == null) return;
+
       runOp("clear", async () => {
-        const res = await send({ type: "MC_SAVE_AND_CLEAR", name: defaultName() });
+        const res = await send({ type: "MC_SAVE_AND_CLEAR", name });
         if (res.ok) {
           toast(t("popup_toast_savingThenClearing"));
           if (!IS_PANEL_SURFACE) setTimeout(() => window.close(), 1200);
@@ -2442,6 +2451,44 @@
   // preset or the flip hotkey forces a tier; cleared by "Unlock (use real)".
   const DEV_ENT_LOCK_KEY = "mc.dev.entlock.v1";
 
+  /* MC_DEBUG_ENT_START */
+  const DAY_MS = 86400000;
+
+  function entPresets(now) {
+    return {
+      premium: {
+        tier: "premium",
+        premiumUntil: now + 365 * DAY_MS,
+        autoRenew: true,
+        source: "dev",
+        lastChecked: now,
+      },
+      "premium-warn": {
+        // Premium, 5 days from expiry, auto-renew off → triggers warning paths.
+        tier: "premium",
+        premiumUntil: now + 5 * DAY_MS,
+        autoRenew: false,
+        source: "dev",
+        lastChecked: now,
+      },
+      lapsed: {
+        // Was premium, expired yesterday → top-N editable, rest read-only.
+        tier: "premium",
+        premiumUntil: now - 1 * DAY_MS,
+        autoRenew: false,
+        source: "dev",
+        lastChecked: now,
+      },
+      free: {
+        tier: "free",
+        premiumUntil: null,
+        autoRenew: false,
+        source: null,
+        lastChecked: now,
+      },
+    };
+  }
+  /* MC_DEBUG_ENT_END */
 
   function formatEntForDisplay(ent) {
     if (!ent) return "(none)";
@@ -2542,6 +2589,96 @@
     });
   })();
 
+  /* MC_DEBUG_ENT_START */
+  // Button delegation inside the debug entitlement section. (Stripped from
+  // production builds along with the buttons in popup.html.)
+  if ($debugPanel) {
+    $debugPanel.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-debug-ent]");
+      if (!btn) return;
+      const action = btn.dataset.debugEnt;
+      const now = Date.now();
+      if (action === "reset-dismiss") {
+        try {
+          await chrome.storage.local.remove(DISMISS_KEY);
+          uiDismissed = { tierStrip: null, lapsedBanner: null };
+          toast("Dismissed flags cleared", "ok");
+          await refresh();
+        } catch (err) {
+          toast(`Reset failed: ${err.message}`, "error");
+        }
+        return;
+      }
+      if (action === "unlock") {
+        try {
+          await chrome.storage.local.remove(DEV_ENT_LOCK_KEY);
+          // Snap the stored entitlement back to the real account.
+          await send({ type: "MC_DEV_SYNC_ENTITLEMENT" });
+          await refreshDebugEntDisplay();
+          await refresh();
+          toast("Entitlement unlocked — using real account", "ok");
+        } catch (err) {
+          toast(`Unlock failed: ${err.message}`, "error");
+        }
+        return;
+      }
+      const presets = entPresets(now);
+      const next = presets[action];
+      if (!next) return;
+      try {
+        // Pin it so the SW's real-account sync doesn't overwrite the forced
+        // state — the whole point for screenshots/video.
+        await chrome.storage.local.set({
+          [ENT_KEY]: next,
+          [DEV_ENT_LOCK_KEY]: true,
+        });
+        // Reset dismissed UI on entitlement state change so banners come back.
+        uiDismissed = { tierStrip: null, lapsedBanner: null };
+        await chrome.storage.local.set({
+          [DISMISS_KEY]: uiDismissed,
+        });
+        await refreshDebugEntDisplay();
+        await refresh();
+        toast(`Entitlement → ${action} (locked)`, "ok");
+      } catch (err) {
+        toast(`Failed: ${err.message}`, "error");
+      }
+    });
+  }
+
+  // Secret fast toggle: Ctrl/Cmd+Alt+P flips Premium ⇄ Free instantly and
+  // pins it (lock on), without opening the debug panel — so screenshots and
+  // video stay clean. Same dev-mode gate as Ctrl+Alt+D; e.code keeps it
+  // working regardless of macOS Option-key remapping.
+  document.addEventListener("keydown", async (e) => {
+    if (!devModeEnabled) return;
+    const isFlip =
+      (e.ctrlKey || e.metaKey) && e.altKey && e.code === "KeyP";
+    if (!isFlip) return;
+    e.preventDefault();
+    try {
+      const got = await chrome.storage.local.get(ENT_KEY);
+      const cur = got[ENT_KEY];
+      const premiumNow =
+        cur &&
+        cur.tier === "premium" &&
+        (cur.premiumUntil == null || cur.premiumUntil > Date.now());
+      const target = premiumNow ? "free" : "premium";
+      const next = entPresets(Date.now())[target];
+      await chrome.storage.local.set({
+        [ENT_KEY]: next,
+        [DEV_ENT_LOCK_KEY]: true,
+      });
+      uiDismissed = { tierStrip: null, lapsedBanner: null };
+      await chrome.storage.local.set({ [DISMISS_KEY]: uiDismissed });
+      await refreshDebugEntDisplay();
+      await refresh();
+      toast(`Entitlement → ${target} (locked)`, "ok");
+    } catch (err) {
+      toast(`Flip failed: ${err.message}`, "error");
+    }
+  });
+  /* MC_DEBUG_ENT_END */
 
   // ---- Dev backup / restore ----------------------------------------------
   // Not inside the entitlement strip markers: this ships (dev-gated behind the
