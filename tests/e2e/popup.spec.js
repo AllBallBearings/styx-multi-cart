@@ -170,4 +170,31 @@ test.describe("popup — Amazon list dashboard", () => {
       )
     ).toBe(1);
   });
+
+  test("Save & Clear asks for a name and sends that name", async ({ popup }) => {
+    const page = await popup({ amazonLists });
+    await page.locator("#mc-clear").click();
+    await page.locator("#mc-confirm-alt").click();
+
+    await expect(page.locator("#mc-prompt-title")).toHaveText("Name this cart");
+    await expect(page.locator("#mc-prompt-body")).toContainText("then clears your Amazon cart");
+    await page.locator("#mc-prompt-input").fill("Weekend supplies");
+    await page.locator("#mc-prompt-ok").click();
+
+    await expect.poll(async () => page.evaluate(() =>
+      window.__mcMessageLog.find((message) => message.type === "MC_SAVE_AND_CLEAR")?.name
+    )).toBe("Weekend supplies");
+  });
+
+  test("cancelling the Save & Clear name prompt leaves the cart alone", async ({ popup }) => {
+    const page = await popup({ amazonLists });
+    await page.locator("#mc-clear").click();
+    await page.locator("#mc-confirm-alt").click();
+    await page.locator("#mc-prompt-cancel").click();
+
+    const operations = await page.evaluate(() => window.__mcMessageLog.filter((message) =>
+      message.type === "MC_SAVE_AND_CLEAR" || message.type === "MC_CLEAR_CURRENT"
+    ));
+    expect(operations).toHaveLength(0);
+  });
 });

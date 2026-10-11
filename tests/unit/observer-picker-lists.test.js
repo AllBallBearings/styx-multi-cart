@@ -13,14 +13,17 @@ function nextTick() {
 
 // Storage seeded with an Amazon-list snapshot (mc.amazonlists.v1) and NO local
 // carts, so the picker runs in "lists mode".
-function loadObserver(html, url) {
+function loadObserver(html, url, { deferAdd = false } = {}) {
   const messages = [];
+  let completeAdd = null;
   const dom = new JSDOM(html, { url, runScripts: "outside-only", pretendToBeVisual: true });
   const lists = [
     { listId: "L1WISH00000", name: "Wish List", count: 5, kind: "wishlist", access: "editable", url: "https://www.amazon.com/hz/wishlist/ls/L1WISH00000" },
     { listId: "L2BEACH0000", name: "Beach trip", count: 2, kind: "custom", access: "editable", url: "https://www.amazon.com/hz/wishlist/ls/L2BEACH0000" },
   ];
   dom.window.chrome = {
+    i18n: { getMessage: (key, subs) =>
+      key === "observer_addingToCart" ? `Adding to "${subs[0]}"…` : key },
     runtime: {
       lastError: null,
       getURL: (p) => `chrome-extension://test-id/${p}`,
@@ -29,6 +32,10 @@ function loadObserver(html, url) {
         // ENSURE returns the same snapshot so the background refresh is a no-op.
         if (message.type === "MC_ENSURE_AMAZON_LISTS") {
           if (cb) cb({ ok: true, host: "www.amazon.com", fetchedAt: Date.now(), lists });
+          return;
+        }
+        if (message.type === "MC_ADD_ITEM_TO_AMAZON_LIST" && deferAdd) {
+          completeAdd = cb;
           return;
         }
         if (cb) cb({ ok: true });
@@ -52,7 +59,7 @@ function loadObserver(html, url) {
     },
   };
   dom.window.eval(SRC);
-  return { dom, messages };
+  return { dom, messages, completeAdd: (response) => completeAdd(response) };
 }
 
 const PDP = `
@@ -95,5 +102,39 @@ describe("observer.js — picker in Amazon-lists mode", () => {
     expect(add).toMatchObject({ listId: "L1WISH00000", asin: "B0TESTASN0", host: "www.amazon.com" });
     // The old local-cart path must NOT be used in lists mode.
     expect(messages.find((m) => m.type === "MC_ADD_ITEM_TO_SAVED_CART")).toBeFalsy();
+  });
+
+  it("shows progress on the selected cart and restores the picker after an error", async () => {
+    const { dom, messages, completeAdd } = loadObserver(
+      PDP, "https://www.amazon.com/dp/B0TESTASN0", { deferAdd: true }
+    );
+    const doc = dom.window.document;
+    doc.querySelector("input[name='submit.addToCart']")
+      .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await nextTick();
+
+    const picker = doc.getElementById("__styx-picker");
+    const rows = [...picker.querySelectorAll(".styx-pk-row")];
+    const selected = rows.find((r) => r.dataset.cartName === "Wish List");
+    selected.click();
+    await nextTick();
+
+    expect(picker.querySelector(".styx-pk-operation").hidden).toBe(false);
+    expect(picker.querySelector(".styx-pk-operation-text").textContent).toContain("Wish List");
+    expect(selected.classList.contains("styx-pk-active")).toBe(true);
+    expect(selected.querySelector(".styx-pk-spinner")).toBeTruthy();
+    expect(picker.querySelector(".styx-pk-list").getAttribute("aria-busy")).toBe("true");
+    expect(picker.querySelector(".styx-pk-escape").disabled).toBe(true);
+    rows.find((r) => r !== selected).click();
+    expect(messages.filter((m) => m.type === "MC_ADD_ITEM_TO_AMAZON_LIST")).toHaveLength(1);
+
+    completeAdd({ ok: false, error: "Amazon could not add this item" });
+    await nextTick();
+    expect(picker.querySelector(".styx-pk-operation-error").textContent)
+      .toContain("Amazon could not add this item");
+    expect(selected.querySelector(".styx-pk-spinner")).toBeNull();
+    expect(picker.querySelector(".styx-pk-list").hasAttribute("aria-busy")).toBe(false);
+    expect(selected.disabled).toBe(false);
+    expect(picker.querySelector(".styx-pk-escape").disabled).toBe(false);
   });
 });

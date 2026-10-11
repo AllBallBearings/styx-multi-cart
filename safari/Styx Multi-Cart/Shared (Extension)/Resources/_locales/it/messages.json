@@ -828,7 +828,7 @@
     "message": "Ancora nessuna lista Amazon — creane una qui sotto."
   },
   "observer_addingToCart": {
-    "message": "Aggiunta a «{{1}}» — osserva la finestra di stato…"
+    "message": "Aggiunta a «{{1}}»… Potrebbe richiedere qualche istante."
   },
   "observer_err_addItemFailed": {
     "message": "Impossibile aggiungere l'articolo."

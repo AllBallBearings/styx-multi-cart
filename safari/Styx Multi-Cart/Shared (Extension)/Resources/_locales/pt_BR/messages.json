@@ -828,7 +828,7 @@
     "message": "Ainda não há listas da Amazon — crie uma abaixo."
   },
   "observer_addingToCart": {
-    "message": "Adicionando a «{{1}}» — acompanhe a janela de status…"
+    "message": "Adicionando a «{{1}}»… Isso pode levar alguns instantes."
   },
   "observer_err_addItemFailed": {
     "message": "Não foi possível adicionar o item."

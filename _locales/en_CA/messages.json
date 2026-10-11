@@ -1072,7 +1072,7 @@
     "message": "No Amazon lists yet — create one below."
   },
   "observer_addingToCart": {
-    "message": "Adding to \"$1\" — watch the status window…",
+    "message": "Adding to \"$1\"… This may take a moment.",
     "placeholders": {
       "1": {
         "content": "$1"

@@ -828,7 +828,7 @@
     "message": "Amazonリストがまだありません — 下から作成してください。"
   },
   "observer_addingToCart": {
-    "message": "「{{1}}」に追加しています — ステータスウィンドウをご確認ください…"
+    "message": "「{{1}}」に追加しています… 少々お待ちください。"
   },
   "observer_err_addItemFailed": {
     "message": "商品を追加できませんでした。"
