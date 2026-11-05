@@ -58,4 +58,4 @@ Um einen ganzen Warenkorb in einem Schritt an Amazon zurückzusenden, verwendet 
 
 Ihr aktiver Amazon-Warenkorb bleibt immer vollwertig und kostenlos nutzbar — Styx beeinträchtigt niemals das grundlegende Amazon-Einkaufserlebnis, selbst wenn Premium abläuft.
 
-Funktioniert mit Chrome und allen Chromium-basierten Browsern.
+Funktioniert mit Chrome und allen Chromium-basierten Browsern. Auch für Safari auf dem Mac im Mac App Store erhältlich.

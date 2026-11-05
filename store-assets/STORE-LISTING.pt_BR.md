@@ -58,4 +58,4 @@ Para reenviar um carrinho inteiro para a Amazon em uma única etapa, o Styx usa 
 
 Seu carrinho ativo da Amazon é sempre completo e sempre gratuito — o Styx nunca atrapalha as compras básicas na Amazon, mesmo se o Premium expirar.
 
-Funciona no Chrome e em todos os navegadores baseados em Chromium.
+Funciona no Chrome e em todos os navegadores baseados em Chromium. Também disponível para Safari no Mac pela Mac App Store.

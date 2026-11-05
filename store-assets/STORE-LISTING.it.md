@@ -58,4 +58,4 @@ Per rinviare un intero carrello ad Amazon in un solo passaggio, Styx utilizza l'
 
 Il tuo carrello Amazon attivo resta sempre di prim'ordine e sempre gratuito — Styx non interrompe mai gli acquisti Amazon di base, anche se Premium scade.
 
-Funziona su Chrome e su tutti i browser basati su Chromium.
+Funziona su Chrome e su tutti i browser basati su Chromium. Disponibile anche per Safari su Mac tramite il Mac App Store.

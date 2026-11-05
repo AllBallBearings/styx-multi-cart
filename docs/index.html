@@ -11,6 +11,7 @@
     <link rel="icon" type="image/png" href="assets/favicon-128.png" />
     <link rel="stylesheet" href="assets/css/style.css" />
     <script src="assets/lightbox.js" defer></script>
+    <script src="assets/copy-link.js" defer></script>
 
     <meta property="og:title" content="Styx Multi-Cart" />
     <meta
@@ -52,6 +53,26 @@
     <section class="hero" id="top">
       <div class="wrap">
         <div class="hero-copy">
+          <aside class="phone-note" aria-label="Using a phone or tablet">
+            <h2>On your phone?</h2>
+            <p>
+              Styx installs on a computer, in Chrome or Safari on Mac. Send
+              yourself this page to open there.
+            </p>
+            <div class="phone-note-actions">
+              <a
+                class="btn btn-primary"
+                href="mailto:?subject=Install%20Styx%20Multi-Cart&amp;body=https%3A%2F%2Fallballbearings.github.io%2Fstyx-multi-cart%2F"
+                >Email myself the link</a
+              >
+              <button class="btn btn-secondary" type="button" id="copy-link">
+                Copy link
+              </button>
+            </div>
+            <p class="phone-note-url" id="copy-link-status" aria-live="polite">
+              allballbearings.github.io/styx-multi-cart
+            </p>
+          </aside>
           <span class="hero-eyebrow"
             >Browser extension · Clearing is free &amp; unlimited</span
           >
@@ -92,7 +113,12 @@
             <a
               class="btn btn-primary"
               href="https://chromewebstore.google.com/detail/styx-multi-cart/blakokemiggkkmocmdabikhgnbincian"
-              >Get Styx Multi-Cart</a
+              >Get for Chrome</a
+            >
+            <a
+              class="btn btn-primary"
+              href="https://apps.apple.com/us/app/styx-multi-cart/id6809101455"
+              >Get for Mac Safari</a
             >
             <a
               class="btn btn-secondary"
@@ -101,7 +127,8 @@
             >
           </div>
           <p class="cta-note">
-            Works on Chrome, Edge, Brave, Arc &amp; other Chromium browsers
+            For computers: Chrome, Edge, Brave, Arc &amp; other Chromium
+            browsers, plus Safari on Mac
           </p>
         </div>
         <div class="hero-art">
@@ -250,12 +277,12 @@
               class="showcase-img-button"
               type="button"
               data-lightbox-src="assets/screenshots/01-clear.png"
-              data-lightbox-alt="Clearing an Amazon cart with Styx: the Clear Amazon cart and Save Amazon cart for later buttons, a clearing-in-progress toast, and the emptied cart"
+              data-lightbox-alt="Emptying an Amazon cart with Styx: the Clear Amazon cart button, a confirmation dialog offering Clear it or Save and Clear, and a Cart cleared message"
               aria-label="Enlarge screenshot: clearing an Amazon cart with Styx"
             >
               <img
                 src="assets/screenshots/01-clear.png"
-                alt="Clearing an Amazon cart with Styx: the Clear Amazon cart and Save Amazon cart for later buttons, a clearing-in-progress toast, and the emptied cart"
+                alt="Emptying an Amazon cart with Styx: the Clear Amazon cart button, a confirmation dialog offering Clear it or Save and Clear, and a Cart cleared message"
               />
             </button>
           </div>
@@ -279,12 +306,12 @@
               class="showcase-img-button"
               type="button"
               data-lightbox-src="assets/screenshots/02-lists-are-carts.png"
-              data-lightbox-alt="The relabeled 'Your Styx Carts' lists page and the Send All to Amazon Cart flow loading a whole cart back into Amazon"
+              data-lightbox-alt="The Send All to Amazon Cart button and the Styx panel listing Amazon lists as carts, each with its own send button"
               aria-label="Enlarge screenshot: Amazon lists as Styx carts"
             >
               <img
                 src="assets/screenshots/02-lists-are-carts.png"
-                alt="The relabeled 'Your Styx Carts' lists page and the Send All to Amazon Cart flow loading a whole cart back into Amazon"
+                alt="The Send All to Amazon Cart button and the Styx panel listing Amazon lists as carts, each with its own send button"
               />
             </button>
           </div>
@@ -296,7 +323,7 @@
               Styx panel and on the relabeled <strong>Your Styx Carts</strong>
               page. Send a whole cart back to Amazon two ways: the
               <strong>Send All to Amazon Cart</strong> button on the list, or
-              the ↗ button in the panel. Styx skips out-of-stock items and asks
+              the orange cart button in the panel. Styx skips out-of-stock items and asks
               which edition you want for books.
             </p>
           </div>
@@ -308,24 +335,25 @@
               class="showcase-img-button"
               type="button"
               data-lightbox-src="assets/screenshots/03-organize.png"
-              data-lightbox-alt="An Amazon product page with a branded 'Add to a Styx cart' button and a picker choosing which cart to add the item to"
+              data-lightbox-alt="An 'Add to a Styx cart' button on a product page, and a picker asking which cart to add a search result to"
               aria-label="Enlarge screenshot: organizing products into Styx carts"
             >
               <img
                 src="assets/screenshots/03-organize.png"
-                alt="An Amazon product page with a branded 'Add to a Styx cart' button and a picker choosing which cart to add the item to"
+                alt="An 'Add to a Styx cart' button on a product page, and a picker asking which cart to add a search result to"
               />
             </button>
           </div>
           <div class="showcase-text">
             <span class="step">Step 3</span>
-            <h3>Organize as you shop</h3>
+            <h3>Sort as you shop</h3>
             <p>
               On any product page, a branded <strong>Add to a Styx cart</strong>
-              button sits right next to Add to Cart — pick which cart it belongs
-              in (Birthday, Groceries, Vidya Games…) so you build the right cart
-              without pushing everything to checkout. You can also save a full
-              cart to a new list straight from the Amazon cart page.
+              button sits right next to Add to Cart. Add to Cart in search
+              results can ask which cart an item belongs in too (Birthday,
+              Groceries, Home Project…), so you build the right cart without
+              pushing everything to checkout. You can also save a full cart to a
+              new list straight from the Amazon cart page.
             </p>
           </div>
         </div>
@@ -376,7 +404,12 @@
           <a
             class="btn btn-primary"
             href="https://chromewebstore.google.com/detail/styx-multi-cart/blakokemiggkkmocmdabikhgnbincian"
-            >Get Styx Multi-Cart</a
+            >Get for Chrome</a
+          >
+          <a
+            class="btn btn-primary"
+            href="https://apps.apple.com/us/app/styx-multi-cart/id6809101455"
+            >Get for Mac Safari</a
           >
           <a
             class="btn btn-ghost"
