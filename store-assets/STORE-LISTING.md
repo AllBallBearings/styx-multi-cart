@@ -7,7 +7,8 @@ Paste these into the Chrome Web Store Developer Dashboard listing form. Keep the
 > Don't introduce "instantly" or "in seconds" (clearing runs item by item,
 > ~2–4s each), inline item editing (Amazon-list carts are read-only in the
 > panel), a toolbar popup or side panel (only the in-page floating panel
-> ships), or Safari/Firefox availability (Chrome Web Store only).
+> ships), or Firefox availability. Safari is Mac only, through the Mac App
+> Store: never claim iPhone or iPad.
 >
 > **"One click" is a deliberate owner decision, not an oversight.** Clearing
 > actually takes two clicks — the button, then a choice in the confirm dialog
@@ -69,7 +70,7 @@ To send a whole cart back to Amazon in one step, Styx uses Amazon's bulk add-to-
 
 Your live Amazon cart is always first-class and always free — Styx never breaks core Amazon shopping, even if Premium lapses.
 
-Works on Chrome and all Chromium-based browsers.
+Works on Chrome and all Chromium-based browsers. Also available for Safari on Mac through the Mac App Store.
 
 ---
 

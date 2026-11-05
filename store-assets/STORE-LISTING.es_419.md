@@ -58,4 +58,4 @@ Para reenviar todo un carrito a Amazon en un solo paso, Styx usa el endpoint de 
 
 Tu carrito de Amazon activo siempre es de primera categoría y siempre gratuito — Styx nunca interrumpe las compras básicas de Amazon, incluso si Premium caduca.
 
-Funciona en Chrome y en todos los navegadores basados en Chromium.
+Funciona en Chrome y en todos los navegadores basados en Chromium. También disponible para Safari en Mac a través de la Mac App Store.

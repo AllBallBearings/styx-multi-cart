@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;800&display=block" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0b1a2b; }
+  .scene {
+    position: relative; width: 1280px; height: 800px; overflow: hidden; color: #fff;
+    font-family: Poppins, sans-serif;
+    background:
+      radial-gradient(ellipse 60% 70% at 88% 12%, rgba(255, 153, 0, 0.2), transparent 65%),
+      radial-gradient(ellipse 60% 60% at 8% 100%, rgba(108, 199, 255, 0.14), transparent 65%),
+      linear-gradient(160deg, #15304a 0%, #0b1a2b 100%);
+  }
+  h1 { margin: 0; font-size: 62px; line-height: 1.08; font-weight: 800; letter-spacing: -1px; }
+  h1 em { font-style: normal; color: #ff9900; }
+  .sub { margin: 14px 0 0; font-size: 28px; line-height: 1.3; font-weight: 500; color: #dbe6f0; }
+  .head { position: absolute; left: 64px; top: 50px; right: 64px; }
+  .part { position: absolute; display: block; filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.45)); }
+  .card { border-radius: 16px; }
+  .label { position: absolute; font-size: 25px; font-weight: 600; color: #ffc34d; }
+  .arrow { position: absolute; width: 58px; height: 44px; }
+  .ring { position: absolute; border: 4px solid #ff9900; border-radius: 14px; box-shadow: 0 0 0 7px rgba(255, 153, 0, 0.28); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+  <symbol id="arr" viewBox="0 0 58 44"><path d="M2 22h44M30 4l20 18-20 18" fill="none" stroke="#ff9900" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<section class="scene" id="s1" data-name="01-clear">
+  <div class="head">
+    <h1><em>Empty</em> your Amazon cart</h1>
+    <p class="sub">Skip deleting items one at a time. Free and unlimited.</p>
+  </div>
+  <img class="part card" src="parts/cart-buybox.png" style="left:64px;top:300px;width:440px" />
+  <div class="ring" style="left:89px;top:450px;width:390px;height:69px"></div>
+  <svg class="arrow" style="left:516px;top:462px"><use href="#arr" /></svg>
+  <img class="part" src="parts/clear-dialog.png" style="left:590px;top:222px;width:626px" />
+  <svg class="arrow" style="left:874px;top:536px;transform:rotate(90deg)"><use href="#arr" /></svg>
+  <img class="part" src="parts/toast-done.png" style="left:668px;top:600px;width:470px" />
+</section>
+
+<section class="scene" id="s2" data-name="02-lists-are-carts">
+  <div class="head" style="right:610px">
+    <h1>Your Amazon lists are now <em>carts</em></h1>
+    <p class="sub">Keep one per occasion. Send a whole cart to Amazon when you're ready.</p>
+  </div>
+  <div class="label" style="left:64px;top:410px">On any list page</div>
+  <img class="part" src="parts/send-all.png" style="left:64px;top:452px;width:476px" />
+  <div class="label" style="left:64px;top:590px">Or from the Styx panel</div>
+  <svg class="arrow" style="left:410px;top:586px"><use href="#arr" /></svg>
+  <img class="part card" src="parts/panel.png" style="left:680px;top:90px;width:540px" />
+  <div class="ring" style="left:1142px;top:362px;width:52px;height:240px"></div>
+</section>
+
+<section class="scene" id="s3" data-name="03-organize">
+  <div class="head" style="right:640px">
+    <h1><em>Sort</em> as you shop</h1>
+    <p class="sub">Choose the right cart while you browse.</p>
+  </div>
+  <div class="label" style="left:64px;top:290px">On product pages</div>
+  <img class="part card" src="parts/product-buybox.png" style="left:64px;top:334px;width:470px" />
+  <div class="ring" style="left:89px;top:481px;width:420px;height:70px"></div>
+  <div class="label" style="left:690px;top:40px">From search results</div>
+  <img class="part card" src="parts/picker.png" style="left:690px;top:84px;width:526px" />
+</section>
+</body>
+</html>

@@ -58,4 +58,4 @@ Pour renvoyer tout un panier vers Amazon en une seule étape, Styx utilise le po
 
 Votre panier Amazon actif reste toujours pleinement fonctionnel et gratuit — Styx ne perturbe jamais les achats Amazon de base, même si Premium expire.
 
-Fonctionne avec Chrome et tous les navigateurs basés sur Chromium.
+Fonctionne avec Chrome et tous les navigateurs basés sur Chromium. Également disponible pour Safari sur Mac via le Mac App Store.
